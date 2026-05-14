@@ -1552,6 +1552,26 @@ function updateTimestamp(isoStr) {
   }
 }
 
+// JSONP — evita el bloqueo CORS de Google Apps Script
+function fetchJSONP(url) {
+  return new Promise((resolve, reject) => {
+    const cbName = 'igcb_' + Date.now();
+    const script = document.createElement('script');
+    const timer = setTimeout(() => { cleanup(); reject(new Error('Timeout')); }, 60000);
+
+    function cleanup() {
+      clearTimeout(timer);
+      delete window[cbName];
+      if (script.parentNode) script.parentNode.removeChild(script);
+    }
+
+    window[cbName] = function(data) { cleanup(); resolve(data); };
+    script.onerror = function() { cleanup(); reject(new Error('Script load error')); };
+    script.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cbName;
+    document.head.appendChild(script);
+  });
+}
+
 async function refreshData() {
   const btn = document.getElementById('btn-refresh');
   btn.disabled = true;
@@ -1559,7 +1579,6 @@ async function refreshData() {
   btn.textContent = '⏳ Leyendo Drive...';
 
   if (!APPS_SCRIPT_URL) {
-    // Sin URL configurada: usar datos locales
     renderAll();
     updateTimestamp(null);
     btn.textContent = '✓ Datos locales';
@@ -1569,14 +1588,9 @@ async function refreshData() {
   }
 
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 55000); // 55 segundos máximo
-    const res = await fetch(APPS_SCRIPT_URL, { signal: controller.signal });
-    clearTimeout(timeout);
-    const data = await res.json();
+    const data = await fetchJSONP(APPS_SCRIPT_URL);
 
     if (data.status === 'ok') {
-      // Reemplazar datos con los frescos de Drive
       if (data.cobros) {
         Object.keys(data.cobros).forEach(m => { if (COBROS_REAL[m]) Object.assign(COBROS_REAL[m], data.cobros[m]); });
       }
