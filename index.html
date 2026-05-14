@@ -260,9 +260,80 @@
   /* STOCK BAR */
   .stock-bar-wrap { background: #f0f4f8; border-radius: 8px; height: 18px; overflow: hidden; margin: 6px 0; }
   .stock-bar { height: 100%; border-radius: 8px; background: linear-gradient(90deg, var(--primary), #2d5f8f); }
+
+  /* LOGIN OVERLAY */
+  #login-overlay {
+    position: fixed; inset: 0; z-index: 9999;
+    background: linear-gradient(135deg, #0f2540 0%, #1b3a5c 60%, #0f2540 100%);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .login-box {
+    background: #ffffff; border-radius: 16px; padding: 48px 44px;
+    width: 100%; max-width: 380px;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.4);
+    display: flex; flex-direction: column; gap: 20px;
+  }
+  .login-logo {
+    text-align: center; margin-bottom: 4px;
+  }
+  .login-logo .logo-mark {
+    display: inline-block; background: var(--primary); color: #fff;
+    font-size: 22px; font-weight: 800; letter-spacing: 2px;
+    padding: 10px 22px; border-radius: 10px;
+    border-bottom: 4px solid var(--accent);
+  }
+  .login-logo .logo-sub {
+    display: block; margin-top: 10px; font-size: 12px;
+    color: var(--muted); letter-spacing: 0.5px;
+  }
+  .login-box h2 {
+    font-size: 16px; font-weight: 600; color: var(--primary);
+    text-align: center; margin: 0;
+  }
+  .login-field { display: flex; flex-direction: column; gap: 6px; }
+  .login-field label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .login-field input {
+    border: 1.5px solid var(--border); border-radius: 8px;
+    padding: 10px 14px; font-size: 14px; color: var(--text);
+    outline: none; transition: border-color 0.2s;
+  }
+  .login-field input:focus { border-color: var(--primary); }
+  .login-btn {
+    background: var(--primary); color: #fff; border: none;
+    border-radius: 8px; padding: 12px; font-size: 14px;
+    font-weight: 700; cursor: pointer; transition: background 0.2s;
+    letter-spacing: 0.3px;
+  }
+  .login-btn:hover { background: #244d78; }
+  .login-error {
+    display: none; background: #fee2e2; color: #991b1b;
+    font-size: 12px; font-weight: 600; border-radius: 6px;
+    padding: 8px 12px; text-align: center;
+  }
 </style>
 </head>
 <body>
+
+<!-- LOGIN OVERLAY -->
+<div id="login-overlay">
+  <div class="login-box">
+    <div class="login-logo">
+      <span class="logo-mark">INGECO</span>
+      <span class="logo-sub">Dashboard Ejecutivo 2026</span>
+    </div>
+    <h2>Acceso restringido</h2>
+    <div class="login-field">
+      <label>Usuario</label>
+      <input type="text" id="login-user" placeholder="Usuario" autocomplete="username" />
+    </div>
+    <div class="login-field">
+      <label>Contraseña</label>
+      <input type="password" id="login-pass" placeholder="Contraseña" autocomplete="current-password" />
+    </div>
+    <div class="login-error" id="login-error">Usuario o contraseña incorrectos</div>
+    <button class="login-btn" onclick="doLogin()">Ingresar</button>
+  </div>
+</div>
 
 <!-- HEADER -->
 <div class="header">
@@ -1552,6 +1623,36 @@ function setMes(mes) {
     b.classList.toggle('active', (i === 0 && mes === 'feb') || (i === 1 && mes === 'mar'));
   });
   renderMargen();
+}
+
+// ================================================================
+// LOGIN
+// ================================================================
+
+function doLogin() {
+  const user = document.getElementById('login-user').value.trim();
+  const pass = document.getElementById('login-pass').value;
+  if (user === 'administracion' && pass === 'TableroIngeco') {
+    sessionStorage.setItem('ingeco_auth', '1');
+    document.getElementById('login-overlay').style.display = 'none';
+  } else {
+    document.getElementById('login-error').style.display = 'block';
+    document.getElementById('login-pass').value = '';
+    document.getElementById('login-pass').focus();
+  }
+}
+
+// Permitir login con Enter
+document.getElementById('login-pass').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') doLogin();
+});
+document.getElementById('login-user').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') document.getElementById('login-pass').focus();
+});
+
+// Si ya estaba autenticado en esta sesión, no mostrar el login
+if (sessionStorage.getItem('ingeco_auth') === '1') {
+  document.getElementById('login-overlay').style.display = 'none';
 }
 
 // ================================================================
