@@ -216,13 +216,15 @@ function leerOCInsumos() {
     Logger.log('OC Insumos — headers detectados: ' + headers.join(' | '));
 
     // Columna O (índice 14): nombre de obra según el Maestro (Guillermo)
+    // Columna C (índice 2): Proveedor
     // Columna F (índice 5): Monto
     // Columna D (índice 3): fecha fact
     const COL_FECHA = _findCol(headers, ['fecha']) ?? 3;
     const COL_MONTO = _findCol(headers, ['monto', 'importe', 'total']) ?? 5;
     const COL_OBRA  = 14; // Columna O — nombre obra como aparece en el Maestro
+    const COL_PROV  = _findCol(headers, ['proveedor', 'prov']) ?? 2; // Columna C
 
-    Logger.log('OC Insumos — cols: fecha=' + COL_FECHA + ' monto=' + COL_MONTO + ' obra=' + COL_OBRA);
+    Logger.log('OC Insumos — cols: fecha=' + COL_FECHA + ' monto=' + COL_MONTO + ' obra=' + COL_OBRA + ' prov=' + COL_PROV);
 
     const acum = {
       feb: { items: {}, total: 0, nOC: 0 },
@@ -242,7 +244,13 @@ function leerOCInsumos() {
       const obraRaw = String(row[COL_OBRA] || '').trim();
       const obra = obraRaw || 'Sin clasificar';
 
-      if (!acum[mes].items[obra]) acum[mes].items[obra] = { monto: 0, nOC: 0 };
+      const proveedorRaw = String(row[COL_PROV] || '').trim();
+      const proveedor = proveedorRaw || 'Sin especificar';
+
+      if (!acum[mes].items[obra]) acum[mes].items[obra] = { monto: 0, nOC: 0, proveedores: {} };
+      if (!acum[mes].items[obra].proveedores[proveedor]) acum[mes].items[obra].proveedores[proveedor] = { monto: 0, nOC: 0 };
+      acum[mes].items[obra].proveedores[proveedor].monto += monto;
+      acum[mes].items[obra].proveedores[proveedor].nOC  += 1;
       acum[mes].items[obra].monto += monto;
       acum[mes].items[obra].nOC  += 1;
       acum[mes].total += monto;
@@ -257,7 +265,14 @@ function leerOCInsumos() {
         total: Math.round(data.total),
         nOC:   data.nOC,
         items: Object.entries(data.items)
-          .map(([obra, v]) => ({ obra, monto: Math.round(v.monto), nOC: v.nOC }))
+          .map(([obra, v]) => ({
+            obra,
+            monto: Math.round(v.monto),
+            nOC: v.nOC,
+            proveedores: Object.entries(v.proveedores)
+              .map(([proveedor, pv]) => ({ proveedor, monto: Math.round(pv.monto), nOC: pv.nOC }))
+              .sort((a, b) => b.monto - a.monto)
+          }))
           .sort((a, b) => b.monto - a.monto)
       };
     }
