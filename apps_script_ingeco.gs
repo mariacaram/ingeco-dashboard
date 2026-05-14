@@ -43,9 +43,23 @@ function doGet(e) {
     if (useCache) {
       const cached = PROPS.getProperty(CACHE_KEY);
       data = cached ? JSON.parse(cached) : buildData();
+      // generadoPorObra se guarda en clave separada (es grande)
+      if (data && !data.generadoPorObra) {
+        const cachedObras = PROPS.getProperty(CACHE_KEY + '_obras');
+        if (cachedObras) data.generadoPorObra = JSON.parse(cachedObras);
+      }
     } else {
       data = buildData();
-      PROPS.setProperty(CACHE_KEY, JSON.stringify(data));
+      // Guardar en cache: datos pequeños por un lado, obras por otro
+      // (PropertiesService tiene límite de 9 KB por propiedad)
+      try {
+        const small = { status: data.status, timestamp: data.timestamp,
+                        moCtroCosto: data.moCtroCosto, ocInsumos: data.ocInsumos };
+        PROPS.setProperty(CACHE_KEY, JSON.stringify(small));
+      } catch(ce) { Logger.log('Cache write (small) error: ' + ce); }
+      try {
+        if (data.generadoPorObra) PROPS.setProperty(CACHE_KEY + '_obras', JSON.stringify(data.generadoPorObra));
+      } catch(ce) { Logger.log('Cache write (obras) error: ' + ce); }
     }
 
     const json = JSON.stringify(data);
