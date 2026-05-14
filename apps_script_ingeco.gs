@@ -429,7 +429,7 @@ function leerGeneradoFernando() {
       for (let i = hdrIdx + 1; i < rows.length; i++) {
         const row = rows[i];
         let cod   = String(row[iCodigo] || '').trim();
-        if (!cod) continue;
+        if (!cod) cod = 'SIN-CODIGO';
 
         // Solo incluir filas con Estado $ = "A Cobrar"
         if (iEstado !== null) {
@@ -478,6 +478,18 @@ function leerGeneradoPorObra() {
     }
 
     obras.sort((a, b) => b.aCobrar - a.aCobrar);
+
+    // Agregar al final las filas de Fernando sin código asignado
+    const montoSinCod = Math.round(aCobrar['SIN-CODIGO'] || 0);
+    if (montoSinCod > 0) {
+      obras.push({
+        cod_obra: '—',
+        nombre:   'Obra sin asignación de código',
+        cliente:  '—',
+        tipo:     '—',
+        aCobrar:  montoSinCod,
+      });
+    }
 
     return { obras: obras, tabsSinPeriodo: tabsSinPeriodo };
 
