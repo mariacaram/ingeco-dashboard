@@ -1,0 +1,1576 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Ejecutivo INGECO — 2026</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --primary: #1b3a5c;
+    --accent: #e8a100;
+    --pos: #16a34a;
+    --neg: #dc2626;
+    --bg: #f0f4f8;
+    --card: #ffffff;
+    --border: #d1dbe6;
+    --text: #1e293b;
+    --muted: #64748b;
+    --nd-bg: #f1f5f9;
+    --nd-text: #94a3b8;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+
+  /* ATRIBUCIÓN DE FUENTE */
+  .fuente {
+    font-size: 10px;
+    color: #94a3b8;
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    line-height: 1.3;
+  }
+  .fuente::before { content: '📄'; font-size: 9px; }
+  .fuente-icon { font-style: normal; }
+  .kpi-card .fuente { border-top: 1px solid var(--border); padding-top: 4px; margin-top: 6px; }
+  .nota-fuente {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 6px;
+    padding: 4px 8px;
+    background: #f8fafc;
+    border-left: 3px solid var(--accent);
+    border-radius: 0 4px 4px 0;
+  }
+  .nota-fuente strong { color: var(--primary); }
+
+  /* HEADER */
+  .header {
+    background: var(--primary);
+    color: #fff;
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  }
+  .header h1 { font-size: 18px; font-weight: 700; letter-spacing: 0.5px; }
+  .header .subtitle { font-size: 12px; color: #a0bad8; margin-top: 2px; }
+  .month-selector { display: flex; gap: 6px; align-items: center; }
+  .month-selector label { font-size: 12px; color: #a0bad8; }
+  .month-btn {
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.3);
+    color: #fff;
+    padding: 5px 14px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    transition: all 0.2s;
+  }
+  .month-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .month-btn:hover:not(.active) { background: rgba(255,255,255,0.25); }
+  .refresh-area { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+  .btn-refresh {
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.35);
+    color: #fff;
+    padding: 6px 16px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    transition: all 0.2s;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .btn-refresh:hover:not(:disabled) { background: rgba(255,255,255,0.25); }
+  .btn-refresh:disabled { opacity: 0.6; cursor: default; }
+  .btn-refresh.ok { border-color: #4ade80; color: #4ade80; }
+  .btn-refresh.err { border-color: #f87171; color: #f87171; }
+  .last-update { font-size: 10px; color: #6b90b0; text-align: right; }
+
+  /* TABS */
+  .tabs-bar {
+    background: var(--primary);
+    padding: 0 24px;
+    display: flex;
+    gap: 2px;
+    border-top: 1px solid rgba(255,255,255,0.1);
+  }
+  .tab-btn {
+    background: transparent;
+    border: none;
+    color: #a0bad8;
+    padding: 10px 16px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    border-bottom: 3px solid transparent;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+  .tab-btn.active { color: #fff; border-bottom-color: var(--accent); }
+  .tab-btn:hover:not(.active) { color: #fff; }
+
+  /* CONTENT */
+  .content { padding: 20px 24px; max-width: 1400px; margin: 0 auto; }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* KPI CARDS */
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .kpi-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    border-left: 4px solid var(--primary);
+  }
+  .kpi-card.accent { border-left-color: var(--accent); }
+  .kpi-card.pos { border-left-color: var(--pos); }
+  .kpi-card.neg { border-left-color: var(--neg); }
+  .kpi-label { font-size: 11px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+  .kpi-value { font-size: 22px; font-weight: 700; color: var(--text); line-height: 1.1; }
+  .kpi-value.nd { font-size: 14px; color: var(--nd-text); font-style: italic; font-weight: 400; }
+  .kpi-value.pos-val { color: var(--pos); }
+  .kpi-value.neg-val { color: var(--neg); }
+  .kpi-sub { font-size: 11px; color: var(--muted); margin-top: 3px; }
+
+  /* SECTION */
+  .section { margin-bottom: 24px; }
+  .section-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--primary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 2px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section-title .badge {
+    font-size: 10px;
+    font-weight: 500;
+    background: var(--nd-bg);
+    color: var(--nd-text);
+    padding: 2px 8px;
+    border-radius: 10px;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .section-title .badge.real { background: #dcfce7; color: var(--pos); }
+  .section-title .badge.partial { background: #fef3c7; color: #92400e; }
+
+  /* TABLES */
+  .table-wrap { overflow-x: auto; border-radius: 8px; border: 1px solid var(--border); background: var(--card); }
+  table { width: 100%; border-collapse: collapse; }
+  th { background: #f8fafc; font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+  td { padding: 9px 12px; border-bottom: 1px solid #f0f4f8; font-size: 13px; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #f8fafc; }
+  td.nd { color: var(--nd-text); font-style: italic; background: var(--nd-bg); }
+  td.pos-val { color: var(--pos); font-weight: 600; }
+  td.neg-val { color: var(--neg); font-weight: 600; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.clickable { cursor: pointer; color: var(--primary); font-weight: 600; }
+  td.clickable:hover { text-decoration: underline; }
+
+  /* SEMÁFORO */
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+  .dot.g { background: var(--pos); }
+  .dot.y { background: var(--accent); }
+  .dot.r { background: var(--neg); }
+
+  /* GRID 2 col */
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+
+  /* CHART CARD */
+  .chart-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+  .chart-card h3 { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 12px; }
+
+  /* PERSONA CARDS */
+  .persona-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+  .persona-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+  .persona-name { font-size: 15px; font-weight: 700; color: var(--primary); margin-bottom: 2px; }
+  .persona-role { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+  .persona-item { font-size: 12px; color: var(--text); margin-bottom: 5px; display: flex; gap: 6px; }
+  .persona-item .pi-label { color: var(--muted); min-width: 80px; font-weight: 500; }
+  .persona-item .pi-val { color: var(--text); }
+  .persona-item .pi-val.nd { color: var(--nd-text); font-style: italic; }
+  .persona-avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; float: right; margin-left: 8px; }
+
+  /* PANEL LATERAL */
+  .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 200; }
+  .overlay.open { display: block; }
+  .side-panel {
+    position: fixed;
+    right: -440px;
+    top: 0;
+    bottom: 0;
+    width: 420px;
+    background: var(--card);
+    z-index: 201;
+    box-shadow: -4px 0 20px rgba(0,0,0,0.15);
+    transition: right 0.3s ease;
+    overflow-y: auto;
+    padding: 24px;
+  }
+  .side-panel.open { right: 0; }
+  .panel-close { position: absolute; top: 16px; right: 16px; background: none; border: none; font-size: 20px; cursor: pointer; color: var(--muted); }
+  .panel-title { font-size: 16px; font-weight: 700; color: var(--primary); margin-bottom: 4px; }
+  .panel-sub { font-size: 12px; color: var(--muted); margin-bottom: 16px; }
+  .panel-kpi { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+  .panel-kpi-item { background: #f8fafc; border-radius: 8px; padding: 10px 12px; }
+  .panel-kpi-label { font-size: 10px; color: var(--muted); text-transform: uppercase; margin-bottom: 4px; }
+  .panel-kpi-val { font-size: 16px; font-weight: 700; color: var(--text); }
+  .panel-kpi-val.nd { font-size: 12px; color: var(--nd-text); font-style: italic; font-weight: 400; }
+
+  /* ALERTA */
+  .alert { padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 12px; display: flex; align-items: flex-start; gap: 8px; }
+  .alert.warn { background: #fef3c7; border-left: 4px solid var(--accent); color: #92400e; }
+  .alert.danger { background: #fee2e2; border-left: 4px solid var(--neg); color: #7f1d1d; }
+  .alert.info { background: #dbeafe; border-left: 4px solid #3b82f6; color: #1e3a8a; }
+
+  /* FLUJO */
+  .flujo-row { display: grid; grid-template-columns: 120px 1fr 1fr 1fr 100px; gap: 0; }
+  .flujo-header { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; padding: 8px 12px; background: #f8fafc; border-bottom: 1px solid var(--border); }
+  .flujo-cell { padding: 11px 12px; border-bottom: 1px solid #f0f4f8; font-size: 13px; }
+  .flujo-cell.periodo { font-weight: 600; color: var(--primary); font-size: 12px; }
+  .flujo-period-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+
+  /* FUENTES TABLE */
+  .status-badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+  .status-badge.real { background: #dcfce7; color: #166534; }
+  .status-badge.parcial { background: #fef3c7; color: #92400e; }
+  .status-badge.pendiente { background: #fee2e2; color: #991b1b; }
+
+  /* NOTA */
+  .nota { font-size: 11px; color: var(--muted); font-style: italic; padding: 8px 12px; background: #f8fafc; border-radius: 6px; margin-top: 10px; }
+
+  /* STOCK BAR */
+  .stock-bar-wrap { background: #f0f4f8; border-radius: 8px; height: 18px; overflow: hidden; margin: 6px 0; }
+  .stock-bar { height: 100%; border-radius: 8px; background: linear-gradient(90deg, var(--primary), #2d5f8f); }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div>
+    <h1>INGECO — Dashboard Ejecutivo</h1>
+    <div class="subtitle">Adrián Caram, Socio Director</div>
+  </div>
+  <div style="display:flex; gap:20px; align-items:center;">
+    <div class="month-selector">
+      <label>Período:</label>
+      <button class="month-btn" onclick="setMes('feb')">Febrero 2026</button>
+      <button class="month-btn active" onclick="setMes('mar')">Marzo 2026</button>
+    </div>
+    <div class="refresh-area">
+      <button class="btn-refresh" id="btn-refresh" onclick="refreshData()">🔄 Actualizar datos</button>
+      <div class="last-update" id="last-update">Datos locales — sin conexión a Drive</div>
+    </div>
+  </div>
+</div>
+
+<!-- TABS -->
+<div class="tabs-bar">
+  <button class="tab-btn active" onclick="openTab('margen')">Margen por Obra</button>
+  <button class="tab-btn" onclick="openTab('cobros')">Cobros y Pipeline</button>
+  <button class="tab-btn" onclick="openTab('planta')">Planta de Asfalto</button>
+  <button class="tab-btn" onclick="openTab('taller')">Taller Mecánico</button>
+  <button class="tab-btn" onclick="openTab('flujo')">Flujo de Fondos</button>
+  <button class="tab-btn" onclick="openTab('estructura')">Estructura</button>
+  <button class="tab-btn" onclick="openTab('fuentes')">Fuentes de Datos</button>
+</div>
+
+<!-- CONTENT -->
+<div class="content">
+
+<!-- PANEL LATERAL -->
+<div class="overlay" id="overlay" onclick="closePanel()"></div>
+<div class="side-panel" id="sidePanel">
+  <button class="panel-close" onclick="closePanel()">✕</button>
+  <div id="panelContent"></div>
+</div>
+
+<!-- ================================================================ -->
+<!-- TAB 1: MARGEN POR OBRA -->
+<!-- ================================================================ -->
+<div class="tab-panel active" id="tab-margen">
+  <div class="alert warn">
+    ⚠️ <strong>Datos incompletos:</strong> los archivos "Copia de OBRAS INGECO.xlsx" (Adrián), "ÓC Insumos 2026" (Guillermo) y "Cobros" (Esteban) no están accesibles desde esta cuenta. Solo se muestra el caso Canal 82008 confirmado por regla de negocio.
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi-card pos">
+      <div class="kpi-label">Total Generado (devengado)</div>
+      <div class="kpi-value" id="kpi-generado">$ 109,3M</div>
+      <div class="kpi-sub">Solo Canal 82008 confirmado</div>
+      <div class="fuente">Cobros Ingeco Feb-Mar-Abr 2026.xlsx (Esteban) — leído 13/05/2026</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Total Egresos (visible)</div>
+      <div class="kpi-value nd">sin dato</div>
+      <div class="kpi-sub">Requiere OC Insumos + TANGO</div>
+      <div class="fuente">ÓC Insumos (Guillermo) + LIQ TANGO (Mauro) — pendiente datos 2026</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Margen estimado</div>
+      <div class="kpi-value nd">sin dato</div>
+      <div class="kpi-sub">Pendiente de archivos de costo</div>
+      <div class="fuente">Se calcula cuando Egresos esté disponible</div>
+    </div>
+    <div class="kpi-card neg">
+      <div class="kpi-label">Obras sin egresos cargados</div>
+      <div class="kpi-value neg-val" id="kpi-sin-egresos">N/D</div>
+      <div class="kpi-sub">Requiere OBRAS INGECO.xlsx</div>
+      <div class="fuente">Maestro de obras NUEVO.xlsx (Adrián) — leído 13/05/2026</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">
+      Tabla Margen por Obra
+      <span class="badge partial">Datos parciales — Canal 82008 confirmado</span>
+    </div>
+    <div class="table-wrap">
+      <table id="tabla-margen">
+        <thead>
+          <tr>
+            <th>Obra / Contrato</th>
+            <th>Cliente</th>
+            <th class="num">Generado (devengado)</th>
+            <th class="num">Insumos</th>
+            <th class="num">MO estimada</th>
+            <th class="num">Total Egresos</th>
+            <th class="num">Diferencia</th>
+            <th class="num">% Margen</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-margen"></tbody>
+      </table>
+    </div>
+    <div class="nota-fuente"><strong>Generado:</strong> Cobros Ingeco Feb-Mar-Abr 2026.xlsx (Esteban) — leído 13/05/2026 · <strong>Insumos:</strong> OC Insumos (Guillermo Konicek) — leído 13/05/2026 · <strong>MO:</strong> LIQ TANGO 1° Quinc. Abr (Mauro) — leído 13/05/2026 · Mes: <strong id="mes-label-margen">Marzo 2026</strong></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">OC de Insumos por Obra — Feb / Mar / Abr 2026 <span class="badge real">Datos reales — Guillermo Konicek</span></div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Obra / Sector</th><th class="num">Feb 2026</th><th class="num">N° OC</th><th class="num">Mar 2026</th><th class="num">N° OC</th><th class="num">Abr 2026 (parcial)</th><th class="num">N° OC</th></tr>
+        </thead>
+        <tbody id="tbody-oc-insumos"></tbody>
+        <tfoot>
+          <tr style="background:#f8fafc;font-weight:700;">
+            <td style="padding:8px 12px;">TOTAL empresa</td>
+            <td class="num neg-val" style="padding:8px 12px;">$549,6M</td><td class="num" style="padding:8px 12px;color:var(--muted);">113</td>
+            <td class="num neg-val" style="padding:8px 12px;">$515,3M</td><td class="num" style="padding:8px 12px;color:var(--muted);">142</td>
+            <td class="num neg-val" style="padding:8px 12px;">$182,6M</td><td class="num" style="padding:8px 12px;color:var(--muted);">39</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    <div class="nota-fuente"><strong>Fuente:</strong> ÓRDENES DE COMPRA DE INSUMOS PARA OBRAS (GUILLERMO KONICEK) — Google Sheet — ID Drive: 1_lhq9c1MddkrK1Tf0kexRtgqw5aPhmZWiQkAIRjpfxs — Responsable: Guillermo Konicek — Leído: 13/05/2026 — Columnas: OC, Proveedor, Fecha, Descripción, Monto — Clasificación por obra desde campo Descripción (texto libre) — Abril parcial al 13/05/2026</div>
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- TAB 2: COBROS Y PIPELINE -->
+<!-- ================================================================ -->
+<div class="tab-panel" id="tab-cobros">
+  <div class="kpi-grid">
+    <div class="kpi-card pos">
+      <div class="kpi-label">Percibido Febrero 2026</div>
+      <div class="kpi-value pos-val">$1,66B</div>
+      <div class="kpi-sub">14 cobros — datos reales</div>
+      <div class="fuente">Cobros Ingeco Feb-Mar-Abr 2026.xlsx (Esteban) — leído 13/05/2026</div>
+    </div>
+    <div class="kpi-card pos">
+      <div class="kpi-label">Percibido Marzo 2026</div>
+      <div class="kpi-value pos-val">$1,53B</div>
+      <div class="kpi-sub">15 cobros — datos reales</div>
+      <div class="fuente">Cobros Ingeco Feb-Mar-Abr 2026.xlsx (Esteban) — leído 13/05/2026</div>
+    </div>
+    <div class="kpi-card pos">
+      <div class="kpi-label">Percibido Abril 2026</div>
+      <div class="kpi-value pos-val">$419M</div>
+      <div class="kpi-sub">12 cobros al 29/04 — parcial</div>
+      <div class="fuente">Cobros Ingeco Feb-Mar-Abr 2026.xlsx (Esteban) — leído 13/05/2026</div>
+    </div>
+    <div class="kpi-card accent">
+      <div class="kpi-label">Pipeline Mayo (confirmado)</div>
+      <div class="kpi-value">$2,80B</div>
+      <div class="kpi-sub">7 ítems con fecha estimada</div>
+      <div class="fuente">Cobros Ingeco Feb-Mar-Abr 2026.xlsx (Esteban) — sección pendientes</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Cobros Reales por Mes <span class="badge real">Datos reales — Drive</span></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Mes</th><th>Obra / Concepto</th><th>Cliente</th><th class="num">Importe percibido</th><th>Fecha cobro real</th></tr></thead>
+        <tbody id="tbody-cobros-real"></tbody>
+      </table>
+    </div>
+    <div class="nota-fuente"><strong>Fuente:</strong> Cobros Ingeco Feb-Mar-Abr 2026.xlsx — ID Drive: 1w9t2A1La45Ab0-KTdX66f1yJDh5TcZZB — Responsable: Esteban — Leído: 13/05/2026 — Columnas usadas: OBRA, CLIENTE, CONCEPTO, IMPORTE, FECHA REAL DE COBRO</div>
+  </div>
+
+  <div class="grid2">
+    <div class="section">
+      <div class="section-title">Pipeline — Pendiente de cobro</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Obra</th><th class="num">Monto</th><th>Est. cobro</th><th>Estado</th></tr></thead>
+          <tbody id="tbody-pipeline"></tbody>
+        </table>
+      </div>
+      <div class="nota-fuente"><strong>Fuente:</strong> Cobros Ingeco Feb-Mar-Abr 2026.xlsx (Esteban) — ítems sin FECHA REAL DE COBRO al 13/05/2026 — Estado DEMORADO = fecha probable pasada sin cobro confirmado</div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Costo Financiero por Demora en Cobro</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Obra</th><th class="num">Monto</th><th class="num">Meses demora</th><th class="num">Costo fin. (5%/mes)</th><th>Obs.</th></tr></thead>
+          <tbody id="tbody-costo-fin"></tbody>
+        </table>
+      </div>
+      <div class="nota-fuente"><strong>Fórmula:</strong> Costo fin. = monto × 5%/mes × meses demora — <strong>Fuente montos:</strong> Cobros Ingeco Feb-Mar-Abr 2026.xlsx (Esteban) — <strong>Tasa:</strong> regla de negocio Adrián (5%/mes)</div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- TAB 3: PLANTA DE ASFALTO -->
+<!-- ================================================================ -->
+<div class="tab-panel" id="tab-planta">
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-label">Tn totales (feb/mar)</div>
+      <div class="kpi-value nd">sin dato</div>
+      <div class="kpi-sub">API no extrajo datos 2026</div>
+      <div class="fuente">REMITOS OFICIALES (Nico Dall'Agata) — columna Tn Caliente/Frío sin precios cargados al 12/05/2026</div>
+    </div>
+    <div class="kpi-card neg">
+      <div class="kpi-label">Insumos planta Feb 2026</div>
+      <div class="kpi-value neg-val">$18,6M</div>
+      <div class="kpi-sub">3 OC — Guillermo Konicek</div>
+      <div class="fuente">OC Insumos (Guillermo Konicek) — ID Drive: 1_lhq9c1...Rfxs — Leído: 13/05/2026 — filtro: Planta Asfalto</div>
+    </div>
+    <div class="kpi-card neg">
+      <div class="kpi-label">Insumos planta Mar 2026</div>
+      <div class="kpi-value neg-val">$20,1M</div>
+      <div class="kpi-sub">4 OC — Guillermo Konicek</div>
+      <div class="fuente">OC Insumos (Guillermo Konicek) — ID Drive: 1_lhq9c1...Rfxs — Leído: 13/05/2026 — filtro: Planta Asfalto</div>
+    </div>
+    <div class="kpi-card accent">
+      <div class="kpi-label">MO / tn</div>
+      <div class="kpi-value nd">sin dato</div>
+      <div class="kpi-sub">MO real: $9,55M/quinc — falta Tn</div>
+      <div class="fuente">MO: 1° Quinc. Abril 2026 - LIQ TANGO.xlsx (Mauro Orellana) — CTRO COSTO = Pta.Asfalto — Tn: sin dato</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Stock de Planta <span class="badge real">Dato real — regla de negocio</span></div>
+    <div class="kpi-grid">
+      <div class="kpi-card pos">
+        <div class="kpi-label">Asfalto MP disponible</div>
+        <div class="kpi-value">700 tn</div>
+        <div class="kpi-sub">Materia prima en stock</div>
+        <div class="fuente">Regla de negocio — Adrián Caram — informado: 12/05/2026</div>
+      </div>
+      <div class="kpi-card pos">
+        <div class="kpi-label">Producibles desde MP</div>
+        <div class="kpi-value">14.000 tn</div>
+        <div class="kpi-sub">700 tn × 20</div>
+        <div class="fuente">Calculado: 700 tn MP × coeficiente 20 — regla de negocio Adrián</div>
+      </div>
+      <div class="kpi-card accent">
+        <div class="kpi-label">Asfalto frío terminado</div>
+        <div class="kpi-value">35 tn</div>
+        <div class="kpi-sub">Listo para despacho</div>
+        <div class="fuente">Regla de negocio — Adrián Caram — informado: 12/05/2026</div>
+      </div>
+      <div class="kpi-card pos">
+        <div class="kpi-label">TOTAL producibles</div>
+        <div class="kpi-value">14.035 tn</div>
+        <div class="kpi-sub">MP producibles + frío</div>
+        <div class="fuente">Calculado: 14.000 + 35 tn — base: regla de negocio Adrián (12/05/2026)</div>
+      </div>
+    </div>
+    <div style="background:var(--card); border:1px solid var(--border); border-radius:10px; padding:16px; margin-top:8px;">
+      <div style="font-size:12px; color:var(--muted); margin-bottom:6px;">Composición del stock total (14.035 tn)</div>
+      <div style="display:flex; align-items:center; gap:12px;">
+        <div style="flex:1;">
+          <div style="font-size:11px; color:var(--muted); margin-bottom:4px;">Producibles desde MP — 14.000 tn (99,75%)</div>
+          <div class="stock-bar-wrap"><div class="stock-bar" style="width:99.75%"></div></div>
+        </div>
+      </div>
+      <div style="display:flex; align-items:center; gap:12px; margin-top:8px;">
+        <div style="flex:1;">
+          <div style="font-size:11px; color:var(--muted); margin-bottom:4px;">Frío terminado — 35 tn (0,25%)</div>
+          <div class="stock-bar-wrap"><div class="stock-bar" style="width:0.25%; background: linear-gradient(90deg, var(--accent), #f59e0b)"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="section">
+      <div class="section-title">Insumos planta (OC reales) + Producción</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Mes</th><th class="num">OC Insumos (Guillermo)</th><th class="num">N° órdenes</th><th class="num">Tn Caliente</th><th class="num">Tn Frío</th></tr></thead>
+          <tbody>
+            <tr><td>Febrero 2026</td><td class="num neg-val">$18.600.000</td><td class="num">3 OC</td><td class="nd num">sin dato</td><td class="nd num">sin dato</td></tr>
+            <tr><td>Marzo 2026</td><td class="num neg-val">$20.100.000</td><td class="num">4 OC</td><td class="nd num">sin dato</td><td class="nd num">sin dato</td></tr>
+            <tr><td>Abril 2026 (parcial)</td><td class="num neg-val">$17.900.000</td><td class="num">2 OC</td><td class="nd num">sin dato</td><td class="nd num">sin dato</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="nota-fuente"><strong>Insumos:</strong> OC Insumos para Obras (Guillermo Konicek) — ID Drive: 1_lhq9c1MddkrK1Tf0kexRtgqw5aPhmZWiQkAIRjpfxs — Leído: 13/05/2026 — filtro OC con descripción "Planta Asfalto/Warnes" — <strong>Tn:</strong> REMITOS OFICIALES (Nico Dall'Agata) — columna PRECIO vacía, tn sin precio; solicitar a Nico que complete el Google Sheet para habilitar Costo/tn</div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">OC Planta Asfalto (Repuestos/insumos) <span class="badge real">Dato real</span></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Proveedor</th><th>N° OC</th><th class="num">Monto</th><th>Descripción</th></tr></thead>
+          <tbody id="tbody-oc-planta"></tbody>
+        </table>
+      </div>
+      <div class="nota-fuente"><strong>Fuente:</strong> OC Repuestos para Equipos.xlsx — Responsable: Alberto Lescano — Leído: 12/05/2026 — Columnas usadas: N° Orden, Proveedor, Monto, Descripción — Filtro: sector Planta Asfalto (6 órdenes visibles)</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Análisis MO / tn <span class="badge">sin dato — requiere TANGO</span></div>
+    <div class="alert info">
+      El cálculo de MO/tn requiere: (1) liquidación de sueldos de planta del archivo TANGO - Mauro Orellana, y (2) tn producidas del REMITOS OFICIALES con precios cargados.
+      <br><br>
+      <strong>Estimación por regla de negocio:</strong> MO total obras ≈ $102,5M/mes. La distribución específica planta/taller/obras requiere el detalle de Mauro.
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi-card neg">
+        <div class="kpi-label">MO Planta (1a quincena Abr)</div>
+        <div class="kpi-value neg-val">$9,55M</div>
+        <div class="kpi-sub">CTRO COSTO = Pta.Asfalto — TANGO real</div>
+        <div class="fuente">1° Quinc. Abril 2026 - LIQ TANGO.xlsx — Mauro Orellana — Leído: 12/05/2026 — Col: CTRO COSTO, IMPORTE</div>
+      </div>
+      <div class="kpi-card neg">
+        <div class="kpi-label">MO Planta mensual (est.)</div>
+        <div class="kpi-value neg-val">~$19,1M</div>
+        <div class="kpi-sub">$9,55M quinc × 2</div>
+        <div class="fuente">Calculado: $9.551.280 × 2 — base: TANGO 1° Quinc Abril (Mauro Orellana)</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">MO total empresa</div>
+        <div class="kpi-value">$102,5M</div>
+        <div class="kpi-sub">Total empresa (regla negocio Adrián)</div>
+        <div class="fuente">Regla de negocio — Adrián Caram — confirmado en conversación 12/05/2026</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- TAB 4: TALLER MECÁNICO -->
+<!-- ================================================================ -->
+<div class="tab-panel" id="tab-taller">
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-label">MO Taller mensual</div>
+      <div class="kpi-value neg-val">$7,0M</div>
+      <div class="kpi-sub">8 mecánicos — TANGO real</div>
+      <div class="fuente">1° Quinc. Abril 2026 - LIQ TANGO.xlsx — Mauro Orellana — Leído: 12/05/2026 — CTRO COSTO = Taller</div>
+    </div>
+    <div class="kpi-card neg">
+      <div class="kpi-label">MO Taller mensual (est.)</div>
+      <div class="kpi-value neg-val">~$14,1M</div>
+      <div class="kpi-sub">Quinc × 2</div>
+      <div class="fuente">Calculado: $7.025.000 quinc × 2 — base: TANGO 1° Quinc Abril (Mauro Orellana)</div>
+    </div>
+    <div class="kpi-card accent">
+      <div class="kpi-label">Repuestos Abr 2026 (visible)</div>
+      <div class="kpi-value" id="kpi-repuestos-total">cargando...</div>
+      <div class="kpi-sub">27 entregas al 08/04 — parcial</div>
+      <div class="fuente">ENTREGAS DE REPUESTOS ABRIL 2026 (Google Sheet — Nico Dall'Agata) — Leído: 12/05/2026 — 27 registros al 08/04</div>
+    </div>
+    <div class="kpi-card neg">
+      <div class="kpi-label">Mayor gasto — Zaranda</div>
+      <div class="kpi-value neg-val">$2,89M</div>
+      <div class="kpi-sub">ZRN-01 — motor + repuestos</div>
+      <div class="fuente">ENTREGAS DE REPUESTOS ABRIL 2026 — entradas N°764+765+768 (ZRN-01) — Nico Dall'Agata</div>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="section">
+      <div class="section-title">Liquidación Individual Mecánicos <span class="badge real">TANGO 1° Quinc Abril 2026</span></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Leg.</th><th>Nombre</th><th>Categoría</th><th class="num">Neto oficial</th><th class="num">Adicional</th><th class="num">Total quinc.</th></tr></thead>
+          <tbody id="tbody-taller-liq"></tbody>
+          <tfoot><tr style="background:#f8fafc; font-weight:700;"><td colspan="5" style="padding:9px 12px;">TOTAL MO Taller 1° Quinc. Abril</td><td class="num" id="tfoot-taller-total" style="padding:9px 12px; color:var(--neg);"></td></tr></tfoot>
+        </table>
+      </div>
+      <div class="nota-fuente"><strong>Fuente:</strong> 1° Quinc. Abril 2026 - LIQ TANGO.xlsx — ID Drive: 1V9LinRvDGzerh1SEpdmLaQTBuDqj3gNn — Carpeta: Mauro (Drive) — Responsable: Mauro Orellana — Leído: 13/05/2026 — Columnas: Legajo, Apellido/Nombre, Categoría, Neto, Adicional — Filtro: CTRO COSTO = Taller mecánico — <strong>Nota:</strong> solo se dispone de 1° quincena; MO mensual estimada = quincena × 2. Cuando Mauro cargue la 2° quincena el dato se actualizará.</div>
+    </div>
+    <div class="section">
+      <div class="section-title">MO por Centro de Costo <span class="badge real">TANGO 1° Quinc Abril</span></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Centro de costo</th><th class="num">MO 1° quinc</th><th class="num">MO mensual (×2)</th></tr></thead>
+          <tbody id="tbody-ctro-costo"></tbody>
+        </table>
+      </div>
+      <div class="nota-fuente"><strong>Fuente:</strong> 1° Quinc. Abril 2026 - LIQ TANGO.xlsx — ID Drive: 1V9LinRvDGzerh1SEpdmLaQTBuDqj3gNn — Carpeta: Mauro (Drive) — Responsable: Mauro Orellana — Leído: 13/05/2026 — Columnas: CTRO COSTO, IMPORTE — <strong>Nota:</strong> MO mensual (×2) es una estimación — se duplica la 1° quincena por no disponer aún de la 2°. Cuando Mauro cargue la 2° quincena el dato se actualiza.</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Entregas de Repuestos — Abril 2026 <span class="badge real">Datos reales — Drive</span></div>
+    <div class="alert info" style="margin-bottom:8px;">
+      Fuente: ENTREGAS DE REPUESTOS ABRIL 2026 (Google Sheet — Nicolás Dall'Agata). 27 entregas registradas al 8/4/2026. El sheet continúa con más entradas que no fueron capturadas por el límite de API.
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>N° Entrega</th>
+            <th>Fecha</th>
+            <th>Equipo</th>
+            <th>Código</th>
+            <th>Tipo</th>
+            <th class="num">Costo</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-reparaciones"></tbody>
+        <tfoot>
+          <tr style="background:#f8fafc; font-weight:700;">
+            <td colspan="5" style="padding:9px 12px; font-size:12px;">SUBTOTAL VISIBLE (27 entregas al 08/04)</td>
+            <td class="num" id="tfoot-total" style="padding:9px 12px; font-size:13px; font-weight:700; color:var(--primary)"></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    <div class="nota-fuente"><strong>Fuente:</strong> ENTREGAS DE REPUESTOS ABRIL 2026 (Google Sheet) — Responsable: Nico Dall'Agata — Leído: 12/05/2026 — Columnas usadas: N° Entrega, Fecha, Equipo, Código, Tipo, Costo — <strong>Nota:</strong> 27 registros visibles al 08/04; el sheet continúa con más entradas no capturadas por límite de API</div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Resumen por Tipo de Equipo</div>
+    <div class="grid2">
+      <div class="chart-card">
+        <h3>Distribución del gasto en repuestos</h3>
+        <canvas id="chartTaller" height="200"></canvas>
+      </div>
+      <div class="section" style="margin:0">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Tipo</th><th class="num">Total</th><th class="num">%</th></tr></thead>
+            <tbody id="tbody-tipo-equipo"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- TAB 5: FLUJO DE FONDOS -->
+<!-- ================================================================ -->
+<div class="tab-panel" id="tab-flujo">
+  <div class="kpi-grid">
+    <div class="kpi-card neg">
+      <div class="kpi-label">Egresos estimados/quincena</div>
+      <div class="kpi-value neg-val">$430M</div>
+      <div class="kpi-sub">Referencia operativa</div>
+      <div class="fuente">Regla de negocio — Adrián Caram — confirmado en conversación 12/05/2026</div>
+    </div>
+    <div class="kpi-card pos">
+      <div class="kpi-label">Pipeline Mayo confirmado</div>
+      <div class="kpi-value pos-val">$2,80B</div>
+      <div class="kpi-sub">7 ítems con fecha estimada</div>
+      <div class="fuente">Cobros Ingeco Feb-Mar-Abr 2026.xlsx — Esteban — ID Drive: 1w9t2A1La45Ab0-KTdX66f1yJDh5TcZZB — Leído: 12/05/2026 — hoja Pipeline</div>
+    </div>
+    <div class="kpi-card pos">
+      <div class="kpi-label">Ingresos 1° quinc Mayo</div>
+      <div class="kpi-value pos-val">$1,93B</div>
+      <div class="kpi-sub">5 ítems est. 1–15 mayo</div>
+      <div class="fuente">Cobros Ingeco Feb-Mar-Abr 2026.xlsx — Esteban — ítems con fecha estimada entre 01/05 y 15/05</div>
+    </div>
+    <div class="kpi-card pos">
+      <div class="kpi-label">Balance 30 días</div>
+      <div class="kpi-value pos-val">+$1,93B</div>
+      <div class="kpi-sub">Ingresos >> egresos — VERDE</div>
+      <div class="fuente">Calculado: Pipeline 1° quinc ($1,93B) − egresos estimados ($430M) — base: Cobros + regla Adrián</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Proyección Quincenal — 90 días</div>
+    <div class="flujo-period-card">
+      <div class="flujo-row" style="border-bottom:1px solid var(--border)">
+        <div class="flujo-header">Período</div>
+        <div class="flujo-header">Ingresos esperados</div>
+        <div class="flujo-header">Egresos estimados</div>
+        <div class="flujo-header">Neto</div>
+        <div class="flujo-header">Estado</div>
+      </div>
+      <div id="flujo-rows"></div>
+    </div>
+    <div class="nota-fuente"><strong>Ingresos:</strong> Cobros Ingeco Feb-Mar-Abr 2026.xlsx (Esteban) — ID Drive: 1w9t2A1La45Ab0-KTdX66f1yJDh5TcZZB — Leído: 12/05/2026 — hoja Pipeline, columnas: Obra, Monto, Fecha estimada cobro — <strong>Egresos:</strong> $430M/quinc — regla de negocio Adrián — Semáforo: verde = ingresos > egresos, rojo = alerta déficit, gris = sin datos</div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Canal 82008 — Dato real confirmado</div>
+    <div class="kpi-grid">
+      <div class="kpi-card pos">
+        <div class="kpi-label">Monto real percibido</div>
+        <div class="kpi-value">$109,27M</div>
+        <div class="kpi-sub">Devengado Marzo 2026</div>
+        <div class="fuente">Cobros Ingeco Feb-Mar-Abr 2026.xlsx — Esteban — ID Drive: 1w9t2A1La45Ab0-KTdX66f1yJDh5TcZZB — Leído: 12/05/2026 — fila: Canal 82008, col Monto = $109.271.297,44</div>
+      </div>
+      <div class="kpi-card accent">
+        <div class="kpi-label">Percibido</div>
+        <div class="kpi-value">14/04/2026</div>
+        <div class="kpi-sub">1 mes de demora</div>
+        <div class="fuente">Cobros Ingeco Feb-Mar-Abr 2026.xlsx — Esteban — col Fecha cobro = 14/04/2026 — devengado: Marzo 2026</div>
+      </div>
+      <div class="kpi-card neg">
+        <div class="kpi-label">Costo financiero</div>
+        <div class="kpi-value neg-val">$5,46M</div>
+        <div class="kpi-sub">$109,27M × 5% × 1 mes</div>
+        <div class="fuente">Calculado: $109.271.297 × 5%/mes × 1 mes demora — tasa: regla de negocio Adrián (5%/mes)</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- TAB 6: ESTRUCTURA -->
+<!-- ================================================================ -->
+<div class="tab-panel" id="tab-estructura">
+  <div class="persona-grid" id="persona-grid"></div>
+</div>
+
+<!-- ================================================================ -->
+<!-- TAB 7: FUENTES DE DATOS -->
+<!-- ================================================================ -->
+<div class="tab-panel" id="tab-fuentes">
+  <div class="section">
+    <div class="section-title">Estado de archivos en Google Drive</div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Archivo</th>
+            <th>Responsable</th>
+            <th>Última actualización</th>
+            <th>Estado</th>
+            <th>Dato aportado</th>
+            <th>Acción requerida</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-fuentes"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Acceso desde cuenta dashboard</div>
+    <div class="alert info">
+      La cuenta conectada al dashboard es <strong>mariacaram94@gmail.com</strong>. Los archivos marcados como "Pendiente" no están compartidos con esta cuenta. Para activar esos datos: el responsable debe compartir el archivo con permisos de visualización desde Google Drive.
+    </div>
+  </div>
+</div>
+
+</div><!-- /content -->
+
+<script>
+// ================================================================
+// DATOS EMBEBIDOS
+// ================================================================
+
+const MES = { feb: 'Febrero 2026', mar: 'Marzo 2026' };
+let mesActual = 'mar';
+
+// Canal 82008 — dato real del archivo Cobros
+const CANAL_82008 = {
+  id: 'CANAL_82008',
+  obra: 'Canal 82008 (Obra 82008)',
+  cliente: 'Municipio S.M. Tucumán',
+  monto: 109271297.44,
+  devengadoMes: 'mar',
+  cobradoMes: 'abr',
+  cobradoFecha: '14/04/2026',
+  demora: 1
+};
+
+// Egresos estimados
+const EGRESOS_QUINCENA = 430000000;
+const MO_TOTAL = 102500000;
+
+// Stock planta
+const STOCK = { asfaltoMP: 700, coef: 20, frioTerminado: 35 };
+
+// Cobros reales por mes (Cobros Ingeco Feb-Mar-Abr 2026.xlsx — Esteban)
+const COBROS_REAL = {
+  feb: {
+    total: 1657718906,
+    items: [
+      { obra: 'Ruta 307 (Ampliación)', concepto: 'Redet.Def.4 + Prov.5 + Prov.6', cliente: 'D.P.V.', monto: 4912450, fecha: '03/02' },
+      { obra: 'Ruta 357 - Quilmes', concepto: 'Fdo.Rep. Cert.1 (Ago-25)', cliente: 'D.P.V.', monto: 6094145, fecha: '04/02' },
+      { obra: 'Ruta 357 - Quilmes', concepto: 'Certificado 2 (Sep-25)', cliente: 'D.P.V.', monto: 283756257, fecha: '09/02' },
+      { obra: 'Desagüesagüe Pluviales Country El Pilar', concepto: 'Etapa V — Anticipo', cliente: 'Country El Pilar', monto: 39000000, fecha: '11/02' },
+      { obra: 'Licitación 81973 + 81971', concepto: 'Fdo.Rep. Cert.2 — Sectores 3 y 5', cliente: 'Munic. SMT', monto: 23268674, fecha: '12/02' },
+      { obra: 'Limpieza Canales 82001-C', concepto: 'Sector Sur SMT', cliente: 'Munic. SMT', monto: 235718069, fecha: '13/02' },
+      { obra: 'Provisión Asfalto', concepto: '1.000 tn + 4.000 lts Emulsión (C.2)', cliente: 'Munic. SMT', monto: 186200000, fecha: '18/02' },
+      { obra: 'Calle Vicente Gallo', concepto: 'Reconoc. Servicios (Mix PP)', cliente: 'Munic. SMT', monto: 127158624, fecha: '20/02' },
+      { obra: 'Ruta 357 - Quilmes', concepto: 'Certificado 4 (Nov-25)', cliente: 'D.P.V.', monto: 357787576, fecha: '24/02' },
+      { obra: 'Av. Belgrano', concepto: 'Repavimentación Etapa II', cliente: 'Munic. SMT', monto: 385914053, fecha: '25/02' },
+      { obra: 'Av. Gobernador del Campo', concepto: 'Fdo.Rep. Redet. Total (Dic-23)', cliente: 'Munic. SMT', monto: 7909056, fecha: '27/02' }
+    ]
+  },
+  mar: {
+    total: 1527261538,
+    items: [
+      { obra: 'Av. Mate de Luna Norte', concepto: 'Fdo.Rep. Redet. Total (May-24)', cliente: 'Munic. SMT', monto: 3026437, fecha: '03/03' },
+      { obra: 'Bacheo Área Central (82001)', concepto: 'Etapa I 2025 — Cuadrante Sur', cliente: 'Munic. SMT', monto: 399651707, fecha: '03/03' },
+      { obra: 'Av. Democracia / Cangallo', concepto: 'Reconoc. Servicios', cliente: 'Munic. SMT', monto: 316608780, fecha: '03/03' },
+      { obra: 'Apertura Calle Helguera Sur', concepto: 'Reconoc. Servicios', cliente: 'Munic. SMT', monto: 143191454, fecha: '06/03' },
+      { obra: 'Obras 81897 + 81898', concepto: 'Redeterminado Total', cliente: 'Munic. SMT', monto: 140761558, fecha: '10/03' },
+      { obra: 'Ruta 307 (Ampliación)', concepto: 'Redet. Definitivo 7', cliente: 'D.P.V.', monto: 3546859, fecha: '11/03' },
+      { obra: 'Obra 81908 (Muni Colectivos)', concepto: 'Redet. Total Benigno Vallejo', cliente: 'Munic. SMT', monto: 65053069, fecha: '16/03' },
+      { obra: 'Ruta 357 - Quilmes', concepto: 'Certificado 5 (Dic-25) + Redet.Def.3', cliente: 'D.P.V.', monto: 192036985, fecha: '18/03' },
+      { obra: 'Ruta 357 - Quilmes', concepto: 'Fdo.Rep. Cert.3 (Oct-25)', cliente: 'D.P.V.', monto: 6468064, fecha: '25/03' },
+      { obra: 'Air Liquide Argentina', concepto: 'Traslado Hidróxido de Calcio Feb-26', cliente: 'Air Liquide', monto: 6838111, fecha: '25/03' },
+      { obra: 'Desagüe Pluviales — Etapa V', concepto: 'Anticipo', cliente: 'Country El Pilar', monto: 40000000, fecha: '30/03' },
+      { obra: 'Ruta 357 - Quilmes', concepto: 'Fdo.Rep. Cert.2 (Sep-25)', cliente: 'D.P.V.', monto: 14187813, fecha: '31/03' },
+      { obra: 'Pavimentac. Lomas de Tafí', concepto: 'Certificado 1', cliente: 'Munic. Tafí Viejo', monto: 195890702, fecha: '31/03' }
+    ]
+  },
+  abr: {
+    total: 418693695,
+    label: 'parcial al 29/04/2026',
+    items: [
+      { obra: 'Limpieza Canales 82001-C', concepto: 'Fdo.Rep.', cliente: 'Munic. SMT', monto: 11785903, fecha: '06/04' },
+      { obra: 'Desagüe Pluviales — Etapa VI', concepto: 'Anticipo', cliente: 'Country El Pilar', monto: 15000000, fecha: '09/04' },
+      { obra: 'Bella Vista — Prov. Asfalto/Pavimax', concepto: 'Provisión', cliente: 'Munic. Bella Vista', monto: 23400000, fecha: '13/04' },
+      { obra: 'Contatruc — Prov. Mezcla/Pavimax', concepto: 'Provisión', cliente: 'Contatruc', monto: 45669483, fecha: '13/04' },
+      { obra: 'Canal 82008 — Limpieza Canales', concepto: 'Mantenimiento Sector Sur (Cert.1)', cliente: 'Munic. SMT', monto: 109271297, fecha: '14/04' },
+      { obra: 'Obras 81908 / 81897 / 81898', concepto: 'Fdo.Rep. Redeterminado Total', cliente: 'Munic. SMT', monto: 9331708, fecha: '17/04' },
+      { obra: 'Bella Vista — ROAD Alquiler', concepto: 'Retroexcavadora', cliente: 'Munic. Bella Vista', monto: 6500000, fecha: '17/04' },
+      { obra: 'Pavimentac. Lomas de Tafí', concepto: 'Certificado 2', cliente: 'Munic. Tafí Viejo', monto: 166875217, fecha: '23/04' },
+      { obra: 'Ruta 357 - Quilmes', concepto: 'Fdo.Rep. Cert.4 (Nov-25)', cliente: 'D.P.V.', monto: 17889379, fecha: '27/04' },
+      { obra: 'Ruta 357 - Quilmes', concepto: 'Redet. Definitivo 2 (Sep-25)', cliente: 'D.P.V.', monto: 12970706, fecha: '29/04' }
+    ]
+  }
+};
+
+// MO Taller — liquidación individual 1° Quinc. Abril 2026 (TANGO)
+const MO_TALLER_1Q_ABR = [
+  { leg: 1533, nombre: 'GALVEZ, Mauro A.', cat: 'Ofic. Especial', neto: 541952, adicional: 1202048 },
+  { leg: 3128, nombre: 'GALVEZ, Francisco M.', cat: 'Oficial', neto: 463603, adicional: 1280397 },
+  { leg: 3365, nombre: 'SIERRA, José M.', cat: 'Med. Oficial', neto: 428441, adicional: 285559 },
+  { leg: 3010, nombre: 'JAIME, Javier O.', cat: 'Oficial', neto: 463603, adicional: 115397 },
+  { leg: 3888, nombre: 'MONTERO, Carlos A.', cat: 'Ayudante', neto: 394360, adicional: 166640 },
+  { leg: 3928, nombre: 'EZQUER, Facundo', cat: 'Ayudante', neto: 394360, adicional: 166640 },
+  { leg: 3929, nombre: 'BARRIONUEVO, Kevin R.', cat: 'Ayudante', neto: 394360, adicional: 166640 },
+  { leg: 3955, nombre: 'BOYDO, Fabián A.', cat: 'Ayudante', neto: 394360, adicional: 166640 }
+];
+
+// OC de Insumos para Obras — Guillermo Konicek (ÓRDENES DE COMPRA DE INSUMOS PARA OBRAS)
+// ID Drive: 1_lhq9c1MddkrK1Tf0kexRtgqw5aPhmZWiQkAIRjpfxs — Leído: 13/05/2026
+// Agrupado por obra desde columna Facturas (fecha fact = D/M/YYYY)
+const OC_INSUMOS = {
+  feb: {
+    total: 549600000, nOC: 113,
+    items: [
+      { obra: 'Obras Municipio SMT', monto: 154900000, nOC: 37 },
+      { obra: 'Ruta 357 - Quilmes', monto: 131200000, nOC: 30 },
+      { obra: 'Obras Varias / General', monto: 161700000, nOC: 17 },
+      { obra: 'Country del Pilar', monto: 26500000, nOC: 7 },
+      { obra: 'Planta Asfalto', monto: 18600000, nOC: 3 },
+      { obra: 'Sin clasificar / Otros', monto: 56700000, nOC: 19 }
+    ]
+  },
+  mar: {
+    total: 515300000, nOC: 142,
+    items: [
+      { obra: 'Obras Municipio SMT', monto: 173600000, nOC: 48 },
+      { obra: 'Ruta 357 - Quilmes', monto: 79000000, nOC: 36 },
+      { obra: 'Obras Varias / General', monto: 126900000, nOC: 19 },
+      { obra: 'Sin clasificar / Otros', monto: 110600000, nOC: 33 },
+      { obra: 'Planta Asfalto', monto: 20100000, nOC: 4 },
+      { obra: 'Corrientes', monto: 4800000, nOC: 1 },
+      { obra: 'Country del Pilar', monto: 400000, nOC: 1 }
+    ]
+  },
+  abr: {
+    total: 182600000, nOC: 39, label: 'parcial al 13/05/2026',
+    items: [
+      { obra: 'Obras Municipio SMT', monto: 70900000, nOC: 12 },
+      { obra: 'Obras Varias / General', monto: 44300000, nOC: 4 },
+      { obra: 'Ruta 357 - Quilmes', monto: 37400000, nOC: 12 },
+      { obra: 'Planta Asfalto', monto: 17900000, nOC: 2 },
+      { obra: 'Sin clasificar / Otros', monto: 10200000, nOC: 6 },
+      { obra: 'Country del Pilar', monto: 1900000, nOC: 3 }
+    ]
+  }
+};
+
+// Centros de costo — MO 1° Quinc Abril 2026 (TANGO — totales por sector)
+// NOTA: solo se dispone de la 1° quincena; MO mensual estimada = quincena × 2
+const MO_CTRO_COSTO = [
+  { centro: 'Taller mecánico', quinc: 7025000 },
+  { centro: 'Planta de Asfalto (Pta.Asfalto)', quinc: 9551280 },
+  { centro: 'Asfalto / Trituradora (sector)', quinc: 13846399 },
+  { centro: 'Ruta 357 - Quilmes', quinc: 20345000 },
+  { centro: 'Pavimentación', quinc: 4320000 },
+  { centro: 'Transporte', quinc: 1446394 },
+  { centro: 'Predio Warnes', quinc: 2730000 },
+  { centro: 'Otros (Alderetes / Corrientes / Cantera)', quinc: 1900000 }
+];
+
+// OC Planta Asfalto (de OC Repuestos - Alberto Lescano)
+const OC_PLANTA = [
+  { proveedor: 'COLFER SRL', nOrden: 23387, monto: 14041213, descripcion: 'PLANTA ASFALTO — componentes' },
+  { proveedor: 'CARLOS VITALE', nOrden: 23388, monto: 105070.36, descripcion: 'PLANTA ASFALTO — repuestos' },
+  { proveedor: 'TS OASIS', nOrden: 23391, monto: 107935, descripcion: 'GRASA — equipos varios' },
+  { proveedor: 'COMBUSTIBLES DEL NORTE', nOrden: 23392, monto: 92715, descripcion: 'GRASA — Planta Asfalto' },
+  { proveedor: 'CARLOS VITALE', nOrden: 23407, monto: 57883, descripcion: 'PLANTA ASFALTO — Amaicha' },
+  { proveedor: 'TS OASIS', nOrden: 23414, monto: 198983, descripcion: 'GRASA — Planta Asfalto' }
+];
+
+// Entregas Repuestos Abril 2026 (datos reales del Google Sheet)
+const REPARACIONES_ABR = [
+  { n: 758, fecha: '01/04', equipo: 'Retropala John Deere 310K', codigo: 'RTP-05', costo: 317019.75, tipo: 'OBRA' },
+  { n: 759, fecha: '01/04', equipo: 'Retropala John Deere 310K', codigo: 'RTP-04', costo: 617100, tipo: 'OBRA' },
+  { n: 760, fecha: '01/04', equipo: 'Zaranda ASTEC GT145S', codigo: 'ZRN-01', costo: 6776, tipo: 'PLANTA' },
+  { n: 761, fecha: '01/04', equipo: 'Terminadora Dynapac F2500C', codigo: 'TRM-01', costo: 444677.04, tipo: 'OBRA' },
+  { n: 763, fecha: '06/04', equipo: 'Rodillo Bomag BW24RH', codigo: 'RN-01', costo: 200000, tipo: 'TALLER' },
+  { n: 764, fecha: '06/04', equipo: 'Zaranda ASTEC GT145S', codigo: 'ZRN-01', costo: 1573000, tipo: 'PLANTA' },
+  { n: 765, fecha: '06/04', equipo: 'Zaranda ASTEC GT145S', codigo: 'ZRN-01', costo: 106700, tipo: 'PLANTA' },
+  { n: 766, fecha: '06/04', equipo: 'Camioneta Fiat Strada', codigo: 'CMT-15', costo: 7569.72, tipo: 'TALLER' },
+  { n: 767, fecha: '07/04', equipo: 'Retroexcavadora Komatsu PC200', codigo: 'EXC-05', costo: 2072726.25, tipo: 'TALLER' },
+  { n: 768, fecha: '07/04', equipo: 'Zaranda ASTEC GT145S', codigo: 'ZRN-01', costo: 1200000, tipo: 'PLANTA' },
+  { n: 769, fecha: '07/04', equipo: 'Depósito — insumos', codigo: '-', costo: 5434.72, tipo: 'DEPOSITO' },
+  { n: 770, fecha: '07/04', equipo: 'Camioneta Nissan Frontier', codigo: 'CMT-24', costo: 36921.84, tipo: 'TALLER' },
+  { n: 771, fecha: '07/04', equipo: 'Camión Ford Cargo 1832E', codigo: 'CMN-04', costo: 446690, tipo: 'TALLER' },
+  { n: 772, fecha: '07/04', equipo: 'Camión Mercedes Atego 1725', codigo: 'CMN-11', costo: 281325, tipo: 'TALLER' },
+  { n: 773, fecha: '07/04', equipo: 'Depósito — insumos', codigo: '-', costo: 8470, tipo: 'DEPOSITO' },
+  { n: 774, fecha: '07/04', equipo: 'Camión Ford Cargo 1832E', codigo: 'CMN-04', costo: 44500.01, tipo: 'TALLER' },
+  { n: 775, fecha: '07/04', equipo: 'Depósito — insumos', codigo: '-', costo: 13321.45, tipo: 'DEPOSITO' },
+  { n: 776, fecha: '07/04', equipo: 'Camioneta Renault Kangoo', codigo: 'CMT-29', costo: 21367.67, tipo: 'TALLER' },
+  { n: 777, fecha: '07/04', equipo: 'Rodillo Bomag BW24RH', codigo: 'RN-01', costo: 184853.49, tipo: 'TALLER' },
+  { n: 778, fecha: '07/04', equipo: 'Depósito — refrigerantes', codigo: '-', costo: 375435.91, tipo: 'DEPOSITO' },
+  { n: 779, fecha: '07/04', equipo: 'Depósito — insumos', codigo: '-', costo: 18751.93, tipo: 'DEPOSITO' },
+  { n: 781, fecha: '08/04', equipo: 'Retropala Hidromek 102B', codigo: 'RTP-10', costo: 488728.55, tipo: 'OBRA' },
+  { n: 782, fecha: '08/04', equipo: 'Rodillo CAT CB534D', codigo: 'RDL-01', costo: 4936.65, tipo: 'TALLER' },
+  { n: 783, fecha: '08/04', equipo: 'Taller — insumos varios', codigo: '-', costo: 26728.39, tipo: 'TALLER' },
+  { n: 784, fecha: '08/04', equipo: 'Taller — insumos varios', codigo: '-', costo: 41803.38, tipo: 'TALLER' },
+  { n: 785, fecha: '08/04', equipo: 'Camioneta Nissan Frontier', codigo: 'CMT-21', costo: 1568359.5, tipo: 'TALLER' },
+  { n: 786, fecha: '08/04', equipo: 'Topadora CAT D6E', codigo: 'TPD-01', costo: 45613.6, tipo: 'TALLER' }
+];
+
+// Pipeline — pendiente de cobro al 12/05/2026
+const PIPELINE = [
+  // Pendientes de abril (ya debían cobrar, sin fecha real)
+  { obra: 'Ruta 357 — Cert.7 (saldo, Feb-26)', monto: 61746837, estimCobro: '29/04', estado: 'DEMORADO' },
+  { obra: 'San Cayetano — Calle Fleming', monto: 103638574, estimCobro: '30/04', estado: 'DEMORADO' },
+  { obra: 'Alderetes — Alquiler Excav. + Topad.', monto: 36423964, estimCobro: '30/04', estado: 'DEMORADO' },
+  { obra: 'Obra Corrientes — Dev. Préstamo Ingeco', monto: 200000000, estimCobro: '30/04', estado: 'DEMORADO' },
+  { obra: 'Provisión Hormigón (400 m³ H21)', monto: 69800000, estimCobro: '30/04', estado: 'DEMORADO' },
+  { obra: 'Obra Licit. 81982 — Anticipo 30%', monto: 312309111, estimCobro: '28/04', estado: 'DEMORADO' },
+  // Mayo
+  { obra: 'Obra Licit. 81976 — Anticipo 30%', monto: 329296522, estimCobro: '06/05', estado: 'PENDIENTE' },
+  { obra: 'Av. Mitre — Prov. Asfalto / Fresado', monto: 799000000, estimCobro: '08/05', estado: 'PENDIENTE' },
+  { obra: 'Lomas de Tafí — Cert.3 (aprox)', monto: 130000000, estimCobro: '08/05', estado: 'PENDIENTE' },
+  { obra: 'Bacheo Etapa 2 — Cert.1', monto: 362869221, estimCobro: '15/05', estado: 'PENDIENTE' },
+  { obra: 'Ruta 357 — Cert.6 (Ene-26)', monto: 564804680, estimCobro: '22/05', estado: 'PENDIENTE' },
+  { obra: 'Lomas de Tafí — Cert.4 (aprox)', monto: 130000000, estimCobro: '22/05', estado: 'PENDIENTE' },
+  { obra: 'Bacheo Etapa 2 — Cert.2', monto: 33406625, estimCobro: '22/05', estado: 'PENDIENTE' },
+  { obra: 'Canteros Av. Soldati', monto: 128806275, estimCobro: '29/05', estado: 'PENDIENTE' },
+  // Sin fecha precisa
+  { obra: 'Av. Roca — Contrato', monto: 620000000, estimCobro: 'S/fecha', estado: 'PIPELINE' },
+  { obra: 'Bacheo Etapa II Cuadrante Sur', monto: 390000000, estimCobro: 'S/fecha', estado: 'PIPELINE' },
+  { obra: 'Prov. Asfalto ~900 tn (Bacheo)', monto: 387000000, estimCobro: 'S/fecha', estado: 'PIPELINE' },
+  { obra: 'Ruta 307 — Medición Final', monto: 22247941, estimCobro: 'S/fecha', estado: 'PIPELINE' }
+];
+
+// Personas
+const PERSONAS = [
+  {
+    nombre: 'Adrián Caram', rol: 'Socio Director', avatar: 'AC',
+    archivos: ['Copia de OBRAS INGECO.xlsx'],
+    aporte: 'Certificados emitidos, montos a cobrar, maestro de obras',
+    pendientes: ['Compartir OBRAS INGECO.xlsx con cuenta dashboard']
+  },
+  {
+    nombre: 'Roberto', rol: 'Gerencia / Administración', avatar: 'RO',
+    archivos: ['—'],
+    aporte: 'Supervisión administrativa general',
+    pendientes: ['Definir archivos de reporte a su cargo']
+  },
+  {
+    nombre: 'Esteban', rol: 'Responsable Cobros', avatar: 'ES',
+    archivos: ['Cobros Ingeco Feb-Mar-Abr 2026.xlsx'],
+    aporte: 'Cobros reales Feb $1.66B / Mar $1.53B / Abr $419M+ — 37 registros con fecha real',
+    pendientes: ['✅ Archivo accesible — datos cargados al dashboard']
+  },
+  {
+    nombre: 'Guillermo Konicek', rol: 'Compras Insumos Obras', avatar: 'GK',
+    archivos: ['ÓRDENES DE COMPRA DE INSUMOS PARA OBRAS (Google Sheet)'],
+    aporte: 'OC insumos Feb $549M (113 OC) / Mar $515M (142 OC) / Abr $183M (39 OC) — datos reales 2026',
+    pendientes: ['✅ Accesible — carpeta Guillermo en Drive — datos cargados al dashboard']
+  },
+  {
+    nombre: 'Mauro Orellana', rol: 'RRHH / Liquidación de Sueldos', avatar: 'MO',
+    archivos: ['1° Quinc. Abril 2026 - LIQ TANGO.xlsx', '03-2026 MENSUALES - LIQ TANGO.xlsx'],
+    aporte: 'MO Taller $7M quinc, MO por centro de costo, liquidación individual 100+ empleados',
+    pendientes: ['✅ Archivos accesibles — datos cargados al dashboard']
+  },
+  {
+    nombre: 'Nico (Nicolás Dall\'Agata)', rol: 'Área Técnica / Mantenimiento', avatar: 'ND',
+    archivos: ['REMITOS OFICIALES.xlsx', 'INGECO 2026 (carpeta)'],
+    aporte: 'Tn producidas caliente/frío, entregas de repuestos, costos de mantenimiento',
+    pendientes: ['Completar columna PRECIO en REMITOS OFICIALES para habilitar costo/tn']
+  },
+  {
+    nombre: 'Agustín', rol: 'Operaciones', avatar: 'AG',
+    archivos: ['—'],
+    aporte: 'Seguimiento operativo obras y planta',
+    pendientes: ['Definir archivos de reporte']
+  },
+  {
+    nombre: 'Alberto Lescano', rol: 'Compras Repuestos Equipos', avatar: 'AL',
+    archivos: ['ÓC Repuestos para Equipos.xlsx'],
+    aporte: 'Órdenes de compra de repuestos para equipos y planta',
+    pendientes: ['Accesible ✅ — datos de planta asfalto incluidos']
+  }
+];
+
+// Fuentes de datos
+const FUENTES = [
+  { archivo: 'Cobros Ingeco Feb-Mar-Abr 2026.xlsx', responsable: 'Esteban', ultimaActualizacion: '07/05/2026', estado: 'real', dato: 'Cobros reales Feb/Mar/Abr — 37 registros', accion: '✅ Accesible — datos cargados' },
+  { archivo: '1° Quinc. Abril 2026 - LIQ TANGO.xlsx', responsable: 'Mauro Orellana', ultimaActualizacion: '29/04/2026', estado: 'real', dato: 'MO por centro de costo — taller y obras', accion: '✅ Accesible — datos cargados' },
+  { archivo: 'ÓRDENES DE COMPRA DE INSUMOS PARA OBRAS (GUILLERMO KONICEK)', responsable: 'Guillermo Konicek', ultimaActualizacion: '13/05/2026', estado: 'real', dato: 'OC insumos Feb $549M / Mar $515M / Abr $183M (parcial) — 294 órdenes 2026', accion: '✅ Accesible — carpeta Guillermo (Drive) — datos cargados' },
+  { archivo: 'REMITOS OFICIALES (Google Sheet)', responsable: 'Nicolás Dall\'Agata', ultimaActualizacion: '12/05/2026', estado: 'parcial', dato: 'Tn caliente/frío (sin precios cargados)', accion: 'Completar columna PRECIO en sheet' },
+  { archivo: 'Maestro de obras NUEVO.xlsx', responsable: 'Adrián / Equipo', ultimaActualizacion: '07/05/2026', estado: 'real', dato: '60+ obras con código canónico y cliente', accion: '✅ Accesible — cargado' },
+  { archivo: 'ENTREGAS DE REPUESTOS ABRIL 2026', responsable: 'Nicolás Dall\'Agata', ultimaActualizacion: '12/05/2026', estado: 'real', dato: 'Costos reales reparaciones taller abr 2026', accion: '✅ Accesible — datos cargados' },
+  { archivo: 'ÓC Repuestos para Equipos (Alberto Lescano)', responsable: 'Alberto Lescano', ultimaActualizacion: '29/04/2026', estado: 'parcial', dato: 'OC planta asfalto y equipos', accion: '✅ Accesible — datos cargados' }
+];
+
+// ================================================================
+// UTILIDADES
+// ================================================================
+
+function fmt(n) {
+  if (n == null) return '—';
+  if (n >= 1e9) return '$' + (n/1e9).toFixed(2) + 'B';
+  if (n >= 1e6) return '$' + (n/1e6).toFixed(1) + 'M';
+  return '$' + n.toLocaleString('es-AR', {minimumFractionDigits: 0, maximumFractionDigits: 0});
+}
+
+function fmtFull(n) {
+  if (n == null) return '—';
+  return '$' + n.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
+function nd(text) {
+  return `<span style="color:var(--nd-text);font-style:italic;">${text || 'sin dato'}</span>`;
+}
+
+// ================================================================
+// RENDER FUNCTIONS
+// ================================================================
+
+function renderMargen() {
+  const tbody = document.getElementById('tbody-margen');
+  document.getElementById('mes-label-margen').textContent = MES[mesActual];
+
+  const rows = [];
+
+  if (mesActual === 'mar') {
+    rows.push({
+      obra: 'Canal 82008',
+      cliente: 'Dirección Hidráulica',
+      generado: CANAL_82008.monto,
+      insumos: null,
+      mo: null,
+      egresos: null,
+      diff: null,
+      margen: null,
+      isReal: true
+    });
+  }
+
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td class="clickable" onclick="openObra('${r.obra}')">${r.obra}</td>
+      <td>${r.cliente}</td>
+      <td class="num ${r.generado ? 'pos-val' : ''}">${r.generado ? fmt(r.generado) : nd()}</td>
+      <td class="${r.insumos ? 'num' : 'nd num'}">${r.insumos ? fmt(r.insumos) : 'sin dato'}</td>
+      <td class="${r.mo ? 'num' : 'nd num'}">${r.mo ? fmt(r.mo) : 'sin dato'}</td>
+      <td class="${r.egresos ? 'num' : 'nd num'}">${r.egresos ? fmt(r.egresos) : 'sin dato'}</td>
+      <td class="${r.diff != null ? (r.diff >= 0 ? 'num pos-val' : 'num neg-val') : 'nd num'}">${r.diff != null ? fmt(r.diff) : 'sin dato'}</td>
+      <td class="${r.margen != null ? (r.margen >= 0 ? 'num pos-val' : 'num neg-val') : 'nd num'}">${r.margen != null ? r.margen.toFixed(1) + '%' : 'sin dato'}</td>
+    </tr>
+  `).join('') + (mesActual === 'feb' ? `
+    <tr><td colspan="8" class="nd" style="text-align:center; padding:20px;">No hay obras confirmadas para Febrero 2026 — requiere OBRAS INGECO.xlsx</td></tr>
+  ` : '');
+}
+
+function renderCobrosReal() {
+  const tbody = document.getElementById('tbody-cobros-real');
+  if (!tbody) return;
+  const rows = [];
+  ['feb','mar','abr'].forEach(mes => {
+    const d = COBROS_REAL[mes];
+    const label = mes === 'feb' ? 'Febrero 2026' : mes === 'mar' ? 'Marzo 2026' : 'Abril 2026';
+    d.items.forEach((it, i) => {
+      rows.push(`<tr>
+        ${i === 0 ? `<td rowspan="${d.items.length}" style="font-weight:600;vertical-align:top;border-right:2px solid var(--border);">${label}<br><small style="color:var(--muted);font-weight:400;">${fmt(d.total)}</small></td>` : ''}
+        <td>${it.obra}</td>
+        <td style="font-size:11px;color:var(--muted);">${it.concepto}</td>
+        <td style="font-size:11px;color:var(--muted);">${it.cliente}</td>
+        <td class="num pos-val">${fmt(it.monto)}</td>
+        <td style="font-size:11px;">${it.fecha}/2026</td>
+      </tr>`);
+    });
+    rows.push(`<tr style="background:#f8fafc;font-weight:700;">
+      <td colspan="4" style="padding:8px 12px;">TOTAL ${label}${d.label ? ' — ' + d.label : ''}</td>
+      <td class="num pos-val" style="padding:8px 12px;">${fmt(d.total)}</td>
+      <td></td>
+    </tr>`);
+  });
+  tbody.innerHTML = rows.join('');
+}
+
+function renderPipeline() {
+  const tbody = document.getElementById('tbody-pipeline');
+  const estadoClass = { 'DEMORADO': 'neg', 'PENDIENTE': 'parcial', 'PIPELINE': 'pendiente' };
+  tbody.innerHTML = PIPELINE.map(p => `
+    <tr>
+      <td>${p.obra}</td>
+      <td class="num pos-val">${fmt(p.monto)}</td>
+      <td style="font-size:11px;">${p.estimCobro}</td>
+      <td><span class="status-badge ${estadoClass[p.estado] || 'pendiente'}" style="font-size:10px;">${p.estado}</span></td>
+    </tr>
+  `).join('');
+}
+
+function renderCostoFinanciero() {
+  const tbody = document.getElementById('tbody-costo-fin');
+  // Canal 82008: devengado marzo, cobrado 14/4 → 1 mes demora
+  const c82008 = { obra: 'Canal 82008', monto: CANAL_82008.monto, demora: 1, obs: 'Dev.mar → cobr.14/abr' };
+  // Demorados de abril (estimación 1 mes de espera)
+  const demorados = PIPELINE.filter(p => p.estado === 'DEMORADO').slice(0, 5).map(p => ({
+    obra: p.obra, monto: p.monto, demora: 0.5, obs: 'Est. cobro abr, aún pendiente'
+  }));
+  const items = [c82008, ...demorados];
+  const totalCF = items.reduce((s, i) => s + i.monto * 0.05 * i.demora, 0);
+  tbody.innerHTML = items.map(i => `
+    <tr>
+      <td style="font-size:12px;">${i.obra}</td>
+      <td class="num">${fmt(i.monto)}</td>
+      <td class="num">${i.demora}</td>
+      <td class="num neg-val">${fmt(i.monto * 0.05 * i.demora)}</td>
+      <td style="font-size:11px;color:var(--muted);">${i.obs}</td>
+    </tr>
+  `).join('') + `
+    <tr style="background:#f8fafc;font-weight:700;">
+      <td colspan="3" style="padding:8px 12px;">TOTAL costo financiero estimado</td>
+      <td class="num neg-val" style="padding:8px 12px;">${fmt(totalCF)}</td>
+      <td></td>
+    </tr>`;
+}
+
+function renderOCInsumos() {
+  const tbody = document.getElementById('tbody-oc-insumos');
+  if (!tbody) return;
+  // Build a unified row per obra across Feb/Mar/Abr
+  const obras = new Set();
+  ['feb','mar','abr'].forEach(m => OC_INSUMOS[m].items.forEach(i => obras.add(i.obra)));
+  const getVal = (mes, obra) => {
+    const it = OC_INSUMOS[mes].items.find(i => i.obra === obra);
+    return it || null;
+  };
+  tbody.innerHTML = [...obras].map(obra => {
+    const f = getVal('feb', obra); const m = getVal('mar', obra); const a = getVal('abr', obra);
+    return `<tr>
+      <td style="font-size:12px;">${obra}</td>
+      <td class="num ${f ? 'neg-val' : 'nd'}">${f ? fmt(f.monto) : '—'}</td>
+      <td class="num" style="color:var(--muted);font-size:11px;">${f ? f.nOC : ''}</td>
+      <td class="num ${m ? 'neg-val' : 'nd'}">${m ? fmt(m.monto) : '—'}</td>
+      <td class="num" style="color:var(--muted);font-size:11px;">${m ? m.nOC : ''}</td>
+      <td class="num ${a ? 'neg-val' : 'nd'}">${a ? fmt(a.monto) : '—'}</td>
+      <td class="num" style="color:var(--muted);font-size:11px;">${a ? a.nOC : ''}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderOCPlanta() {
+  const tbody = document.getElementById('tbody-oc-planta');
+  tbody.innerHTML = OC_PLANTA.map(oc => `
+    <tr>
+      <td>${oc.proveedor}</td>
+      <td>${oc.nOrden}</td>
+      <td class="num">${fmtFull(oc.monto)}</td>
+      <td>${oc.descripcion}</td>
+    </tr>
+  `).join('');
+}
+
+function renderReparaciones() {
+  const tbody = document.getElementById('tbody-reparaciones');
+  tbody.innerHTML = REPARACIONES_ABR.map(r => `
+    <tr>
+      <td>${r.n}</td>
+      <td>${r.fecha}/2026</td>
+      <td>${r.equipo}</td>
+      <td style="font-family:monospace; font-size:12px;">${r.codigo}</td>
+      <td><span class="status-badge ${r.tipo === 'PLANTA' ? 'parcial' : r.tipo === 'OBRA' ? 'real' : 'pendiente'}" style="font-size:10px;">${r.tipo}</span></td>
+      <td class="num">${fmtFull(r.costo)}</td>
+    </tr>
+  `).join('');
+
+  const total = REPARACIONES_ABR.reduce((s, r) => s + r.costo, 0);
+  document.getElementById('tfoot-total').textContent = fmtFull(total);
+  document.getElementById('kpi-repuestos-total').textContent = fmt(total);
+
+  // Resumen por tipo
+  const tipos = {};
+  REPARACIONES_ABR.forEach(r => {
+    tipos[r.tipo] = (tipos[r.tipo] || 0) + r.costo;
+  });
+  const tipoRows = document.getElementById('tbody-tipo-equipo');
+  tipoRows.innerHTML = Object.entries(tipos).sort((a,b) => b[1]-a[1]).map(([tipo, monto]) => `
+    <tr>
+      <td>${tipo}</td>
+      <td class="num">${fmtFull(monto)}</td>
+      <td class="num">${((monto/total)*100).toFixed(1)}%</td>
+    </tr>
+  `).join('');
+
+  // Chart
+  const ctx = document.getElementById('chartTaller').getContext('2d');
+  new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: Object.keys(tipos),
+      datasets: [{
+        data: Object.values(tipos),
+        backgroundColor: ['#1b3a5c','#e8a100','#16a34a','#dc2626','#7c3aed'],
+        borderWidth: 2,
+        borderColor: '#fff'
+      }]
+    },
+    options: {
+      plugins: {
+        legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 12 } },
+        tooltip: {
+          callbacks: {
+            label: function(ctx) {
+              return ctx.label + ': ' + fmt(ctx.raw);
+            }
+          }
+        }
+      },
+      cutout: '55%'
+    }
+  });
+}
+
+function renderTallerLiq() {
+  const tbody = document.getElementById('tbody-taller-liq');
+  if (!tbody) return;
+  tbody.innerHTML = MO_TALLER_1Q_ABR.map(m => {
+    const total = m.neto + m.adicional;
+    return `<tr>
+      <td style="font-family:monospace;font-size:11px;">${m.leg}</td>
+      <td>${m.nombre}</td>
+      <td style="font-size:11px;color:var(--muted);">${m.cat}</td>
+      <td class="num">${fmt(m.neto)}</td>
+      <td class="num">${fmt(m.adicional)}</td>
+      <td class="num neg-val" style="font-weight:600;">${fmt(total)}</td>
+    </tr>`;
+  }).join('');
+  const total = MO_TALLER_1Q_ABR.reduce((s,m) => s + m.neto + m.adicional, 0);
+  const el = document.getElementById('tfoot-taller-total');
+  if (el) el.textContent = fmt(total);
+}
+
+function renderCtroCosto() {
+  const tbody = document.getElementById('tbody-ctro-costo');
+  if (!tbody) return;
+  const total = MO_CTRO_COSTO.reduce((s,c) => s + c.quinc, 0);
+  tbody.innerHTML = MO_CTRO_COSTO.map(c => `
+    <tr>
+      <td>${c.centro}</td>
+      <td class="num neg-val">${fmt(c.quinc)}</td>
+      <td class="num" style="color:var(--muted);">${fmt(c.quinc * 2)}</td>
+    </tr>
+  `).join('') + `
+    <tr style="background:#f8fafc;font-weight:700;">
+      <td style="padding:8px 12px;">TOTAL empresa (TANGO jornales)</td>
+      <td class="num neg-val" style="padding:8px 12px;">${fmt(total)}</td>
+      <td class="num" style="padding:8px 12px;color:var(--muted);">${fmt(total*2)}</td>
+    </tr>`;
+}
+
+function renderFlujo() {
+  const periodos = [
+    { label: '1-15 Mayo', ingresos: 312309111 + 329296522 + 799000000 + 130000000 + 362869221, egresos: EGRESOS_QUINCENA, items: '81982+81976+Av.Mitre+LTafíC3+BacheoE2C1' },
+    { label: '16-31 Mayo', ingresos: 564804680 + 130000000 + 33406625 + 128806275, egresos: EGRESOS_QUINCENA, items: 'R357C6+LTafíC4+BacheoE2C2+Soldati' },
+    { label: '1-15 Junio', ingresos: null, egresos: EGRESOS_QUINCENA, items: 'sin pipeline confirmado' },
+    { label: '16-30 Junio', ingresos: null, egresos: EGRESOS_QUINCENA, items: 'sin pipeline confirmado' },
+    { label: '1-15 Julio', ingresos: null, egresos: EGRESOS_QUINCENA, items: 'sin pipeline confirmado' },
+    { label: '16-31 Julio', ingresos: null, egresos: EGRESOS_QUINCENA, items: 'sin pipeline confirmado' }
+  ];
+
+  const container = document.getElementById('flujo-rows');
+  container.innerHTML = periodos.map(p => {
+    const neto = p.ingresos != null ? p.ingresos - p.egresos : null;
+    const semaforo = neto == null ? 'y' : neto >= 0 ? 'g' : 'r';
+    return `
+      <div class="flujo-row">
+        <div class="flujo-cell periodo">${p.label}</div>
+        <div class="flujo-cell">
+          ${p.ingresos != null ? `<span class="pos-val" style="font-weight:600;">${fmt(p.ingresos)}</span><br><small style="color:var(--muted);font-size:10px;">${p.items}</small>` : nd('sin dato')}
+        </div>
+        <div class="flujo-cell neg-val">${fmt(p.egresos)}</div>
+        <div class="flujo-cell ${neto == null ? '' : neto >= 0 ? 'pos-val' : 'neg-val'}" style="font-weight:600;">${neto != null ? fmt(neto) : nd('sin dato')}</div>
+        <div class="flujo-cell"><span class="dot ${semaforo}"></span>${semaforo === 'y' ? 'S/datos' : semaforo === 'g' ? 'VERDE' : 'ALERTA'}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderPersonas() {
+  const grid = document.getElementById('persona-grid');
+  grid.innerHTML = PERSONAS.map(p => `
+    <div class="persona-card">
+      <div class="persona-avatar">${p.avatar}</div>
+      <div class="persona-name">${p.nombre}</div>
+      <div class="persona-role">${p.rol}</div>
+      <div class="persona-item"><span class="pi-label">Archivos:</span><span class="pi-val">${p.archivos.join(', ')}</span></div>
+      <div class="persona-item"><span class="pi-label">Aporta:</span><span class="pi-val">${p.aporte}</span></div>
+      <div class="persona-item"><span class="pi-label">Pendiente:</span><span class="pi-val ${p.pendientes[0].includes('✅') ? '' : 'nd'}">${p.pendientes.join(' · ')}</span></div>
+    </div>
+  `).join('');
+}
+
+function renderFuentes() {
+  const tbody = document.getElementById('tbody-fuentes');
+  tbody.innerHTML = FUENTES.map(f => `
+    <tr>
+      <td style="font-weight:500;">${f.archivo}</td>
+      <td>${f.responsable}</td>
+      <td>${f.ultimaActualizacion}</td>
+      <td><span class="status-badge ${f.estado}">${f.estado === 'real' ? 'Real' : f.estado === 'parcial' ? 'Parcial' : 'Pendiente'}</span></td>
+      <td>${f.dato}</td>
+      <td style="font-size:12px; color:var(--muted);">${f.accion}</td>
+    </tr>
+  `).join('');
+}
+
+// ================================================================
+// PANEL LATERAL
+// ================================================================
+
+function openObra(nombre) {
+  const panel = document.getElementById('sidePanel');
+  const overlay = document.getElementById('overlay');
+  const content = document.getElementById('panelContent');
+
+  content.innerHTML = `
+    <div class="panel-title">${nombre}</div>
+    <div class="panel-sub">Detalle de obra — ${MES[mesActual]}</div>
+    <div class="panel-kpi">
+      <div class="panel-kpi-item">
+        <div class="panel-kpi-label">Generado (devengado)</div>
+        <div class="panel-kpi-val">${nombre === 'Canal 82008' ? fmt(CANAL_82008.monto) : nd('sin dato')}</div>
+      </div>
+      <div class="panel-kpi-item">
+        <div class="panel-kpi-label">Insumos</div>
+        <div class="panel-kpi-val nd">sin dato</div>
+      </div>
+      <div class="panel-kpi-item">
+        <div class="panel-kpi-label">MO estimada</div>
+        <div class="panel-kpi-val nd">sin dato</div>
+      </div>
+      <div class="panel-kpi-item">
+        <div class="panel-kpi-label">Margen</div>
+        <div class="panel-kpi-val nd">sin dato</div>
+      </div>
+    </div>
+    ${nombre === 'Canal 82008' ? `
+    <div class="alert info" style="font-size:12px;">
+      <div><strong>Canal 82008</strong> — $109,3M devengados en Marzo 2026. Percibido en Abril 2026 (1 mes de demora).<br>
+      Costo financiero por demora: <strong>$5.465.000</strong> ($109,3M × 5% × 1 mes).</div>
+    </div>
+    ` : ''}
+    <div style="margin-top:12px;">
+      <div style="font-size:12px; font-weight:700; color:var(--muted); text-transform:uppercase; margin-bottom:8px;">Datos pendientes</div>
+      <div style="font-size:12px; color:var(--text);">
+        <div style="margin-bottom:6px;">• Insumos de obra — requiere OC Insumos 2026 (Guillermo)</div>
+        <div style="margin-bottom:6px;">• Repuestos específicos — requiere OC Repuestos por obra</div>
+        <div style="margin-bottom:6px;">• MO proporcional — requiere TANGO (Mauro)</div>
+      </div>
+    </div>
+  `;
+
+  panel.classList.add('open');
+  overlay.classList.add('open');
+}
+
+function closePanel() {
+  document.getElementById('sidePanel').classList.remove('open');
+  document.getElementById('overlay').classList.remove('open');
+}
+
+// ================================================================
+// REFRESH — conexión a Google Apps Script
+// ================================================================
+
+// Pegá acá la URL de tu Web App después de hacer el deploy en Apps Script:
+const APPS_SCRIPT_URL = '';
+
+function renderAll() {
+  renderMargen();
+  renderCobrosReal();
+  renderOCInsumos();
+  renderPipeline();
+  renderCostoFinanciero();
+  renderOCPlanta();
+  renderReparaciones();
+  renderTallerLiq();
+  renderCtroCosto();
+  renderFlujo();
+  renderPersonas();
+  renderFuentes();
+}
+
+function updateTimestamp(isoStr) {
+  const el = document.getElementById('last-update');
+  if (!el) return;
+  if (isoStr) {
+    const d = new Date(isoStr);
+    const fmt = d.toLocaleString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+    el.textContent = 'Actualizado desde Drive: ' + fmt;
+  } else {
+    const now = new Date();
+    const fmt = now.toLocaleString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+    el.textContent = 'Datos locales al ' + fmt;
+  }
+}
+
+async function refreshData() {
+  const btn = document.getElementById('btn-refresh');
+  btn.disabled = true;
+  btn.className = 'btn-refresh';
+  btn.textContent = '⏳ Leyendo Drive...';
+
+  if (!APPS_SCRIPT_URL) {
+    // Sin URL configurada: usar datos locales
+    renderAll();
+    updateTimestamp(null);
+    btn.textContent = '✓ Datos locales';
+    btn.className = 'btn-refresh ok';
+    setTimeout(() => { btn.textContent = '🔄 Actualizar datos'; btn.className = 'btn-refresh'; btn.disabled = false; }, 2500);
+    return;
+  }
+
+  try {
+    const res = await fetch(APPS_SCRIPT_URL);
+    const data = await res.json();
+
+    if (data.status === 'ok') {
+      // Reemplazar datos con los frescos de Drive
+      if (data.cobros) {
+        Object.keys(data.cobros).forEach(m => { if (COBROS_REAL[m]) Object.assign(COBROS_REAL[m], data.cobros[m]); });
+      }
+      if (data.pipeline && Array.isArray(data.pipeline)) {
+        PIPELINE.splice(0, PIPELINE.length, ...data.pipeline);
+      }
+      if (data.moCtroCosto && Array.isArray(data.moCtroCosto)) {
+        MO_CTRO_COSTO.splice(0, MO_CTRO_COSTO.length, ...data.moCtroCosto);
+      }
+      if (data.ocInsumos) {
+        Object.keys(data.ocInsumos).forEach(m => { if (OC_INSUMOS[m]) Object.assign(OC_INSUMOS[m], data.ocInsumos[m]); });
+      }
+      renderAll();
+      updateTimestamp(data.timestamp);
+      btn.textContent = '✓ Actualizado';
+      btn.className = 'btn-refresh ok';
+    } else {
+      throw new Error(data.message || 'Error del servidor');
+    }
+  } catch (err) {
+    console.error('Refresh error:', err);
+    renderAll();
+    updateTimestamp(null);
+    btn.textContent = '⚠ Error — datos locales';
+    btn.className = 'btn-refresh err';
+  }
+
+  setTimeout(() => { btn.textContent = '🔄 Actualizar datos'; btn.className = 'btn-refresh'; btn.disabled = false; }, 3000);
+}
+
+// ================================================================
+// TABS Y MES
+// ================================================================
+
+function openTab(id) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('active');
+  const btns = document.querySelectorAll('.tab-btn');
+  const map = { margen: 0, cobros: 1, planta: 2, taller: 3, flujo: 4, estructura: 5, fuentes: 6 };
+  btns[map[id]].classList.add('active');
+}
+
+function setMes(mes) {
+  mesActual = mes;
+  document.querySelectorAll('.month-btn').forEach((b, i) => {
+    b.classList.toggle('active', (i === 0 && mes === 'feb') || (i === 1 && mes === 'mar'));
+  });
+  renderMargen();
+}
+
+// ================================================================
+// INIT
+// ================================================================
+
+renderMargen();
+renderCobrosReal();
+renderOCInsumos();
+renderPipeline();
+renderCostoFinanciero();
+renderOCPlanta();
+renderReparaciones();
+renderTallerLiq();
+renderCtroCosto();
+renderFlujo();
+renderPersonas();
+renderFuentes();
+
+</script>
+</body>
+</html>
