@@ -345,6 +345,7 @@ function leerMaestroObras() {
     const iNombre = _findCol(headers, ['nombre_canonico', 'nombre canonico', 'nombre']);
     const iCliente= _findCol(headers, ['cliente']);
     const iFuente = _findCol(headers, ['fuente']);
+    const iTipo   = _findCol(headers, ['tipo_contrato', 'tipo contrato', 'tipo']);
     const iEstado = _findCol(headers, ['estado']);
 
     if (iCod === null || iNombre === null) {
@@ -365,6 +366,7 @@ function leerMaestroObras() {
         nombre:  nombre,
         cliente: iCliente !== null ? String(row[iCliente] || '').trim() : '',
         fuente:  iFuente  !== null ? String(row[iFuente]  || '').trim() : '',
+        tipo:    iTipo    !== null ? String(row[iTipo]    || '').trim() : '',
       };
     }
 
@@ -460,7 +462,7 @@ function leerGeneradoPorObra() {
         cod_obra: cod,
         nombre:   info.nombre,
         cliente:  info.cliente,
-        fuente:   info.fuente,
+        tipo:     info.tipo,
         generado: Math.round(generado[cod] || 0),
       });
     }
