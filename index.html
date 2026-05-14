@@ -1339,7 +1339,9 @@ function renderReparaciones() {
     </tr>
   `).join('');
 
-  // Chart
+  // Chart — destruir instancia anterior si existe (para permitir re-render)
+  const existingChart = Chart.getChart('chartTaller');
+  if (existingChart) existingChart.destroy();
   const ctx = document.getElementById('chartTaller').getContext('2d');
   new Chart(ctx, {
     type: 'doughnut',
