@@ -1786,6 +1786,34 @@ renderFlujo();
 renderPersonas();
 renderFuentes();
 
+// Auto-carga desde caché del Apps Script (sin tocar Drive)
+if (APPS_SCRIPT_URL) {
+  (async function autoCargarCache() {
+    const lastUpEl = document.getElementById('last-update');
+    if (lastUpEl) lastUpEl.textContent = 'Cargando datos guardados...';
+    try {
+      const data = await fetchJSONP(APPS_SCRIPT_URL + '?cache=1');
+      if (data.status === 'ok') {
+        if (data.moCtroCosto && Array.isArray(data.moCtroCosto)) {
+          MO_CTRO_COSTO.splice(0, MO_CTRO_COSTO.length, ...data.moCtroCosto);
+        }
+        if (data.ocInsumos) {
+          Object.keys(data.ocInsumos).forEach(m => { if (OC_INSUMOS[m]) Object.assign(OC_INSUMOS[m], data.ocInsumos[m]); });
+        }
+        if (data.generadoPorObra) {
+          GENERADO_POR_OBRA = data.generadoPorObra;
+        }
+        renderAll();
+        updateTimestamp(data.timestamp);
+      } else {
+        if (lastUpEl) lastUpEl.textContent = 'Datos locales — presioná "Actualizar datos" para conectar';
+      }
+    } catch (e) {
+      if (lastUpEl) lastUpEl.textContent = 'Datos locales — presioná "Actualizar datos" para conectar';
+    }
+  })();
+}
+
 </script>
 </body>
 </html>
