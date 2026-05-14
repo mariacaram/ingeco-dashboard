@@ -1569,7 +1569,10 @@ async function refreshData() {
   }
 
   try {
-    const res = await fetch(APPS_SCRIPT_URL);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 55000); // 55 segundos máximo
+    const res = await fetch(APPS_SCRIPT_URL, { signal: controller.signal });
+    clearTimeout(timeout);
     const data = await res.json();
 
     if (data.status === 'ok') {
