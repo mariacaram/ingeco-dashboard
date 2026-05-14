@@ -88,15 +88,16 @@ function actualizarNocturno() {
 // CONSTRUIR EL OBJETO DE DATOS COMPLETO
 // ============================================================
 function buildData() {
-  return {
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    moCtroCosto:     leerTangoMO(),
-    ocInsumos:       leerOCInsumos(),
-    generadoPorObra: leerGeneradoPorObra()
-    // cobros y pipeline se mantienen hardcodeados en el dashboard HTML
-    // (se actualizan a mano — son datos de gestión manual de Esteban / Adrián)
+  const result = {
+    status:      'ok',
+    timestamp:   new Date().toISOString(),
+    moCtroCosto: leerTangoMO(),
+    ocInsumos:   leerOCInsumos(),
   };
+  // Nuevas fuentes — en bloque separado para que si fallan no rompan TANGO/OC
+  try { result.generadoPorObra = leerGeneradoPorObra(); }
+  catch(e) { Logger.log('generadoPorObra error: ' + e); result.generadoPorObra = null; }
+  return result;
 }
 
 // ============================================================
@@ -393,12 +394,10 @@ function leerGeneradoFernando() {
         }
       }
 
-      // Normalizar headers (quitar acentos para comparar)
-      const headers = rows[hdrIdx].map(h =>
-        String(h).toLowerCase().trim().normalize('NFD').replace(/[̀-ͯ]/g, '')
-      );
+      // Buscar columnas — búsqueda directa en lowercase, sin normalize
+      const headers = rows[hdrIdx].map(h => String(h).toLowerCase().trim());
 
-      const iCodigo = _findCol(headers, ['codigo', 'c?digo', 'cod']);
+      const iCodigo = _findCol(headers, ['código', 'codigo', 'cod_obra', 'cod']);
       const iMonto  = _findCol(headers, ['monto']);
 
       if (iCodigo === null || iMonto === null) {
