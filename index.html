@@ -457,6 +457,36 @@
     </div>
     <div class="nota-fuente"><strong>Fuente:</strong> <a href="https://docs.google.com/spreadsheets/d/1_lhq9c1MddkrK1Tf0kexRtgqw5aPhmZWiQkAIRjpfxs/edit" target="_blank">ÓRDENES DE COMPRA DE INSUMOS PARA OBRAS (Guillermo Konicek)</a> — Google Sheet — Responsable: Guillermo Konicek — Leído: 13/05/2026 — Columnas: OC, Proveedor, Fecha, Descripción, Monto — Clasificación por obra desde campo Descripción (texto libre) — Abril parcial al 13/05/2026</div>
   </div>
+
+  <div class="section">
+    <div class="section-title">
+      Generado por Obra — Teórico
+      <span class="badge partial">Fernando Solís — períodos pendientes de carga</span>
+    </div>
+    <div class="alert warn" id="alert-periodos-pendientes" style="display:none;margin-bottom:12px;">
+      ⚠️ <strong>Períodos sin cargar en la planilla de Fernando Solís:</strong> Las pestañas <strong>OBRAS DE MUNICIPIO</strong>, <strong>VIALIDAD1</strong> y <strong>Otros Ingresos</strong> aún no tienen el campo Período completado. Se muestra el <em>total acumulado</em> sin filtro de período.
+    </div>
+    <div class="table-wrap">
+      <table id="tabla-generado-obra">
+        <thead>
+          <tr>
+            <th>Cód. Obra</th>
+            <th>Obra</th>
+            <th>Cliente</th>
+            <th>Fuente</th>
+            <th class="num">Generado teórico</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-generado-obra">
+          <tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px;">Presioná "Actualizar datos" para cargar desde Drive</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="nota-fuente">
+      <strong>Generado teórico:</strong> <a href="https://docs.google.com/spreadsheets/d/1vGY8-saBKS4XAwd4RRqacNYRS7W0KV9brDBEo3_Jn0A/edit" target="_blank">Obras activas (Fernando Solís)</a> — suma de certificados por COD_OBRA ·
+      <strong>Maestro de Obras:</strong> <a href="https://docs.google.com/spreadsheets/d/1VbG7DPqaOSlYkvQxbxag-4P2sOoRJQwWGccbx9OMyBM/edit" target="_blank">Maestro de Obras — COD_OBRA</a>
+    </div>
+  </div>
 </div>
 
 <!-- ================================================================ -->
@@ -1006,6 +1036,10 @@ const OC_INSUMOS = {
     ]
   }
 };
+
+// Generado teórico por obra — Fernando Solís + Maestro de Obras
+// Se actualiza desde Apps Script (leerGeneradoPorObra)
+let GENERADO_POR_OBRA = null;
 
 // Centros de costo — MO 1° Quinc Abril 2026 (TANGO — totales por sector)
 // NOTA: solo se dispone de la 1° quincena; MO mensual estimada = quincena × 2
@@ -1569,6 +1603,7 @@ function renderAll() {
   renderMargen();
   renderCobrosReal();
   renderOCInsumos();
+  renderGeneradoPorObra();
   renderPipeline();
   renderCostoFinanciero();
   renderOCPlanta();
@@ -1578,6 +1613,40 @@ function renderAll() {
   renderFlujo();
   renderPersonas();
   renderFuentes();
+}
+
+function renderGeneradoPorObra() {
+  const tbody   = document.getElementById('tbody-generado-obra');
+  const alertEl = document.getElementById('alert-periodos-pendientes');
+  if (!tbody) return;
+
+  if (!GENERADO_POR_OBRA || !GENERADO_POR_OBRA.obras) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px;">Presioná "Actualizar datos" para cargar desde Drive</td></tr>';
+    return;
+  }
+
+  if (alertEl && GENERADO_POR_OBRA.tabsSinPeriodo && GENERADO_POR_OBRA.tabsSinPeriodo.length > 0) {
+    alertEl.style.display = '';
+  }
+
+  const obras = GENERADO_POR_OBRA.obras;
+  if (!obras.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px;">Sin datos</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = obras.map(o => {
+    const gen = o.generado > 0
+      ? `<strong>${fmt(o.generado)}</strong>`
+      : `<span style="color:var(--muted)">—</span>`;
+    return `<tr>
+      <td><code style="font-size:11px;background:#f1f5f9;padding:2px 5px;border-radius:3px;">${o.cod_obra}</code></td>
+      <td>${o.nombre}</td>
+      <td>${o.cliente}</td>
+      <td><span style="font-size:11px;color:var(--muted)">${o.fuente}</span></td>
+      <td class="num">${gen}</td>
+    </tr>`;
+  }).join('');
 }
 
 function updateTimestamp(isoStr) {
@@ -1644,6 +1713,9 @@ async function refreshData() {
       }
       if (data.ocInsumos) {
         Object.keys(data.ocInsumos).forEach(m => { if (OC_INSUMOS[m]) Object.assign(OC_INSUMOS[m], data.ocInsumos[m]); });
+      }
+      if (data.generadoPorObra) {
+        GENERADO_POR_OBRA = data.generadoPorObra;
       }
       renderAll();
       updateTimestamp(data.timestamp);
