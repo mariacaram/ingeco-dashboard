@@ -437,9 +437,6 @@ function leerGeneradoFernando() {
           if (estado !== 'a cobrar') continue;
         }
 
-        // Normalizar typo frecuente en planilla de Fernando: MUNSMT → MUNCMT
-        cod = cod.replace(/^MUNSMT-/, 'MUNCMT-');
-
         // Usar "Monto" si tiene valor, sino "Monto Total"
         let monto = iMonto >= 0 ? parsearMonto(row[iMonto]) : 0;
         if (monto <= 0 && iMontoTotal >= 0) monto = parsearMonto(row[iMontoTotal]);
