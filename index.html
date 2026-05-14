@@ -1178,7 +1178,8 @@ function nd(text) {
 
 function renderMargen() {
   const tbody = document.getElementById('tbody-margen');
-  document.getElementById('mes-label-margen').textContent = MES[mesActual];
+  const mesLabel = document.getElementById('mes-label-margen');
+  if (mesLabel) mesLabel.textContent = MES[mesActual];
 
   // Calcular totales de egresos para el mes seleccionado
   const ocMes    = OC_INSUMOS[mesActual] ? OC_INSUMOS[mesActual].total : null;
