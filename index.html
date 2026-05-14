@@ -392,14 +392,14 @@
     </div>
     <div class="kpi-card">
       <div class="kpi-label">Total Egresos (visible)</div>
-      <div class="kpi-value nd">sin dato</div>
-      <div class="kpi-sub">Requiere OC Insumos + TANGO</div>
-      <div class="fuente">ÓC Insumos (Guillermo) + LIQ TANGO (Mauro) — pendiente datos 2026</div>
+      <div class="kpi-value nd" id="kpi-egresos">sin dato</div>
+      <div class="kpi-sub" id="kpi-egresos-sub">Requiere OC Insumos + TANGO</div>
+      <div class="fuente" id="kpi-egresos-fuente">ÓC Insumos (Guillermo) + LIQ TANGO (Mauro) — pendiente datos 2026</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">Margen estimado</div>
-      <div class="kpi-value nd">sin dato</div>
-      <div class="kpi-sub">Pendiente de archivos de costo</div>
+      <div class="kpi-value nd" id="kpi-margen-est">sin dato</div>
+      <div class="kpi-sub" id="kpi-margen-sub">Pendiente de archivos de costo</div>
       <div class="fuente">Se calcula cuando Egresos esté disponible</div>
     </div>
     <div class="kpi-card neg">
@@ -1174,6 +1174,44 @@ function nd(text) {
 function renderMargen() {
   const tbody = document.getElementById('tbody-margen');
   document.getElementById('mes-label-margen').textContent = MES[mesActual];
+
+  // Calcular totales de egresos para el mes seleccionado
+  const ocMes    = OC_INSUMOS[mesActual] ? OC_INSUMOS[mesActual].total : null;
+  const moQuinc  = MO_CTRO_COSTO.length > 0 ? MO_CTRO_COSTO.reduce((s, r) => s + r.quinc, 0) : null;
+  const moMensual = moQuinc ? moQuinc * 2 : null;
+  const totalEgresos = (ocMes != null && moMensual != null) ? ocMes + moMensual : null;
+
+  // Actualizar KPI de Egresos
+  const kpiEg = document.getElementById('kpi-egresos');
+  if (kpiEg) {
+    if (totalEgresos != null) {
+      kpiEg.textContent = fmt(totalEgresos);
+      kpiEg.className = 'kpi-value neg-val';
+      document.getElementById('kpi-egresos-sub').textContent = 'OC Insumos + MO estimada (×2 la quincena)';
+      document.getElementById('kpi-egresos-fuente').textContent =
+        'OC: Guillermo Konicek — MO: TANGO 1° Quinc. Abr (estimación mensual = quincena × 2)';
+    } else {
+      kpiEg.textContent = 'sin dato';
+      kpiEg.className = 'kpi-value nd';
+    }
+  }
+
+  // Actualizar KPI de Margen estimado
+  const cobMes = COBROS_REAL[mesActual] ? COBROS_REAL[mesActual].total : null;
+  const kpiMg  = document.getElementById('kpi-margen-est');
+  if (kpiMg) {
+    if (cobMes != null && totalEgresos != null) {
+      const margenVal = cobMes - totalEgresos;
+      const pct = ((margenVal / cobMes) * 100).toFixed(1);
+      kpiMg.textContent = fmt(margenVal) + ' (' + pct + '%)';
+      kpiMg.className   = 'kpi-value ' + (margenVal >= 0 ? 'pos-val' : 'neg-val');
+      document.getElementById('kpi-margen-sub').textContent =
+        'Cobros ' + MES[mesActual] + ' − Egresos estimados';
+    } else {
+      kpiMg.textContent = 'sin dato';
+      kpiMg.className   = 'kpi-value nd';
+    }
+  }
 
   const rows = [];
 
