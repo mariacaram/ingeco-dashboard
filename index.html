@@ -1229,7 +1229,8 @@ function renderMargen() {
     const obras = GENERADO_POR_OBRA.obras;
 
     // Actualizar KPI Total A Cobrar con suma de Fernando
-    const totalGen = obras.reduce((s, o) => s + o.aCobrar, 0);
+    // Compatibilidad con datos en caché que usan campo viejo "generado"
+    const totalGen = obras.reduce((s, o) => s + (o.aCobrar ?? o.generado ?? 0), 0);
     if (kpiGen)    { kpiGen.textContent = fmt(totalGen); kpiGen.className = 'kpi-value pos-val'; }
     if (kpiGenSub) kpiGenSub.textContent = obras.length + ' obras con monto A Cobrar';
     if (badge)     badge.textContent = obras.length + ' obras · Fernando Solís';
@@ -1238,12 +1239,16 @@ function renderMargen() {
     }
 
     tbody.innerHTML = obras.map(o => {
+      const monto = o.aCobrar ?? o.generado ?? 0;
+      const montoCell = monto > 0
+        ? `<strong class="pos-val">${fmt(monto)}</strong>`
+        : `<span class="nd">—</span>`;
       return `<tr>
         <td><code style="font-size:11px;background:#f1f5f9;padding:2px 5px;border-radius:3px;">${o.cod_obra}</code></td>
         <td>${o.nombre}</td>
         <td>${o.cliente}</td>
         <td><span style="font-size:11px;color:var(--muted)">${o.tipo || '—'}</span></td>
-        <td class="num"><strong class="pos-val">${fmt(o.aCobrar)}</strong></td>
+        <td class="num">${montoCell}</td>
       </tr>`;
     }).join('');
   } else {

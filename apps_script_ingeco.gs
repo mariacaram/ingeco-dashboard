@@ -414,15 +414,17 @@ function leerGeneradoFernando() {
       const headers = rows[hdrIdx].map(h => String(h).toLowerCase().trim());
 
       const iCodigo = _findCol(headers, ['código', 'codigo', 'cod_obra', 'cod']);
-      const iMonto  = _findCol(headers, ['monto']);
       const iEstado = _findCol(headers, ['estado $', 'estado$', 'estado']);
+      // Separar "Monto Total" (valor contrato) de "Monto" (certificado específico)
+      const iMontoTotal = headers.findIndex(h => h.includes('monto') && h.includes('total'));
+      const iMonto      = headers.findIndex(h => h === 'monto' || (h.includes('monto') && !h.includes('total')));
 
-      if (iCodigo === null || iMonto === null) {
+      if (iCodigo === null || (iMonto < 0 && iMontoTotal < 0)) {
         Logger.log('Fernando [' + sheet.getName() + ']: columnas no encontradas. Headers: ' + headers.join('|'));
         continue;
       }
 
-      Logger.log('Fernando [' + sheet.getName() + ']: iCodigo=' + iCodigo + ' iMonto=' + iMonto + ' iEstado=' + iEstado);
+      Logger.log('Fernando [' + sheet.getName() + ']: iCodigo=' + iCodigo + ' iEstado=' + iEstado + ' iMonto=' + iMonto + ' iMontoTotal=' + iMontoTotal);
 
       for (let i = hdrIdx + 1; i < rows.length; i++) {
         const row = rows[i];
@@ -438,7 +440,9 @@ function leerGeneradoFernando() {
         // Normalizar typo frecuente en planilla de Fernando: MUNSMT → MUNCMT
         cod = cod.replace(/^MUNSMT-/, 'MUNCMT-');
 
-        const monto = parsearMonto(row[iMonto]);
+        // Usar "Monto" si tiene valor, sino "Monto Total"
+        let monto = iMonto >= 0 ? parsearMonto(row[iMonto]) : 0;
+        if (monto <= 0 && iMontoTotal >= 0) monto = parsearMonto(row[iMontoTotal]);
         if (!monto || monto <= 0) continue;
 
         aCobrarPorCodigo[cod] = (aCobrarPorCodigo[cod] || 0) + monto;
