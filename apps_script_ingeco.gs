@@ -392,6 +392,7 @@ function leerGeneradoFernando() {
     const tabsSinPeriodo  = [...TABS_OBJETIVO]; // se notifica en el dashboard
 
     const aCobrarPorCodigo = {};
+    const nombrePorCodigo  = {};
 
     for (const sheet of sheets) {
       const tabName = sheet.getName().toUpperCase().trim();
@@ -415,6 +416,7 @@ function leerGeneradoFernando() {
 
       const iCodigo = _findCol(headers, ['código', 'codigo', 'cod_obra', 'cod']);
       const iEstado = _findCol(headers, ['estado $', 'estado$', 'estado']);
+      const iNombre = _findCol(headers, ['nombre obra', 'nombre']) ?? 0;
       // Separar "Monto Total" (valor contrato) de "Monto" (certificado específico)
       const iMontoTotal = headers.findIndex(h => h.includes('monto') && h.includes('total'));
       const iMonto      = headers.findIndex(h => h === 'monto' || (h.includes('monto') && !h.includes('total')));
@@ -443,11 +445,17 @@ function leerGeneradoFernando() {
         if (!monto || monto <= 0) continue;
 
         aCobrarPorCodigo[cod] = (aCobrarPorCodigo[cod] || 0) + monto;
+
+        // Guardar nombre de la primera fila vista para este código
+        if (!nombrePorCodigo[cod]) {
+          const n = String(row[iNombre] || '').trim();
+          if (n) nombrePorCodigo[cod] = n;
+        }
       }
     }
 
     Logger.log('Fernando Solís — CODs con A Cobrar: ' + Object.keys(aCobrarPorCodigo).length);
-    return { aCobrar: aCobrarPorCodigo, tabsSinPeriodo: tabsSinPeriodo };
+    return { aCobrar: aCobrarPorCodigo, nombreFernando: nombrePorCodigo, tabsSinPeriodo: tabsSinPeriodo };
 
   } catch (err) {
     Logger.log('leerGeneradoFernando error: ' + err.toString());
@@ -460,26 +468,31 @@ function leerGeneradoFernando() {
 // ============================================================
 function leerGeneradoPorObra() {
   try {
-    const maestro               = leerMaestroObras();
-    const { aCobrar, tabsSinPeriodo } = leerGeneradoFernando();
+    const maestro = leerMaestroObras();
+    const { aCobrar, nombreFernando, tabsSinPeriodo } = leerGeneradoFernando();
 
     const obras = [];
-    for (const [cod, info] of Object.entries(maestro)) {
-      if (info.fuente === 'INTERNO') continue;
-      const monto = Math.round(aCobrar[cod] || 0);
-      if (monto <= 0) continue; // solo obras con monto A Cobrar > 0
+    // Iterar sobre TODOS los códigos de Fernando (no solo los del Maestro)
+    for (const [cod, monto] of Object.entries(aCobrar)) {
+      if (cod === 'SIN-CODIGO') continue;
+      const montoRed = Math.round(monto);
+      if (montoRed <= 0) continue;
+
+      const info = maestro[cod];
+      if (info && info.fuente === 'INTERNO') continue;
+
       obras.push({
         cod_obra: cod,
-        nombre:   info.nombre,
-        cliente:  info.cliente,
-        tipo:     info.tipo,
-        aCobrar:  monto,
+        nombre:   info ? info.nombre : (nombreFernando[cod] || cod),
+        cliente:  info ? info.cliente : '—',
+        tipo:     info ? info.tipo    : '—',
+        aCobrar:  montoRed,
       });
     }
 
     obras.sort((a, b) => b.aCobrar - a.aCobrar);
 
-    // Agregar al final las filas de Fernando sin código asignado
+    // Filas sin código al final
     const montoSinCod = Math.round(aCobrar['SIN-CODIGO'] || 0);
     if (montoSinCod > 0) {
       obras.push({
