@@ -391,7 +391,7 @@ function leerGeneradoFernando() {
     const TABS_OBJETIVO   = ['OBRAS DE MUNICIPIO', 'VIALIDAD1', 'OTROS INGRESOS'];
     const tabsSinPeriodo  = [...TABS_OBJETIVO]; // se notifica en el dashboard
 
-    const generadoPorCodigo = {};
+    const aCobrarPorCodigo = {};
 
     for (const sheet of sheets) {
       const tabName = sheet.getName().toUpperCase().trim();
@@ -415,18 +415,25 @@ function leerGeneradoFernando() {
 
       const iCodigo = _findCol(headers, ['código', 'codigo', 'cod_obra', 'cod']);
       const iMonto  = _findCol(headers, ['monto']);
+      const iEstado = _findCol(headers, ['estado $', 'estado$', 'estado']);
 
       if (iCodigo === null || iMonto === null) {
         Logger.log('Fernando [' + sheet.getName() + ']: columnas no encontradas. Headers: ' + headers.join('|'));
         continue;
       }
 
-      Logger.log('Fernando [' + sheet.getName() + ']: iCodigo=' + iCodigo + ' iMonto=' + iMonto);
+      Logger.log('Fernando [' + sheet.getName() + ']: iCodigo=' + iCodigo + ' iMonto=' + iMonto + ' iEstado=' + iEstado);
 
       for (let i = hdrIdx + 1; i < rows.length; i++) {
         const row = rows[i];
         let cod   = String(row[iCodigo] || '').trim();
         if (!cod) continue;
+
+        // Solo incluir filas con Estado $ = "A Cobrar"
+        if (iEstado !== null) {
+          const estado = String(row[iEstado] || '').trim().toLowerCase();
+          if (estado !== 'a cobrar') continue;
+        }
 
         // Normalizar typo frecuente en planilla de Fernando: MUNSMT → MUNCMT
         cod = cod.replace(/^MUNSMT-/, 'MUNCMT-');
@@ -434,12 +441,12 @@ function leerGeneradoFernando() {
         const monto = parsearMonto(row[iMonto]);
         if (!monto || monto <= 0) continue;
 
-        generadoPorCodigo[cod] = (generadoPorCodigo[cod] || 0) + monto;
+        aCobrarPorCodigo[cod] = (aCobrarPorCodigo[cod] || 0) + monto;
       }
     }
 
-    Logger.log('Fernando Solís — CODs con generado: ' + Object.keys(generadoPorCodigo).length);
-    return { generado: generadoPorCodigo, tabsSinPeriodo: tabsSinPeriodo };
+    Logger.log('Fernando Solís — CODs con A Cobrar: ' + Object.keys(aCobrarPorCodigo).length);
+    return { aCobrar: aCobrarPorCodigo, tabsSinPeriodo: tabsSinPeriodo };
 
   } catch (err) {
     Logger.log('leerGeneradoFernando error: ' + err.toString());
@@ -453,22 +460,23 @@ function leerGeneradoFernando() {
 function leerGeneradoPorObra() {
   try {
     const maestro               = leerMaestroObras();
-    const { generado, tabsSinPeriodo } = leerGeneradoFernando();
+    const { aCobrar, tabsSinPeriodo } = leerGeneradoFernando();
 
     const obras = [];
     for (const [cod, info] of Object.entries(maestro)) {
-      if (info.fuente === 'INTERNO') continue; // centros de costo internos no van en esta tabla
+      if (info.fuente === 'INTERNO') continue;
+      const monto = Math.round(aCobrar[cod] || 0);
+      if (monto <= 0) continue; // solo obras con monto A Cobrar > 0
       obras.push({
         cod_obra: cod,
         nombre:   info.nombre,
         cliente:  info.cliente,
         tipo:     info.tipo,
-        generado: Math.round(generado[cod] || 0),
+        aCobrar:  monto,
       });
     }
 
-    // Ordenar: primero las que tienen generado (mayor primero), luego las sin dato
-    obras.sort((a, b) => b.generado - a.generado);
+    obras.sort((a, b) => b.aCobrar - a.aCobrar);
 
     return { obras: obras, tabsSinPeriodo: tabsSinPeriodo };
 
