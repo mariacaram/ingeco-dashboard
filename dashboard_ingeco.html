@@ -436,25 +436,6 @@
   </div>
 
   <div class="section">
-    <div class="section-title">Egresos de Insumos por Obra — <span id="mes-label-egresos"></span> <span class="badge">OC Insumos · Guillermo Konicek</span></div>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Obra / Sector</th>
-            <th class="num">Monto OC Insumos</th>
-            <th class="num">N° OC</th>
-          </tr>
-        </thead>
-        <tbody id="tbody-egresos-obra">
-          <tr><td colspan="3" class="nd" style="text-align:center;padding:16px;">Seleccioná un mes</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <div class="nota-fuente"><strong>Fuente:</strong> <a href="https://docs.google.com/spreadsheets/d/1_lhq9c1MddkrK1Tf0kexRtgqw5aPhmZWiQkAIRjpfxs/edit" target="_blank">OC Insumos (Guillermo Konicek)</a> — OC registradas en el mes seleccionado, agrupadas por obra/destino</div>
-  </div>
-
-  <div class="section">
     <div class="section-title">OC de Insumos — Detalle por Obra · <span id="mes-label-oc"></span> <span class="badge real">Datos reales — Guillermo Konicek</span></div>
     <div class="table-wrap">
       <table>
@@ -1272,28 +1253,6 @@ function renderMargen() {
     tbody.innerHTML = '<tr><td colspan="5" class="nd" style="text-align:center;padding:20px;">Presioná "Actualizar datos" para cargar desde Drive</td></tr>';
   }
 
-  // Tabla de egresos de insumos por obra (mes seleccionado)
-  const mesLabelEg = document.getElementById('mes-label-egresos');
-  if (mesLabelEg) mesLabelEg.textContent = MES[mesActual] || mesActual;
-  const tbodyEg = document.getElementById('tbody-egresos-obra');
-  if (tbodyEg) {
-    const ocDatos = OC_INSUMOS[mesActual];
-    if (ocDatos && ocDatos.items && ocDatos.items.length > 0) {
-      const filas = ocDatos.items.map(it => `<tr>
-        <td>${it.obra}</td>
-        <td class="num"><strong class="neg-val">${fmt(it.monto)}</strong></td>
-        <td class="num" style="color:var(--muted);">${it.nOC}</td>
-      </tr>`).join('');
-      const totalFila = `<tr style="background:#f8fafc;font-weight:700;border-top:2px solid var(--border);">
-        <td>TOTAL</td>
-        <td class="num neg-val">${fmt(ocDatos.total)}</td>
-        <td class="num" style="color:var(--muted);">${ocDatos.nOC}</td>
-      </tr>`;
-      tbodyEg.innerHTML = filas + totalFila;
-    } else {
-      tbodyEg.innerHTML = '<tr><td colspan="3" class="nd" style="text-align:center;padding:16px;">Sin datos para el mes seleccionado</td></tr>';
-    }
-  }
 }
 
 function renderCobrosReal() {
