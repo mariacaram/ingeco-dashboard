@@ -215,11 +215,12 @@ function leerOCInsumos() {
     const headers = rows[hdrIdx].map(h => String(h).toLowerCase().trim());
     Logger.log('OC Insumos — headers detectados: ' + headers.join(' | '));
 
-    // Buscar columnas por nombre; si no, usar posiciones fijas conocidas del análisis previo
-    // Estructura observada: | (vacío) | id | pedInt | fecha | facturas/obra | monto |
+    // Columna O (índice 14): nombre de obra según el Maestro (Guillermo)
+    // Columna F (índice 5): Monto
+    // Columna D (índice 3): fecha fact
     const COL_FECHA = _findCol(headers, ['fecha']) ?? 3;
     const COL_MONTO = _findCol(headers, ['monto', 'importe', 'total']) ?? 5;
-    const COL_OBRA  = _findCol(headers, ['obra', 'centro', 'destino', 'factura']) ?? 4;
+    const COL_OBRA  = 14; // Columna O — nombre obra como aparece en el Maestro
 
     Logger.log('OC Insumos — cols: fecha=' + COL_FECHA + ' monto=' + COL_MONTO + ' obra=' + COL_OBRA);
 
@@ -238,7 +239,8 @@ function leerOCInsumos() {
       const monto = parsearMonto(row[COL_MONTO]);
       if (!monto || monto <= 0) continue;
 
-      const obra = clasificarObra(String(row[COL_OBRA] || ''));
+      const obraRaw = String(row[COL_OBRA] || '').trim();
+      const obra = obraRaw || 'Sin clasificar';
 
       if (!acum[mes].items[obra]) acum[mes].items[obra] = { monto: 0, nOC: 0 };
       acum[mes].items[obra].monto += monto;
