@@ -422,8 +422,9 @@ function leerGeneradoFernando() {
     const TABS_OBJETIVO   = ['OBRAS DE MUNICIPIO', 'VIALIDAD1', 'OTROS INGRESOS'];
     const tabsSinPeriodo  = [...TABS_OBJETIVO]; // se notifica en el dashboard
 
-    const aCobrarPorCodigo = {};
-    const nombrePorCodigo  = {};
+    const aCobrarPorCodigo  = {};
+    const nombrePorCodigo   = {};
+    const detallesPorCodigo = {};
 
     for (const sheet of sheets) {
       const tabName = sheet.getName().toUpperCase().trim();
@@ -478,15 +479,18 @@ function leerGeneradoFernando() {
         aCobrarPorCodigo[cod] = (aCobrarPorCodigo[cod] || 0) + monto;
 
         // Guardar nombre de la primera fila vista para este código
-        if (!nombrePorCodigo[cod]) {
-          const n = String(row[iNombre] || '').trim();
-          if (n) nombrePorCodigo[cod] = n;
-        }
+        const n = String(row[iNombre] || '').trim();
+        if (!nombrePorCodigo[cod] && n) nombrePorCodigo[cod] = n;
+
+        // Guardar ítem individual para el panel de detalle
+        if (!detallesPorCodigo[cod]) detallesPorCodigo[cod] = [];
+        detallesPorCodigo[cod].push({ nombre: n || cod, monto: Math.round(monto) });
       }
     }
 
     Logger.log('Fernando Solís — CODs con A Cobrar: ' + Object.keys(aCobrarPorCodigo).length);
-    return { aCobrar: aCobrarPorCodigo, nombreFernando: nombrePorCodigo, tabsSinPeriodo: tabsSinPeriodo };
+    return { aCobrar: aCobrarPorCodigo, nombreFernando: nombrePorCodigo,
+             detalles: detallesPorCodigo, tabsSinPeriodo: tabsSinPeriodo };
 
   } catch (err) {
     Logger.log('leerGeneradoFernando error: ' + err.toString());
@@ -500,7 +504,7 @@ function leerGeneradoFernando() {
 function leerGeneradoPorObra() {
   try {
     const maestro = leerMaestroObras();
-    const { aCobrar, nombreFernando, tabsSinPeriodo } = leerGeneradoFernando();
+    const { aCobrar, nombreFernando, detalles, tabsSinPeriodo } = leerGeneradoFernando();
 
     const obras = [];
     // Iterar sobre TODOS los códigos de Fernando (no solo los del Maestro)
@@ -518,6 +522,7 @@ function leerGeneradoPorObra() {
         cliente:  info ? info.cliente : '—',
         tipo:     info ? info.tipo    : '—',
         aCobrar:  montoRed,
+        items:    detalles[cod] || [],
       });
     }
 
