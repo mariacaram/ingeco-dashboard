@@ -411,6 +411,31 @@
 
   <div class="section">
     <div class="section-title">
+      Margen por Obra · <span id="mes-label-resumen-obra"></span>
+      <span class="badge partial" id="badge-resumen-obra">Presioná "Actualizar datos"</span>
+    </div>
+    <div class="table-wrap">
+      <table id="tabla-resumen-obra">
+        <thead>
+          <tr>
+            <th>Cód. Obra</th>
+            <th class="num">A Cobrar</th>
+            <th class="num">Insumos</th>
+            <th class="num">Mano de Obra</th>
+            <th class="num">Alquiler</th>
+            <th class="num">Margen</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-resumen-obra">
+          <tr><td colspan="6" class="nd" style="text-align:center;padding:20px;">Presioná "Actualizar datos" para cargar desde Drive</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="nota-fuente">A Cobrar: Fernando Solís · Insumos: OC Guillermo Konicek · Alquiler: Partes diarios Adrián Caram · MO: TANGO (total mensual estimado, no atribuible por obra)</div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">
       Generado por Obra — Teórico
       <span class="badge partial" id="badge-margen">Presioná "Actualizar datos"</span>
     </div>
@@ -1284,6 +1309,90 @@ function renderMargen() {
     tbody.innerHTML = '<tr><td colspan="5" class="nd" style="text-align:center;padding:20px;">Presioná "Actualizar datos" para cargar desde Drive</td></tr>';
   }
 
+  renderResumenObra();
+}
+
+function renderResumenObra() {
+  const tbody   = document.getElementById('tbody-resumen-obra');
+  const mesLabel = document.getElementById('mes-label-resumen-obra');
+  if (mesLabel) mesLabel.textContent = MES[mesActual] || mesActual;
+  if (!tbody) return;
+
+  const obras = GENERADO_POR_OBRA && GENERADO_POR_OBRA.obras ? GENERADO_POR_OBRA.obras : [];
+  if (obras.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="nd" style="text-align:center;padding:20px;">Presioná "Actualizar datos" para cargar desde Drive</td></tr>';
+    return;
+  }
+
+  // OC Insumos del mes: mapa por nombre de obra (lowercase)
+  const ocPorNombre = {};
+  if (OC_INSUMOS && OC_INSUMOS[mesActual] && OC_INSUMOS[mesActual].items) {
+    OC_INSUMOS[mesActual].items.forEach(item => {
+      const k = (item.obra || '').toLowerCase().trim();
+      if (k) ocPorNombre[k] = (ocPorNombre[k] || 0) + item.monto;
+    });
+  }
+
+  // Alquiler del mes: mapa por nombre de obra (lowercase)
+  const alqPorNombre = {};
+  if (ALQUILER_EQUIPOS && ALQUILER_EQUIPOS[mesActual] && ALQUILER_EQUIPOS[mesActual].porObra) {
+    ALQUILER_EQUIPOS[mesActual].porObra.forEach(item => {
+      const k = (item.obra || '').toLowerCase().trim();
+      if (k) alqPorNombre[k] = (alqPorNombre[k] || 0) + item.costoArs;
+    });
+  }
+
+  // MO total mensual (Tango quincena × 2)
+  const moTotal = MO_CTRO_COSTO.length > 0
+    ? MO_CTRO_COSTO.reduce((s, r) => s + r.quinc, 0) * 2
+    : null;
+
+  let sumaCobrar = 0, sumaInsumos = 0, sumaAlquiler = 0;
+
+  const filas = obras.map(o => {
+    const aCobrar = o.aCobrar ?? o.generado ?? 0;
+
+    // Buscar insumos: por nombre canónico primero, luego por código
+    const nk = (o.nombre || '').toLowerCase().trim();
+    const ck = (o.cod_obra || '').toLowerCase().trim();
+    const insumos  = ocPorNombre[nk]  || ocPorNombre[ck]  || 0;
+    const alquiler = alqPorNombre[ck] || alqPorNombre[nk] || 0;
+
+    const margen = aCobrar - insumos - alquiler;
+    const mgColor = margen > 0 ? 'pos-val' : margen < 0 ? 'neg-val' : '';
+
+    sumaCobrar  += aCobrar;
+    sumaInsumos += insumos;
+    sumaAlquiler+= alquiler;
+
+    return `<tr>
+      <td><code style="font-size:11px;background:#f1f5f9;padding:2px 5px;border-radius:3px;">${o.cod_obra}</code></td>
+      <td class="num">${aCobrar > 0 ? `<strong class="pos-val">${fmt(aCobrar)}</strong>` : '<span class="nd">—</span>'}</td>
+      <td class="num">${insumos  > 0 ? `<span class="neg-val">${fmt(insumos)}</span>`  : '<span class="nd">—</span>'}</td>
+      <td class="num"><span style="font-size:11px;color:var(--muted);">—</span></td>
+      <td class="num">${alquiler > 0 ? `<span class="neg-val">${fmt(alquiler)}</span>` : '<span class="nd">—</span>'}</td>
+      <td class="num"><strong class="${mgColor}">${fmt(margen)}</strong></td>
+    </tr>`;
+  });
+
+  // Fila total: incluye MO en los egresos totales
+  const moCell = moTotal != null
+    ? `<span class="neg-val">${fmt(moTotal)}</span>`
+    : '<span class="nd">sin dato</span>';
+  const sumaEgresos = sumaInsumos + (moTotal || 0) + sumaAlquiler;
+  const sumaMargen  = sumaCobrar - sumaEgresos;
+  const sumaColor   = sumaMargen > 0 ? 'pos-val' : sumaMargen < 0 ? 'neg-val' : '';
+
+  filas.push(`<tr style="background:#f8fafc;font-weight:700;border-top:2px solid var(--border);">
+    <td style="font-size:12px;">TOTAL</td>
+    <td class="num pos-val">${fmt(sumaCobrar)}</td>
+    <td class="num neg-val">${fmt(sumaInsumos)}</td>
+    <td class="num">${moCell}</td>
+    <td class="num neg-val">${fmt(sumaAlquiler)}</td>
+    <td class="num ${sumaColor}">${fmt(sumaMargen)}</td>
+  </tr>`);
+
+  tbody.innerHTML = filas.join('');
 }
 
 function renderCobrosReal() {
