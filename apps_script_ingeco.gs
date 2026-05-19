@@ -613,6 +613,7 @@ function leerAlquilerEquipos() {
       // Columnas fijas según estructura conocida de los partes diarios
       const COL_FECHA     = 0;
       const COL_OBRA      = 2;
+      const COL_HORAS_OP  = 7;  // HORARIOS OPERARIO / TOTAL (dato principal)
       const COL_HORAS_EQ  = 12; // HORARIOS EQUIPO / TOTAL
       const COL_HOROMETRO = 17; // HORÓMETRO / TOTAL
 
@@ -626,8 +627,9 @@ function leerAlquilerEquipos() {
         const obraRaw = String(row[COL_OBRA] || '').trim();
         const obra    = (obraRaw && obraRaw !== '-') ? obraRaw : 'Sin asignar';
 
-        let horas = parsearHoras(row[COL_HOROMETRO]);  // horómetro: número limpio, más confiable
-        if (horas <= 0) horas = parsearHoras(row[COL_HORAS_EQ]);
+        let horas = parsearHoras(row[COL_HORAS_OP]);   // Horarios Operario: dato principal
+        if (horas <= 0) horas = parsearHoras(row[COL_HOROMETRO]);  // Horómetro: fallback si olvidaron cargar
+        if (horas <= 0) horas = parsearHoras(row[COL_HORAS_EQ]);   // Horarios Equipo: último recurso
         if (horas <= 0) continue;
 
         if (!acum[mes][cod][obra]) acum[mes][cod][obra] = 0;
