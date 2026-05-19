@@ -752,14 +752,14 @@
       <div class="nota-fuente"><strong>Fuente:</strong> <a href="https://drive.google.com/file/d/1V9LinRvDGzerh1SEpdmLaQTBuDqj3gNn/view" target="_blank">1° Quinc. Abril 2026 - LIQ TANGO.xlsx (Mauro Orellana)</a> — Leído: 13/05/2026 — Columnas: Legajo, Apellido/Nombre, Categoría, Neto, Adicional — Filtro: CTRO COSTO = Taller mecánico — <strong>Nota:</strong> solo se dispone de 1° quincena; MO mensual estimada = quincena × 2. Cuando Mauro cargue la 2° quincena el dato se actualizará.</div>
     </div>
     <div class="section">
-      <div class="section-title">MO por Centro de Costo <span class="badge real">TANGO 1° Quinc Abril</span></div>
+      <div class="section-title">MO por Centro de Costo · <span id="mes-label-ctro-costo"></span> <span class="badge real">TANGO — Mauro Orellana</span></div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Centro de costo</th><th class="num">MO 1° quinc</th><th class="num">MO mensual (×2)</th></tr></thead>
+          <thead><tr><th>Centro de costo</th><th class="num">MO total mes</th></tr></thead>
           <tbody id="tbody-ctro-costo"></tbody>
         </table>
       </div>
-      <div class="nota-fuente"><strong>Fuente:</strong> <a href="https://drive.google.com/file/d/1V9LinRvDGzerh1SEpdmLaQTBuDqj3gNn/view" target="_blank">1° Quinc. Abril 2026 - LIQ TANGO.xlsx (Mauro Orellana)</a> — Leído: 13/05/2026 — Columnas: CTRO COSTO, IMPORTE — <strong>Nota:</strong> MO mensual (×2) es una estimación — se duplica la 1° quincena por no disponer aún de la 2°. Cuando Mauro cargue la 2° quincena el dato se actualiza.</div>
+      <div class="nota-fuente"><strong>Fuente:</strong> <a href="https://drive.google.com/drive/folders/1hQZoJovbFDHNsJhNiGMEueH1bLfXuuCP" target="_blank">Carpeta liquidaciones TANGO (Mauro Orellana)</a> — un Google Sheet por mes con 2 pestañas (1° y 2° quincena) — el monto es la suma real de ambas quincenas</div>
     </div>
   </div>
 
@@ -1064,7 +1064,7 @@ let GENERADO_POR_OBRA = null;
 let ALQUILER_EQUIPOS = {};
 
 // Centros de costo MO por mes — cargado desde la carpeta TANGO de Mauro (Apps Script)
-// { ene: [{centro, quinc}], feb: [...], mar: [...], abr: [...] }
+// { ene: [{centro, monto}], feb: [...], mar: [...], abr: [...] }  (monto = suma ambas quincenas)
 const MO_CTRO_COSTO = {};
 function getMO(mes) { const a = MO_CTRO_COSTO[mes || mesActual]; return Array.isArray(a) ? a : []; }
 
@@ -1229,8 +1229,7 @@ function renderMargen() {
   // Calcular totales de egresos para el mes seleccionado
   const ocMes    = OC_INSUMOS[mesActual] ? OC_INSUMOS[mesActual].total : null;
   const moArr    = getMO(mesActual);
-  const moQuinc  = moArr.length > 0 ? moArr.reduce((s, r) => s + r.quinc, 0) : null;
-  const moMensual = moQuinc ? moQuinc * 2 : null;
+  const moMensual = moArr.length > 0 ? moArr.reduce((s, r) => s + r.monto, 0) : null;
   const totalEgresos = (ocMes != null && moMensual != null) ? ocMes + moMensual : null;
 
   // Actualizar KPI de Egresos
@@ -1239,9 +1238,9 @@ function renderMargen() {
     if (totalEgresos != null) {
       kpiEg.textContent = fmt(totalEgresos);
       kpiEg.className = 'kpi-value neg-val';
-      document.getElementById('kpi-egresos-sub').textContent = 'OC Insumos + MO estimada (×2 la quincena)';
+      document.getElementById('kpi-egresos-sub').textContent = 'OC Insumos + MO real del mes (TANGO)';
       document.getElementById('kpi-egresos-fuente').textContent =
-        'OC: Guillermo Konicek — MO: TANGO 1° Quinc. Abr (estimación mensual = quincena × 2)';
+        'OC: Guillermo Konicek — MO: TANGO ambas quincenas (Mauro Orellana)';
     } else {
       kpiEg.textContent = 'sin dato';
       kpiEg.className = 'kpi-value nd';
@@ -1335,9 +1334,9 @@ function renderResumenObra() {
     });
   }
 
-  // MO total mensual (Tango quincena × 2)
+  // MO total mensual (suma de ambas quincenas del mes)
   const moArr2  = getMO(mesActual);
-  const moTotal = moArr2.length > 0 ? moArr2.reduce((s, r) => s + r.quinc, 0) * 2 : null;
+  const moTotal = moArr2.length > 0 ? moArr2.reduce((s, r) => s + r.monto, 0) : null;
 
   let sumaCobrar = 0, sumaInsumos = 0, sumaAlquiler = 0;
 
@@ -1683,23 +1682,23 @@ function renderTallerLiq() {
 function renderCtroCosto() {
   const tbody = document.getElementById('tbody-ctro-costo');
   if (!tbody) return;
+  const mesLabel = document.getElementById('mes-label-ctro-costo');
+  if (mesLabel) mesLabel.textContent = MES[mesActual] || mesActual;
   const mo = getMO(mesActual);
   if (mo.length === 0) {
     tbody.innerHTML = '<tr><td colspan="3" class="nd" style="text-align:center;padding:16px;">Sin datos TANGO para ' + (MES[mesActual] || mesActual) + ' — actualizá datos</td></tr>';
     return;
   }
-  const total = mo.reduce((s,c) => s + c.quinc, 0);
+  const total = mo.reduce((s,c) => s + c.monto, 0);
   tbody.innerHTML = mo.map(c => `
     <tr>
       <td>${c.centro}</td>
-      <td class="num neg-val">${fmt(c.quinc)}</td>
-      <td class="num" style="color:var(--muted);">${fmt(c.quinc * 2)}</td>
+      <td class="num neg-val">${fmt(c.monto)}</td>
     </tr>
   `).join('') + `
     <tr style="background:#f8fafc;font-weight:700;">
       <td style="padding:8px 12px;">TOTAL empresa (TANGO jornales)</td>
       <td class="num neg-val" style="padding:8px 12px;">${fmt(total)}</td>
-      <td class="num" style="padding:8px 12px;color:var(--muted);">${fmt(total*2)}</td>
     </tr>`;
 }
 

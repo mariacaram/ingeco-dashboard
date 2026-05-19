@@ -168,63 +168,105 @@ function leerTangoMO() {
   }
 }
 
-// Parsea un archivo CSV/TXT de TANGO y devuelve [{centro, quinc}]
+// Parsea un archivo de TANGO (Google Sheet o CSV) y devuelve [{centro, monto}]
+// Si es Google Sheet: suma todas las pestañas (= ambas quincenas del mes)
 function parsearArchivoTangoMO(file) {
   try {
-    let content;
-    try {
-      content = file.getBlob().getDataAsString('UTF-8');
-    } catch (e) {
-      content = file.getBlob().getDataAsString('ISO-8859-1');
+    const mime = file.getMimeType();
+    if (mime === 'application/vnd.google-apps.spreadsheet') {
+      return parsearGSheetTangoMO(file);
     }
-
-    const lines = content.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-
-    // Encontrar línea de encabezados (contiene CTRO COSTO y NETO)
-    const headerLine = lines.find(l => l.toUpperCase().includes('CTRO') && l.toUpperCase().includes('NETO'));
-    if (!headerLine) {
-      Logger.log('Tango parsear — no se encontró línea de encabezados en: ' + file.getName());
-      return null;
-    }
-
-    const sep     = headerLine.includes(';') ? ';' : (headerLine.includes('\t') ? '\t' : ',');
-    const headers = headerLine.split(sep).map(h => h.trim().replace(/^"|"$/g, ''));
-
-    const iCtro = headers.findIndex(h => h.toUpperCase().includes('CTRO'));
-    const iNeto = headers.findIndex(h => h.toUpperCase() === 'NETO' || h.toUpperCase().endsWith('NETO'));
-
-    if (iCtro < 0 || iNeto < 0) {
-      Logger.log('Tango parsear — columnas no encontradas. Headers: ' + headers.join(' | '));
-      return null;
-    }
-
-    const totales  = {};
-    const startIdx = lines.indexOf(headerLine) + 1;
-
-    for (let i = startIdx; i < lines.length; i++) {
-      const cells = lines[i].split(sep).map(c => c.trim().replace(/^"|"$/g, ''));
-      if (cells.length <= Math.max(iCtro, iNeto)) continue;
-
-      const ctro = cells[iCtro];
-      if (!ctro || ctro.toUpperCase().includes('TOTAL') || ctro === '') continue;
-
-      const netoStr = cells[iNeto].replace(/\./g, '').replace(',', '.');
-      const neto    = parseFloat(netoStr);
-      if (isNaN(neto) || neto <= 0) continue;
-
-      const clave = mapearCentro(ctro);
-      totales[clave] = (totales[clave] || 0) + neto;
-    }
-
-    return Object.entries(totales)
-      .map(([centro, quinc]) => ({ centro, quinc: Math.round(quinc) }))
-      .filter(r => r.quinc > 100)
-      .sort((a, b) => b.quinc - a.quinc);
-
+    // Fallback CSV/TXT
+    return parsearCsvTangoMO(file);
   } catch (err) {
     Logger.log('parsearArchivoTangoMO error (' + file.getName() + '): ' + err.toString());
     return null;
   }
+}
+
+// Lee un Google Sheet con N pestañas (quincenas) y acumula los totales por centro
+function parsearGSheetTangoMO(file) {
+  const ss      = SpreadsheetApp.openById(file.getId());
+  const sheets  = ss.getSheets();
+  const totales = {};
+
+  for (const sheet of sheets) {
+    const rows = sheet.getDataRange().getValues();
+
+    // Buscar fila de encabezados (tiene columna CTRO/CENTRO y NETO)
+    let hdrIdx = -1, iCtro = -1, iNeto = -1;
+    for (let i = 0; i < Math.min(25, rows.length); i++) {
+      const cells = rows[i].map(c => String(c).toUpperCase().trim());
+      const ci = cells.findIndex(c => c.includes('CTRO') || c.includes('CENTRO') || c === 'CTROCOSTO');
+      const ni = cells.findIndex(c => c === 'NETO' || c.endsWith('NETO'));
+      if (ci >= 0 && ni >= 0) { hdrIdx = i; iCtro = ci; iNeto = ni; break; }
+    }
+    if (hdrIdx < 0) {
+      Logger.log('Tango GSheet [' + sheet.getName() + '] — no se encontró header CTRO/NETO, omitida');
+      continue;
+    }
+    Logger.log('Tango GSheet [' + sheet.getName() + '] — header en fila ' + hdrIdx + ', iCtro=' + iCtro + ', iNeto=' + iNeto);
+
+    for (let i = hdrIdx + 1; i < rows.length; i++) {
+      const row  = rows[i];
+      const ctro = String(row[iCtro] || '').trim();
+      if (!ctro || ctro.toUpperCase().includes('TOTAL') || ctro === '') continue;
+
+      const raw  = row[iNeto];
+      const neto = typeof raw === 'number' ? raw : parsearMonto(String(raw || ''));
+      if (!neto || neto <= 0) continue;
+
+      const clave = mapearCentro(ctro);
+      totales[clave] = (totales[clave] || 0) + neto;
+    }
+  }
+
+  const result = Object.entries(totales)
+    .map(([centro, monto]) => ({ centro, monto: Math.round(monto) }))
+    .filter(r => r.monto > 100)
+    .sort((a, b) => b.monto - a.monto);
+
+  Logger.log('Tango GSheet "' + file.getName() + '" — ' + result.length + ' centros, total=' +
+    result.reduce((s,r) => s + r.monto, 0));
+  return result;
+}
+
+// Fallback: parsea un CSV/TXT de TANGO exportado
+function parsearCsvTangoMO(file) {
+  let content;
+  try {
+    content = file.getBlob().getDataAsString('UTF-8');
+  } catch (e) {
+    content = file.getBlob().getDataAsString('ISO-8859-1');
+  }
+
+  const lines      = content.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  const headerLine = lines.find(l => l.toUpperCase().includes('CTRO') && l.toUpperCase().includes('NETO'));
+  if (!headerLine) return null;
+
+  const sep     = headerLine.includes(';') ? ';' : (headerLine.includes('\t') ? '\t' : ',');
+  const headers = headerLine.split(sep).map(h => h.trim().replace(/^"|"$/g, ''));
+  const iCtro   = headers.findIndex(h => h.toUpperCase().includes('CTRO'));
+  const iNeto   = headers.findIndex(h => h.toUpperCase() === 'NETO' || h.toUpperCase().endsWith('NETO'));
+  if (iCtro < 0 || iNeto < 0) return null;
+
+  const totales  = {};
+  const startIdx = lines.indexOf(headerLine) + 1;
+  for (let i = startIdx; i < lines.length; i++) {
+    const cells = lines[i].split(sep).map(c => c.trim().replace(/^"|"$/g, ''));
+    if (cells.length <= Math.max(iCtro, iNeto)) continue;
+    const ctro = cells[iCtro];
+    if (!ctro || ctro.toUpperCase().includes('TOTAL')) continue;
+    const neto = parseFloat(cells[iNeto].replace(/\./g, '').replace(',', '.'));
+    if (isNaN(neto) || neto <= 0) continue;
+    const clave = mapearCentro(ctro);
+    totales[clave] = (totales[clave] || 0) + neto;
+  }
+
+  return Object.entries(totales)
+    .map(([centro, monto]) => ({ centro, monto: Math.round(monto) }))
+    .filter(r => r.monto > 100)
+    .sort((a, b) => b.monto - a.monto);
 }
 
 // Mapea el texto crudo de CTRO COSTO a la etiqueta usada en el dashboard
