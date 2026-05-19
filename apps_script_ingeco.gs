@@ -558,8 +558,9 @@ function leerAlquilerEquipos() {
 
     let hdrPIdx = 0;
     for (let i = 0; i < Math.min(10, rowsPrecios.length); i++) {
-      const r = rowsPrecios[i].map(c => String(c).toUpperCase()).join('|');
-      if (r.includes('CÓDIGO') || r.includes('CODIGO')) { hdrPIdx = i; break; }
+      // Buscar la celda que sea EXACTAMENTE 'CÓDIGO' (no substring de "CÓDIGOS DE EQUIPOS")
+      const cells = rowsPrecios[i].map(c => String(c).toUpperCase().trim());
+      if (cells.some(c => c === 'CÓDIGO' || c === 'CODIGO')) { hdrPIdx = i; break; }
     }
     const hP = rowsPrecios[hdrPIdx].map(h => String(h).toLowerCase().trim());
     const iCod    = _findCol(hP, ['código', 'codigo']);
@@ -620,8 +621,8 @@ function leerAlquilerEquipos() {
         const obraRaw = String(row[COL_OBRA] || '').trim();
         const obra    = (obraRaw && obraRaw !== '-') ? obraRaw : 'Sin asignar';
 
-        let horas = parsearHoras(row[COL_HORAS_EQ]);
-        if (horas <= 0) horas = parsearHoras(row[COL_HOROMETRO]);
+        let horas = parsearHoras(row[COL_HOROMETRO]);  // horómetro: número limpio, más confiable
+        if (horas <= 0) horas = parsearHoras(row[COL_HORAS_EQ]);
         if (horas <= 0) continue;
 
         if (!acum[mes][cod][obra]) acum[mes][cod][obra] = 0;
@@ -690,7 +691,7 @@ function leerAlquilerEquipos() {
 
 function parsearHoras(raw) {
   if (!raw || raw === '' || raw === '-') return 0;
-  if (raw instanceof Date) return raw.getHours() + raw.getMinutes() / 60;
+  if (raw instanceof Date) return raw.getUTCHours() + raw.getUTCMinutes() / 60;
   if (typeof raw === 'number') {
     if (raw > 0 && raw < 1) return raw * 24; // fracción de día (Google Sheets)
     return raw;
