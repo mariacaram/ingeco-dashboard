@@ -754,5 +754,77 @@ function diagnostico() {
   const gpo = leerGeneradoPorObra();
   Logger.log(gpo ? JSON.stringify(gpo, null, 2).substring(0, 1000) : 'NULL (error al leer)');
 
+  Logger.log('\n--- ALQUILER EQUIPOS ---');
+  const alq = leerAlquilerEquipos();
+  Logger.log(alq ? JSON.stringify(alq, null, 2).substring(0, 1000) : 'NULL (error al leer)');
+
   Logger.log('\n=== FIN DIAGNÓSTICO ===');
+}
+
+// ============================================================
+// DIAGNÓSTICO ESPECÍFICO DE EQUIPOS
+// Ejecutar desde el editor → Ver → Registros
+// ============================================================
+function diagnosticoEquipos() {
+  Logger.log('=== DIAGNÓSTICO EQUIPOS ===');
+
+  // 1. Precios
+  try {
+    const ssP = SpreadsheetApp.openById(FILE_IDS.equiposFlota);
+    const rowsP = ssP.getSheets()[0].getDataRange().getValues();
+    Logger.log('Precios — total filas: ' + rowsP.length);
+    Logger.log('Precios — primeras 12 filas col0: ' + rowsP.slice(0, 12).map((r,i) => i + ': ' + JSON.stringify(r[0])).join(' | '));
+
+    let hdrPIdx = 0;
+    for (let i = 0; i < Math.min(10, rowsP.length); i++) {
+      const r = rowsP[i].map(c => String(c).toUpperCase()).join('|');
+      if (r.includes('CÓDIGO') || r.includes('CODIGO')) { hdrPIdx = i; break; }
+    }
+    Logger.log('Precios — header en fila: ' + hdrPIdx);
+    Logger.log('Precios — headers: ' + rowsP[hdrPIdx].join(' | '));
+
+    const hP = rowsP[hdrPIdx].map(h => String(h).toLowerCase().trim());
+    const iCod = _findCol(hP, ['código', 'codigo']);
+    const iPF  = _findCol(hP, ['pf']);
+    Logger.log('Precios — iCod=' + iCod + ' iPF=' + iPF);
+
+    let count = 0;
+    for (let i = hdrPIdx + 1; i < rowsP.length; i++) {
+      const cod = String(rowsP[i][iCod] || '').trim();
+      const pf  = rowsP[i][iPF];
+      if (cod && pf) { Logger.log('  precio: ' + cod + ' → PF=' + pf); count++; }
+    }
+    Logger.log('Precios — equipos encontrados: ' + count);
+  } catch(e) { Logger.log('ERROR leyendo precios: ' + e); }
+
+  // 2. Partes diarios
+  try {
+    const ssU = SpreadsheetApp.openById(FILE_IDS.usageEquipos);
+    const sheets = ssU.getSheets();
+    Logger.log('\nPartes diarios — pestañas (' + sheets.length + '): ' + sheets.map(s => s.getName()).join(', '));
+
+    for (const sheet of sheets) {
+      const cod = sheet.getName().trim();
+      Logger.log('\n-- Pestaña: ' + cod);
+      const rows = sheet.getDataRange().getValues();
+      Logger.log('  Total filas: ' + rows.length);
+      Logger.log('  Col0 primeras 15 filas: ' + rows.slice(0, 15).map((r, i) => i + ':' + JSON.stringify(r[0])).join(' | '));
+
+      let hdrIdx = -1;
+      for (let i = 0; i < Math.min(15, rows.length); i++) {
+        if (String(rows[i][0]).toUpperCase().trim() === 'FECHA') { hdrIdx = i; break; }
+      }
+      Logger.log('  Header FECHA en fila: ' + hdrIdx);
+      if (hdrIdx >= 0) {
+        Logger.log('  Headers: ' + rows[hdrIdx].slice(0, 20).join(' | '));
+        // Mostrar primeras 3 filas de datos
+        for (let i = hdrIdx + 1; i < Math.min(hdrIdx + 4, rows.length); i++) {
+          const r = rows[i];
+          Logger.log('  Fila ' + i + ': fecha=' + JSON.stringify(r[0]) + ' obra=' + JSON.stringify(r[2]) + ' col12=' + JSON.stringify(r[12]) + ' col17=' + JSON.stringify(r[17]));
+        }
+      }
+    }
+  } catch(e) { Logger.log('ERROR leyendo partes diarios: ' + e); }
+
+  Logger.log('\n=== FIN DIAGNÓSTICO EQUIPOS ===');
 }
