@@ -557,7 +557,7 @@ function leerAlquilerEquipos() {
     const rowsPrecios = ssPrecios.getSheets()[0].getDataRange().getValues();
 
     let hdrPIdx = 0;
-    for (let i = 0; i < Math.min(5, rowsPrecios.length); i++) {
+    for (let i = 0; i < Math.min(10, rowsPrecios.length); i++) {
       const r = rowsPrecios[i].map(c => String(c).toUpperCase()).join('|');
       if (r.includes('CÓDIGO') || r.includes('CODIGO')) { hdrPIdx = i; break; }
     }
@@ -599,7 +599,7 @@ function leerAlquilerEquipos() {
       const rows = sheet.getDataRange().getValues();
       // Encontrar fila con FECHA en col 0
       let hdrIdx = -1;
-      for (let i = 0; i < Math.min(8, rows.length); i++) {
+      for (let i = 0; i < Math.min(15, rows.length); i++) {
         if (String(rows[i][0]).toUpperCase().trim() === 'FECHA') { hdrIdx = i; break; }
       }
       if (hdrIdx < 0) continue;
