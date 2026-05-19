@@ -778,8 +778,8 @@ function diagnosticoEquipos() {
 
     let hdrPIdx = 0;
     for (let i = 0; i < Math.min(10, rowsP.length); i++) {
-      const r = rowsP[i].map(c => String(c).toUpperCase()).join('|');
-      if (r.includes('CÓDIGO') || r.includes('CODIGO')) { hdrPIdx = i; break; }
+      const cells = rowsP[i].map(c => String(c).toUpperCase().trim());
+      if (cells.some(c => c === 'CÓDIGO' || c === 'CODIGO')) { hdrPIdx = i; break; }
     }
     Logger.log('Precios — header en fila: ' + hdrPIdx);
     Logger.log('Precios — headers: ' + rowsP[hdrPIdx].join(' | '));
