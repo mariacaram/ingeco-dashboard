@@ -21,7 +21,7 @@
 
 // IDs de los archivos en Google Drive
 const FILE_IDS = {
-  tango1qAbr:   '1V9LinRvDGzerh1SEpdmLaQTBuDqj3gNn',              // TANGO LIQ — 1° Quinc. Abr 2026 (Mauro)
+  tangoFolder:  '1hQZoJovbFDHNsJhNiGMEueH1bLfXuuCP',              // Carpeta liquidaciones TANGO (Mauro) — un archivo por mes
   ocInsumos:    '1_lhq9c1MddkrK1Tf0kexRtgqw5aPhmZWiQkAIRjpfxs',  // OC Insumos — Google Sheet (Guillermo)
   maestroObras: '1VbG7DPqaOSlYkvQxbxag-4P2sOoRJQwWGccbx9OMyBM',  // Maestro de Obras con COD_OBRA
   fernandoObras:'1vGY8-saBKS4XAwd4RRqacNYRS7W0KV9brDBEo3_Jn0A',  // Obras activas (Fernando Solís)
@@ -131,14 +131,51 @@ function buildData() {
 // ============================================================
 // TANGO — MO por Centro de Costo (1° Quincena)
 // ============================================================
+// Lee todos los archivos de la carpeta de Mauro y devuelve { ene: [...], feb: [...], abr: [...] }
 function leerTangoMO() {
   try {
-    // Intentar UTF-8 primero, luego ISO-8859-1 (TANGO suele usar Windows-1252 / Latin-1)
+    const folder  = DriveApp.getFolderById(FILE_IDS.tangoFolder);
+    const files   = folder.getFiles();
+    const resultado = {};
+
+    while (files.hasNext()) {
+      const file    = files.next();
+      const nombre  = file.getName().toUpperCase();
+
+      // Detectar mes desde el nombre del archivo
+      let mes = null;
+      if      (nombre.includes('ENE') || nombre.includes('ENERO'))    mes = 'ene';
+      else if (nombre.includes('FEB') || nombre.includes('FEBRERO'))  mes = 'feb';
+      else if (nombre.includes('MAR') || nombre.includes('MARZO'))    mes = 'mar';
+      else if (nombre.includes('ABR') || nombre.includes('ABRIL'))    mes = 'abr';
+
+      if (!mes) {
+        Logger.log('Tango — no se detectó mes en: ' + file.getName() + ' — omitido');
+        continue;
+      }
+
+      Logger.log('Tango — procesando "' + file.getName() + '" → ' + mes);
+      const data = parsearArchivoTangoMO(file);
+      if (data && data.length > 0) resultado[mes] = data;
+    }
+
+    Logger.log('Tango MO — meses cargados: ' + Object.keys(resultado).join(', '));
+    return resultado;
+
+  } catch (err) {
+    Logger.log('leerTangoMO error: ' + err.toString());
+    return null;
+  }
+}
+
+// Parsea un archivo CSV/TXT de TANGO y devuelve [{centro, quinc}]
+function parsearArchivoTangoMO(file) {
+  try {
     let content;
     try {
-      content = DriveApp.getFileById(FILE_IDS.tango1qAbr).getBlob().getDataAsString('UTF-8');
+      content = file.getBlob().getDataAsString('UTF-8');
     } catch (e) {
-      content = DriveApp.getFileById(FILE_IDS.tango1qAbr).getBlob().getDataAsString('ISO-8859-1');
+      content = file.getBlob().getDataAsString('ISO-8859-1');
     }
 
     const lines = content.split('\n').map(l => l.trim()).filter(l => l.length > 0);
@@ -146,23 +183,22 @@ function leerTangoMO() {
     // Encontrar línea de encabezados (contiene CTRO COSTO y NETO)
     const headerLine = lines.find(l => l.toUpperCase().includes('CTRO') && l.toUpperCase().includes('NETO'));
     if (!headerLine) {
-      Logger.log('TANGO: no se encontró línea de encabezados');
+      Logger.log('Tango parsear — no se encontró línea de encabezados en: ' + file.getName());
       return null;
     }
 
-    // Detectar separador (punto y coma es lo más común en TANGO)
-    const sep = headerLine.includes(';') ? ';' : (headerLine.includes('\t') ? '\t' : ',');
+    const sep     = headerLine.includes(';') ? ';' : (headerLine.includes('\t') ? '\t' : ',');
     const headers = headerLine.split(sep).map(h => h.trim().replace(/^"|"$/g, ''));
 
     const iCtro = headers.findIndex(h => h.toUpperCase().includes('CTRO'));
     const iNeto = headers.findIndex(h => h.toUpperCase() === 'NETO' || h.toUpperCase().endsWith('NETO'));
 
     if (iCtro < 0 || iNeto < 0) {
-      Logger.log('TANGO: columnas no encontradas. Headers: ' + headers.join(' | '));
+      Logger.log('Tango parsear — columnas no encontradas. Headers: ' + headers.join(' | '));
       return null;
     }
 
-    const totales = {};
+    const totales  = {};
     const startIdx = lines.indexOf(headerLine) + 1;
 
     for (let i = startIdx; i < lines.length; i++) {
@@ -173,7 +209,7 @@ function leerTangoMO() {
       if (!ctro || ctro.toUpperCase().includes('TOTAL') || ctro === '') continue;
 
       const netoStr = cells[iNeto].replace(/\./g, '').replace(',', '.');
-      const neto = parseFloat(netoStr);
+      const neto    = parseFloat(netoStr);
       if (isNaN(neto) || neto <= 0) continue;
 
       const clave = mapearCentro(ctro);
@@ -186,7 +222,7 @@ function leerTangoMO() {
       .sort((a, b) => b.quinc - a.quinc);
 
   } catch (err) {
-    Logger.log('leerTangoMO error: ' + err.toString());
+    Logger.log('parsearArchivoTangoMO error (' + file.getName() + '): ' + err.toString());
     return null;
   }
 }

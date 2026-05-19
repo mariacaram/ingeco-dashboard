@@ -1063,18 +1063,10 @@ let GENERADO_POR_OBRA = null;
 // { abr: { totalArs, tcUsd, porObra: [{obra, costoArs, horasTot, equipos: [{codigo, clasificacion, marca, modelo, pfUsd, horas, costoArs}]}] } }
 let ALQUILER_EQUIPOS = {};
 
-// Centros de costo — MO 1° Quinc Abril 2026 (TANGO — totales por sector)
-// NOTA: solo se dispone de la 1° quincena; MO mensual estimada = quincena × 2
-const MO_CTRO_COSTO = [
-  { centro: 'Taller mecánico', quinc: 7025000 },
-  { centro: 'Planta de Asfalto (Pta.Asfalto)', quinc: 9551280 },
-  { centro: 'Asfalto / Trituradora (sector)', quinc: 13846399 },
-  { centro: 'Ruta 357 - Quilmes', quinc: 20345000 },
-  { centro: 'Pavimentación', quinc: 4320000 },
-  { centro: 'Transporte', quinc: 1446394 },
-  { centro: 'Predio Warnes', quinc: 2730000 },
-  { centro: 'Otros (Alderetes / Corrientes / Cantera)', quinc: 1900000 }
-];
+// Centros de costo MO por mes — cargado desde la carpeta TANGO de Mauro (Apps Script)
+// { ene: [{centro, quinc}], feb: [...], mar: [...], abr: [...] }
+const MO_CTRO_COSTO = {};
+function getMO(mes) { const a = MO_CTRO_COSTO[mes || mesActual]; return Array.isArray(a) ? a : []; }
 
 // OC Planta Asfalto (de OC Repuestos - Alberto Lescano)
 const OC_PLANTA = [
@@ -1236,7 +1228,8 @@ function renderMargen() {
 
   // Calcular totales de egresos para el mes seleccionado
   const ocMes    = OC_INSUMOS[mesActual] ? OC_INSUMOS[mesActual].total : null;
-  const moQuinc  = MO_CTRO_COSTO.length > 0 ? MO_CTRO_COSTO.reduce((s, r) => s + r.quinc, 0) : null;
+  const moArr    = getMO(mesActual);
+  const moQuinc  = moArr.length > 0 ? moArr.reduce((s, r) => s + r.quinc, 0) : null;
   const moMensual = moQuinc ? moQuinc * 2 : null;
   const totalEgresos = (ocMes != null && moMensual != null) ? ocMes + moMensual : null;
 
@@ -1343,9 +1336,8 @@ function renderResumenObra() {
   }
 
   // MO total mensual (Tango quincena × 2)
-  const moTotal = MO_CTRO_COSTO.length > 0
-    ? MO_CTRO_COSTO.reduce((s, r) => s + r.quinc, 0) * 2
-    : null;
+  const moArr2  = getMO(mesActual);
+  const moTotal = moArr2.length > 0 ? moArr2.reduce((s, r) => s + r.quinc, 0) * 2 : null;
 
   let sumaCobrar = 0, sumaInsumos = 0, sumaAlquiler = 0;
 
@@ -1691,8 +1683,13 @@ function renderTallerLiq() {
 function renderCtroCosto() {
   const tbody = document.getElementById('tbody-ctro-costo');
   if (!tbody) return;
-  const total = MO_CTRO_COSTO.reduce((s,c) => s + c.quinc, 0);
-  tbody.innerHTML = MO_CTRO_COSTO.map(c => `
+  const mo = getMO(mesActual);
+  if (mo.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="3" class="nd" style="text-align:center;padding:16px;">Sin datos TANGO para ' + (MES[mesActual] || mesActual) + ' — actualizá datos</td></tr>';
+    return;
+  }
+  const total = mo.reduce((s,c) => s + c.quinc, 0);
+  tbody.innerHTML = mo.map(c => `
     <tr>
       <td>${c.centro}</td>
       <td class="num neg-val">${fmt(c.quinc)}</td>
@@ -2014,8 +2011,8 @@ async function refreshData() {
       if (data.pipeline && Array.isArray(data.pipeline)) {
         PIPELINE.splice(0, PIPELINE.length, ...data.pipeline);
       }
-      if (data.moCtroCosto && Array.isArray(data.moCtroCosto)) {
-        MO_CTRO_COSTO.splice(0, MO_CTRO_COSTO.length, ...data.moCtroCosto);
+      if (data.moCtroCosto && typeof data.moCtroCosto === 'object') {
+        Object.assign(MO_CTRO_COSTO, data.moCtroCosto);
       }
       if (data.ocInsumos) {
         Object.keys(data.ocInsumos).forEach(m => { if (OC_INSUMOS[m]) Object.assign(OC_INSUMOS[m], data.ocInsumos[m]); });
@@ -2066,6 +2063,7 @@ function setMes(mes) {
   renderMargen();
   renderOCInsumos();
   renderAlquilerEquipos();
+  renderCtroCosto();
 }
 
 // ================================================================
@@ -2123,8 +2121,8 @@ if (APPS_SCRIPT_URL) {
     try {
       const data = await fetchJSONP(APPS_SCRIPT_URL + '?cache=1');
       if (data.status === 'ok') {
-        if (data.moCtroCosto && Array.isArray(data.moCtroCosto)) {
-          MO_CTRO_COSTO.splice(0, MO_CTRO_COSTO.length, ...data.moCtroCosto);
+        if (data.moCtroCosto && typeof data.moCtroCosto === 'object') {
+          Object.assign(MO_CTRO_COSTO, data.moCtroCosto);
         }
         if (data.ocInsumos) {
           Object.keys(data.ocInsumos).forEach(m => { if (OC_INSUMOS[m]) Object.assign(OC_INSUMOS[m], data.ocInsumos[m]); });
