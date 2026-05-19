@@ -25,7 +25,13 @@ const FILE_IDS = {
   ocInsumos:    '1_lhq9c1MddkrK1Tf0kexRtgqw5aPhmZWiQkAIRjpfxs',  // OC Insumos — Google Sheet (Guillermo)
   maestroObras: '1VbG7DPqaOSlYkvQxbxag-4P2sOoRJQwWGccbx9OMyBM',  // Maestro de Obras con COD_OBRA
   fernandoObras:'1vGY8-saBKS4XAwd4RRqacNYRS7W0KV9brDBEo3_Jn0A',  // Obras activas (Fernando Solís)
+  equiposFlota: '1PEcPzwrQ8kE2evmUlrFq9wPbgWOR92MPl3LEqcSYbIk',  // Equipos + PF mensual (Adrián)
+  usageEquipos: '1CPnhO1M78vwARe21ye_Xcr0hiLIrKtR3zzANsJgc5d4',  // Partes diarios por equipo (una pestaña por COD)
 };
+
+// Tipo de cambio USD → ARS oficial promedio mensual (Banco Nación Argentina)
+// Actualizar cada mes con el promedio del período
+const TC_USD_MENSUAL = { feb: 1430, mar: 1413, abr: 1397 };
 
 // Cache en PropertiesService — evita leer Drive en cada request
 const PROPS = PropertiesService.getScriptProperties();
@@ -43,10 +49,14 @@ function doGet(e) {
     if (useCache) {
       const cached = PROPS.getProperty(CACHE_KEY);
       data = cached ? JSON.parse(cached) : buildData();
-      // generadoPorObra se guarda en clave separada (es grande)
+      // generadoPorObra y alquilerEquipos se guardan en claves separadas (son grandes)
       if (data && !data.generadoPorObra) {
         const cachedObras = PROPS.getProperty(CACHE_KEY + '_obras');
         if (cachedObras) data.generadoPorObra = JSON.parse(cachedObras);
+      }
+      if (data && !data.alquilerEquipos) {
+        const cachedAlquiler = PROPS.getProperty(CACHE_KEY + '_alquiler');
+        if (cachedAlquiler) data.alquilerEquipos = JSON.parse(cachedAlquiler);
       }
     } else {
       data = buildData();
@@ -60,6 +70,9 @@ function doGet(e) {
       try {
         if (data.generadoPorObra) PROPS.setProperty(CACHE_KEY + '_obras', JSON.stringify(data.generadoPorObra));
       } catch(ce) { Logger.log('Cache write (obras) error: ' + ce); }
+      try {
+        if (data.alquilerEquipos) PROPS.setProperty(CACHE_KEY + '_alquiler', JSON.stringify(data.alquilerEquipos));
+      } catch(ce) { Logger.log('Cache write (alquiler) error: ' + ce); }
     }
 
     const json = JSON.stringify(data);
@@ -108,9 +121,10 @@ function buildData() {
     moCtroCosto: leerTangoMO(),
     ocInsumos:   leerOCInsumos(),
   };
-  // Nuevas fuentes — en bloque separado para que si fallan no rompan TANGO/OC
-  try { result.generadoPorObra = leerGeneradoPorObra(); }
+  try { result.generadoPorObra  = leerGeneradoPorObra(); }
   catch(e) { Logger.log('generadoPorObra error: ' + e); result.generadoPorObra = null; }
+  try { result.alquilerEquipos  = leerAlquilerEquipos(); }
+  catch(e) { Logger.log('alquilerEquipos error: ' + e); result.alquilerEquipos = null; }
   return result;
 }
 
@@ -527,6 +541,169 @@ function leerGeneradoPorObra() {
     Logger.log('leerGeneradoPorObra error: ' + err.toString());
     return { obras: [], tabsSinPeriodo: [] };
   }
+}
+
+// ============================================================
+// ALQUILER INTERNO DE EQUIPOS — Partes diarios (una pestaña por equipo)
+// Fuente precios: equiposFlota (COD → PF en USD)
+// Fuente uso:     usageEquipos (una pestaña por COD_EQUIPO)
+// Costo por obra: prorrateado por horas trabajadas en el mes
+// TC: dólar oficial promedio mensual (TC_USD_MENSUAL)
+// ============================================================
+function leerAlquilerEquipos() {
+  try {
+    // 1. Leer precios — solo equipos con PF definido (maquinaria pesada)
+    const ssPrecios = SpreadsheetApp.openById(FILE_IDS.equiposFlota);
+    const rowsPrecios = ssPrecios.getSheets()[0].getDataRange().getValues();
+
+    let hdrPIdx = 0;
+    for (let i = 0; i < Math.min(5, rowsPrecios.length); i++) {
+      const r = rowsPrecios[i].map(c => String(c).toUpperCase()).join('|');
+      if (r.includes('CÓDIGO') || r.includes('CODIGO')) { hdrPIdx = i; break; }
+    }
+    const hP = rowsPrecios[hdrPIdx].map(h => String(h).toLowerCase().trim());
+    const iCod    = _findCol(hP, ['código', 'codigo']);
+    const iPF     = _findCol(hP, ['pf']);
+    const iClasif = _findCol(hP, ['clasificación', 'clasificacion']);
+    const iMarca  = _findCol(hP, ['marca']);
+    const iModelo = _findCol(hP, ['modelo']);
+    if (iCod === null || iPF === null) return null;
+
+    const precios = {};
+    for (let i = hdrPIdx + 1; i < rowsPrecios.length; i++) {
+      const row = rowsPrecios[i];
+      const cod = String(row[iCod] || '').trim();
+      const pf  = typeof row[iPF] === 'number' ? row[iPF]
+                : parseFloat(String(row[iPF]).replace(',', '.')) || 0;
+      if (!cod || pf <= 0) continue;
+      precios[cod] = {
+        pf_usd:       pf,
+        clasificacion: String(row[iClasif] || '').trim(),
+        marca:         String(row[iMarca]  || '').trim(),
+        modelo:        String(row[iModelo] || '').trim()
+      };
+    }
+    Logger.log('Equipos con PF: ' + Object.keys(precios).length);
+
+    // 2. Leer uso — una pestaña por equipo (nombre pestaña = COD_EQUIPO)
+    const ssUso  = SpreadsheetApp.openById(FILE_IDS.usageEquipos);
+    const meses  = ['feb', 'mar', 'abr'];
+    // acum[mes][cod] = { _total: horas, [obra]: horas }
+    const acum = {};
+    meses.forEach(m => { acum[m] = {}; });
+
+    for (const sheet of ssUso.getSheets()) {
+      const cod = sheet.getName().trim();
+      if (!precios[cod]) continue;
+
+      const rows = sheet.getDataRange().getValues();
+      // Encontrar fila con FECHA en col 0
+      let hdrIdx = -1;
+      for (let i = 0; i < Math.min(8, rows.length); i++) {
+        if (String(rows[i][0]).toUpperCase().trim() === 'FECHA') { hdrIdx = i; break; }
+      }
+      if (hdrIdx < 0) continue;
+
+      // Columnas fijas según estructura conocida de los partes diarios
+      const COL_FECHA     = 0;
+      const COL_OBRA      = 2;
+      const COL_HORAS_EQ  = 12; // HORARIOS EQUIPO / TOTAL
+      const COL_HOROMETRO = 17; // HORÓMETRO / TOTAL
+
+      meses.forEach(m => { if (!acum[m][cod]) acum[m][cod] = { _total: 0 }; });
+
+      for (let i = hdrIdx + 1; i < rows.length; i++) {
+        const row = rows[i];
+        const mes = parsearMes(row[COL_FECHA]);
+        if (!mes) continue;
+
+        const obraRaw = String(row[COL_OBRA] || '').trim();
+        const obra    = (obraRaw && obraRaw !== '-') ? obraRaw : 'Sin asignar';
+
+        let horas = parsearHoras(row[COL_HORAS_EQ]);
+        if (horas <= 0) horas = parsearHoras(row[COL_HOROMETRO]);
+        if (horas <= 0) continue;
+
+        if (!acum[mes][cod][obra]) acum[mes][cod][obra] = 0;
+        acum[mes][cod][obra]  += horas;
+        acum[mes][cod]._total += horas;
+      }
+    }
+
+    // 3. Calcular costos prorrateados por horas
+    const resultado = {};
+    for (const mes of meses) {
+      const tc = TC_USD_MENSUAL[mes] || 1400;
+      const porObra = {};
+      let totalMes  = 0;
+
+      for (const [cod, datos] of Object.entries(acum[mes])) {
+        const info       = precios[cod];
+        const totalHoras = datos._total;
+        if (!info || totalHoras <= 0) continue;
+
+        const pfArs = info.pf_usd * tc;
+
+        for (const [obra, horas] of Object.entries(datos)) {
+          if (obra === '_total') continue;
+          const costoArs = Math.round((horas / totalHoras) * pfArs);
+          if (!porObra[obra]) porObra[obra] = { costoArs: 0, horasTot: 0, equipos: [] };
+          porObra[obra].costoArs += costoArs;
+          porObra[obra].horasTot += horas;
+          porObra[obra].equipos.push({
+            codigo:       cod,
+            clasificacion: info.clasificacion,
+            marca:        info.marca,
+            modelo:       info.modelo,
+            pfUsd:        info.pf_usd,
+            horas:        Math.round(horas * 10) / 10,
+            costoArs:     costoArs
+          });
+          totalMes += costoArs;
+        }
+      }
+
+      if (Object.keys(porObra).length === 0) continue;
+
+      resultado[mes] = {
+        totalArs: totalMes,
+        tcUsd:    tc,
+        porObra:  Object.entries(porObra)
+          .map(([obra, v]) => ({
+            obra,
+            costoArs: v.costoArs,
+            horasTot: Math.round(v.horasTot * 10) / 10,
+            equipos:  v.equipos.sort((a, b) => b.costoArs - a.costoArs)
+          }))
+          .sort((a, b) => b.costoArs - a.costoArs)
+      };
+    }
+
+    Logger.log('Alquiler equipos — meses con datos: ' + Object.keys(resultado).join(', '));
+    return resultado;
+
+  } catch (err) {
+    Logger.log('leerAlquilerEquipos error: ' + err.toString());
+    return null;
+  }
+}
+
+function parsearHoras(raw) {
+  if (!raw || raw === '' || raw === '-') return 0;
+  if (raw instanceof Date) return raw.getHours() + raw.getMinutes() / 60;
+  if (typeof raw === 'number') {
+    if (raw > 0 && raw < 1) return raw * 24; // fracción de día (Google Sheets)
+    return raw;
+  }
+  if (typeof raw === 'string') {
+    const s = raw.trim();
+    if (!s || s === '-' || s === '\\-') return 0;
+    const m = s.match(/^(\d+):(\d+)$/);
+    if (m) return parseInt(m[1]) + parseInt(m[2]) / 60;
+    const n = parseFloat(s);
+    if (!isNaN(n)) return n;
+  }
+  return 0;
 }
 
 function jsonResponse(obj) {
