@@ -393,19 +393,19 @@
       <div class="kpi-label">Total Egresos (visible)</div>
       <div class="kpi-value nd" id="kpi-egresos">sin dato</div>
       <div class="kpi-sub" id="kpi-egresos-sub">Requiere OC Insumos + TANGO</div>
-      <div class="fuente" id="kpi-egresos-fuente">ÓC Insumos (Guillermo) + LIQ TANGO (Mauro) — pendiente datos 2026</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-label">Margen estimado</div>
-      <div class="kpi-value nd" id="kpi-margen-est">sin dato</div>
-      <div class="kpi-sub" id="kpi-margen-sub">Pendiente de archivos de costo</div>
-      <div class="fuente">Se calcula cuando Egresos esté disponible</div>
+      <div class="fuente" id="kpi-egresos-fuente">OC Insumos (Guillermo) + MO: TANGO ambas quincenas (Mauro Orellana)</div>
     </div>
     <div class="kpi-card neg">
       <div class="kpi-label">Alquiler interno equipos</div>
       <div class="kpi-value neg-val" id="kpi-alquiler-equipos">sin dato</div>
       <div class="kpi-sub" id="kpi-alquiler-sub">Actualizá datos para cargar</div>
       <div class="fuente">Partes diarios equipos (Adrián) · TC dólar oficial promedio mensual (BNA)</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Margen estimado</div>
+      <div class="kpi-value nd" id="kpi-margen-est">sin dato</div>
+      <div class="kpi-sub" id="kpi-margen-sub">Pendiente de archivos de costo</div>
+      <div class="fuente" id="kpi-margen-formula">A Cobrar − (OC Insumos + MO TANGO + Alquiler Equipos)</div>
     </div>
   </div>
 
@@ -1268,6 +1268,7 @@ function renderMargen() {
   // Actualizar KPI de Margen estimado
   const cobMes = COBROS_REAL[mesActual] ? COBROS_REAL[mesActual].total : null;
   const kpiMg  = document.getElementById('kpi-margen-est');
+  const kpiMgFormula = document.getElementById('kpi-margen-formula');
   if (kpiMg) {
     if (cobMes != null && totalEgresos != null) {
       const margenVal = cobMes - totalEgresos;
@@ -1276,9 +1277,16 @@ function renderMargen() {
       kpiMg.className   = 'kpi-value ' + (margenVal >= 0 ? 'pos-val' : 'neg-val');
       document.getElementById('kpi-margen-sub').textContent =
         'Cobros ' + MES[mesActual] + ' − Egresos estimados';
+      if (kpiMgFormula) {
+        const partes = [];
+        if (ocMes != null)    partes.push('OC ' + fmt(ocMes));
+        if (moMensual != null) partes.push('MO ' + fmt(moMensual));
+        kpiMgFormula.textContent = fmt(cobMes) + ' − (' + partes.join(' + ') + ')';
+      }
     } else {
       kpiMg.textContent = 'sin dato';
       kpiMg.className   = 'kpi-value nd';
+      if (kpiMgFormula) kpiMgFormula.textContent = 'A Cobrar − (OC Insumos + MO TANGO)';
     }
   }
 
