@@ -976,6 +976,10 @@ function diagnostico() {
   const alq = leerAlquilerEquipos();
   Logger.log(alq ? JSON.stringify(alq, null, 2).substring(0, 1000) : 'NULL (error al leer)');
 
+  Logger.log('\n--- REMITOS ASFALTO ---');
+  const rem = leerRemitosAsfalto();
+  Logger.log(rem ? JSON.stringify(rem, null, 2) : 'NULL (error al leer)');
+
   Logger.log('\n=== FIN DIAGNÓSTICO ===');
 }
 
