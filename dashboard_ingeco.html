@@ -692,29 +692,12 @@
 
   <div class="section">
     <div class="section-title">Análisis MO / tn <span class="badge">sin dato — requiere TANGO</span></div>
-    <div class="alert info">
-      El cálculo de MO/tn requiere: (1) liquidación de sueldos de planta del archivo TANGO - Mauro Orellana, y (2) tn producidas del REMITOS OFICIALES con precios cargados.
-      <br><br>
-      <strong>Estimación por regla de negocio:</strong> MO total obras ≈ $102,5M/mes. La distribución específica planta/taller/obras requiere el detalle de Mauro.
-    </div>
     <div class="kpi-grid">
       <div class="kpi-card neg">
-        <div class="kpi-label">MO Planta (1a quincena Abr)</div>
-        <div class="kpi-value neg-val">$9,55M</div>
-        <div class="kpi-sub">CTRO COSTO = Pta.Asfalto — TANGO real</div>
-        <div class="fuente">1° Quinc. Abril 2026 - LIQ TANGO.xlsx — Mauro Orellana — Leído: 12/05/2026 — Col: CTRO COSTO, IMPORTE</div>
-      </div>
-      <div class="kpi-card neg">
-        <div class="kpi-label">MO Planta mensual (est.)</div>
-        <div class="kpi-value neg-val">~$19,1M</div>
-        <div class="kpi-sub">$9,55M quinc × 2</div>
-        <div class="fuente">Calculado: $9.551.280 × 2 — base: TANGO 1° Quinc Abril (Mauro Orellana)</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-label">MO total empresa</div>
-        <div class="kpi-value">$102,5M</div>
-        <div class="kpi-sub">Total empresa (regla negocio Adrián)</div>
-        <div class="fuente">Regla de negocio — Adrián Caram — confirmado en conversación 12/05/2026</div>
+        <div class="kpi-label">MO Planta · <span id="mes-label-mo-planta"></span></div>
+        <div class="kpi-value nd" id="kpi-planta-mo">sin dato</div>
+        <div class="kpi-sub" id="kpi-planta-mo-sub">Actualizá datos para cargar desde TANGO</div>
+        <div class="fuente">TANGO (Mauro Orellana) — clasificación: Pta. Asfalto</div>
       </div>
     </div>
   </div>
@@ -725,17 +708,11 @@
 <!-- ================================================================ -->
 <div class="tab-panel" id="tab-taller">
   <div class="kpi-grid">
-    <div class="kpi-card">
-      <div class="kpi-label">MO Taller mensual</div>
-      <div class="kpi-value neg-val">$7,0M</div>
-      <div class="kpi-sub">8 mecánicos — TANGO real</div>
-      <div class="fuente">1° Quinc. Abril 2026 - LIQ TANGO.xlsx — Mauro Orellana — Leído: 12/05/2026 — CTRO COSTO = Taller</div>
-    </div>
     <div class="kpi-card neg">
-      <div class="kpi-label">MO Taller mensual (est.)</div>
-      <div class="kpi-value neg-val">~$14,1M</div>
-      <div class="kpi-sub">Quinc × 2</div>
-      <div class="fuente">Calculado: $7.025.000 quinc × 2 — base: TANGO 1° Quinc Abril (Mauro Orellana)</div>
+      <div class="kpi-label">MO Taller · <span id="mes-label-mo-taller"></span></div>
+      <div class="kpi-value nd" id="kpi-taller-mo">sin dato</div>
+      <div class="kpi-sub" id="kpi-taller-mo-sub">Actualizá datos para cargar desde TANGO</div>
+      <div class="fuente">TANGO (Mauro Orellana) — clasificación: Taller</div>
     </div>
     <div class="kpi-card pos">
       <div class="kpi-label">Ingreso alquiler equipos</div>
@@ -773,7 +750,7 @@
       <div class="section-title">MO por Centro de Costo · <span id="mes-label-ctro-costo"></span> <span class="badge real">TANGO — Mauro Orellana</span></div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Centro de costo</th><th class="num">MO total mes</th></tr></thead>
+          <thead><tr><th>Centro de costo</th><th>Clasificacion</th><th class="num">MO total mes</th></tr></thead>
           <tbody id="tbody-ctro-costo"></tbody>
         </table>
       </div>
@@ -1083,9 +1060,12 @@ let ALQUILER_EQUIPOS = {};
 let REMITOS_ASFALTO = {}; // { feb: {caliente, frio, total}, mar: {...}, abr: {...} }
 
 // Centros de costo MO por mes — cargado desde la carpeta TANGO de Mauro (Apps Script)
-// { ene: [{centro, monto}], feb: [...], mar: [...], abr: [...] }  (monto = suma ambas quincenas)
+// { ene: [{centro, monto, clasificacion}], ... }  clasificacion: "Obra" | "Taller" | "Pta. Asfalto"
 const MO_CTRO_COSTO = {};
 function getMO(mes) { const a = MO_CTRO_COSTO[mes || mesActual]; return Array.isArray(a) ? a : []; }
+function getMOObra(mes)   { return getMO(mes).filter(r => (r.clasificacion || 'Obra') === 'Obra'); }
+function getMOTaller(mes) { return getMO(mes).filter(r => r.clasificacion === 'Taller'); }
+function getMOPlanta(mes) { return getMO(mes).filter(r => r.clasificacion === 'Pta. Asfalto'); }
 
 // OC Planta Asfalto (de OC Repuestos - Alberto Lescano)
 const OC_PLANTA = [
@@ -1252,7 +1232,7 @@ function renderMargen() {
 
   // Calcular totales de egresos para el mes seleccionado
   const ocMes     = OC_INSUMOS[mesActual] ? OC_INSUMOS[mesActual].total : null;
-  const moArr     = getMO(mesActual);
+  const moArr     = getMOObra(mesActual);
   const moMensual = moArr.length > 0 ? moArr.reduce((s, r) => s + r.monto, 0) : null;
   const alqMes    = ALQUILER_EQUIPOS[mesActual] ? ALQUILER_EQUIPOS[mesActual].totalArs : null;
   const totalEgresos = (ocMes != null && moMensual != null) ? ocMes + moMensual : null;
@@ -1375,8 +1355,8 @@ function renderResumenObra() {
     });
   }
 
-  // MO total mensual (suma de ambas quincenas del mes)
-  const moArr2  = getMO(mesActual);
+  // MO total mensual — solo clasificacion "Obra"
+  const moArr2  = getMOObra(mesActual);
   const moTotal = moArr2.length > 0 ? moArr2.reduce((s, r) => s + r.monto, 0) : null;
 
   let sumaCobrar = 0, sumaInsumos = 0, sumaAlquiler = 0;
@@ -1763,11 +1743,12 @@ function renderCtroCosto() {
   tbody.innerHTML = mo.map(c => `
     <tr>
       <td>${c.centro}</td>
+      <td><span style="font-size:11px;color:var(--muted);">${c.clasificacion || 'Obra'}</span></td>
       <td class="num neg-val">${fmt(c.monto)}</td>
     </tr>
   `).join('') + `
     <tr style="background:#f8fafc;font-weight:700;">
-      <td style="padding:8px 12px;">TOTAL empresa (TANGO jornales)</td>
+      <td style="padding:8px 12px;" colspan="2">TOTAL empresa (TANGO jornales)</td>
       <td class="num neg-val" style="padding:8px 12px;">${fmt(total)}</td>
     </tr>`;
 }
@@ -2030,11 +2011,52 @@ function renderPlanta() {
   }
 }
 
+function renderMOClasif() {
+  const mesLabel = MES[mesActual] || mesActual;
+
+  const elLabelTaller = document.getElementById('mes-label-mo-taller');
+  if (elLabelTaller) elLabelTaller.textContent = mesLabel;
+  const tallerArr = getMOTaller(mesActual);
+  const kpiTaller = document.getElementById('kpi-taller-mo');
+  const kpiTallerSub = document.getElementById('kpi-taller-mo-sub');
+  if (kpiTaller) {
+    if (tallerArr.length > 0) {
+      const total = tallerArr.reduce((s, r) => s + r.monto, 0);
+      kpiTaller.textContent = fmt(total);
+      kpiTaller.className = 'kpi-value neg-val';
+      if (kpiTallerSub) kpiTallerSub.textContent = tallerArr.map(r => r.centro).join(', ');
+    } else {
+      kpiTaller.textContent = 'sin dato';
+      kpiTaller.className = 'kpi-value nd';
+      if (kpiTallerSub) kpiTallerSub.textContent = 'Actualizá datos para cargar desde TANGO';
+    }
+  }
+
+  const elLabelPlanta = document.getElementById('mes-label-mo-planta');
+  if (elLabelPlanta) elLabelPlanta.textContent = mesLabel;
+  const plantaArr = getMOPlanta(mesActual);
+  const kpiPlanta = document.getElementById('kpi-planta-mo');
+  const kpiPlantaSub = document.getElementById('kpi-planta-mo-sub');
+  if (kpiPlanta) {
+    if (plantaArr.length > 0) {
+      const total = plantaArr.reduce((s, r) => s + r.monto, 0);
+      kpiPlanta.textContent = fmt(total);
+      kpiPlanta.className = 'kpi-value neg-val';
+      if (kpiPlantaSub) kpiPlantaSub.textContent = plantaArr.map(r => r.centro).join(', ');
+    } else {
+      kpiPlanta.textContent = 'sin dato';
+      kpiPlanta.className = 'kpi-value nd';
+      if (kpiPlantaSub) kpiPlantaSub.textContent = 'Actualizá datos para cargar desde TANGO';
+    }
+  }
+}
+
 function renderAll() {
   renderMargen();
   renderCobrosReal();
   renderOCInsumos();
   renderMODetalle();
+  renderMOClasif();
   renderAlquilerEquipos();
   renderPlanta();
   renderPipeline();

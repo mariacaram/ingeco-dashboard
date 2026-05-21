@@ -224,12 +224,12 @@ function parsearArchivoTangoMO(file) {
 function parsearGSheetTangoMO(file) {
   const ss     = SpreadsheetApp.openById(file.getId());
   const sheets = ss.getSheets();
-  const totales = {};
+  const totales = {}; // key = "centro||clasificacion"
 
   for (const sheet of sheets) {
     const rows = sheet.getDataRange().getValues();
 
-    let hdrIdx = -1, iClave = -1, iMonto = -1, modo = null;
+    let hdrIdx = -1, iClave = -1, iMonto = -1, iClasif = -1, modo = null;
 
     for (let i = 0; i < Math.min(25, rows.length); i++) {
       const cells = rows[i].map(c => String(c).toUpperCase().trim());
@@ -238,14 +238,18 @@ function parsearGSheetTangoMO(file) {
       const iObra   = cells.findIndex(c => c === 'OBRA');
       const iTotalQ = cells.findIndex(c => c.includes('TOTAL') && c.includes('QUINCENA'));
       if (iObra >= 0 && iTotalQ >= 0) {
-        hdrIdx = i; iClave = iObra; iMonto = iTotalQ; modo = 'obra'; break;
+        hdrIdx = i; iClave = iObra; iMonto = iTotalQ; modo = 'obra';
+        iClasif = cells.findIndex(c => c.includes('CLASIF'));
+        break;
       }
 
       // Formato B: CTRO/CENTRO + NETO (resumen por centro de costo)
       const iCtro = cells.findIndex(c => c.includes('CTRO') || c.includes('CENTRO'));
       const iNeto = cells.findIndex(c => c === 'NETO' || c.endsWith('NETO'));
       if (iCtro >= 0 && iNeto >= 0) {
-        hdrIdx = i; iClave = iCtro; iMonto = iNeto; modo = 'ctro'; break;
+        hdrIdx = i; iClave = iCtro; iMonto = iNeto; modo = 'ctro';
+        iClasif = cells.findIndex(c => c.includes('CLASIF'));
+        break;
       }
     }
 
@@ -253,7 +257,7 @@ function parsearGSheetTangoMO(file) {
       Logger.log('Tango GSheet [' + sheet.getName() + '] — no se encontró header compatible, omitida');
       continue;
     }
-    Logger.log('Tango GSheet [' + sheet.getName() + '] — modo=' + modo + ' hdr=' + hdrIdx + ' iClave=' + iClave + ' iMonto=' + iMonto);
+    Logger.log('Tango GSheet [' + sheet.getName() + '] — modo=' + modo + ' hdr=' + hdrIdx + ' iClave=' + iClave + ' iMonto=' + iMonto + ' iClasif=' + iClasif);
 
     for (let i = hdrIdx + 1; i < rows.length; i++) {
       const row   = rows[i];
@@ -264,14 +268,22 @@ function parsearGSheetTangoMO(file) {
       const monto = typeof raw === 'number' ? raw : parsearMonto(String(raw || ''));
       if (!monto || monto <= 0) continue;
 
-      // En modo ctro, mapear al nombre canónico del centro de costo
-      const key = modo === 'ctro' ? mapearCentro(clave) : clave;
-      totales[key] = (totales[key] || 0) + monto;
+      const key    = modo === 'ctro' ? mapearCentro(clave) : clave;
+      const clasif = iClasif >= 0 ? String(row[iClasif] || '').trim() || 'Obra' : 'Obra';
+      const totKey = key + '||' + clasif;
+      totales[totKey] = (totales[totKey] || 0) + monto;
     }
   }
 
   const result = Object.entries(totales)
-    .map(([centro, monto]) => ({ centro, monto: Math.round(monto) }))
+    .map(([totKey, monto]) => {
+      const sep = totKey.indexOf('||');
+      return {
+        centro:         sep >= 0 ? totKey.substring(0, sep) : totKey,
+        monto:          Math.round(monto),
+        clasificacion:  sep >= 0 ? totKey.substring(sep + 2) : 'Obra',
+      };
+    })
     .filter(r => r.monto > 100)
     .sort((a, b) => b.monto - a.monto);
 
