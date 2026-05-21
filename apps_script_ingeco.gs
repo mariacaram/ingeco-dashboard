@@ -191,40 +191,56 @@ function parsearArchivoTangoMO(file) {
   }
 }
 
-// Lee un Google Sheet con N pestañas (quincenas) y acumula los totales por centro
+// Lee un Google Sheet con N pestañas (quincenas) y acumula los totales por obra
+// Soporta dos formatos de TANGO:
+//   Formato A: columnas OBRA + TOTAL QUINCENA C/REDONDEO PARA PAGO EN EFECTIVO
+//   Formato B: columnas CTRO COSTO + NETO (resumen por centro de costo)
 function parsearGSheetTangoMO(file) {
-  const ss      = SpreadsheetApp.openById(file.getId());
-  const sheets  = ss.getSheets();
+  const ss     = SpreadsheetApp.openById(file.getId());
+  const sheets = ss.getSheets();
   const totales = {};
 
   for (const sheet of sheets) {
     const rows = sheet.getDataRange().getValues();
 
-    // Buscar fila de encabezados (tiene columna CTRO/CENTRO y NETO)
-    let hdrIdx = -1, iCtro = -1, iNeto = -1;
+    let hdrIdx = -1, iClave = -1, iMonto = -1, modo = null;
+
     for (let i = 0; i < Math.min(25, rows.length); i++) {
       const cells = rows[i].map(c => String(c).toUpperCase().trim());
-      const ci = cells.findIndex(c => c.includes('CTRO') || c.includes('CENTRO') || c === 'CTROCOSTO');
-      const ni = cells.findIndex(c => c === 'NETO' || c.endsWith('NETO'));
-      if (ci >= 0 && ni >= 0) { hdrIdx = i; iCtro = ci; iNeto = ni; break; }
+
+      // Formato A: OBRA + TOTAL QUINCENA (planilla por empleado con obra asignada)
+      const iObra   = cells.findIndex(c => c === 'OBRA');
+      const iTotalQ = cells.findIndex(c => c.includes('TOTAL') && c.includes('QUINCENA'));
+      if (iObra >= 0 && iTotalQ >= 0) {
+        hdrIdx = i; iClave = iObra; iMonto = iTotalQ; modo = 'obra'; break;
+      }
+
+      // Formato B: CTRO/CENTRO + NETO (resumen por centro de costo)
+      const iCtro = cells.findIndex(c => c.includes('CTRO') || c.includes('CENTRO'));
+      const iNeto = cells.findIndex(c => c === 'NETO' || c.endsWith('NETO'));
+      if (iCtro >= 0 && iNeto >= 0) {
+        hdrIdx = i; iClave = iCtro; iMonto = iNeto; modo = 'ctro'; break;
+      }
     }
+
     if (hdrIdx < 0) {
-      Logger.log('Tango GSheet [' + sheet.getName() + '] — no se encontró header CTRO/NETO, omitida');
+      Logger.log('Tango GSheet [' + sheet.getName() + '] — no se encontró header compatible, omitida');
       continue;
     }
-    Logger.log('Tango GSheet [' + sheet.getName() + '] — header en fila ' + hdrIdx + ', iCtro=' + iCtro + ', iNeto=' + iNeto);
+    Logger.log('Tango GSheet [' + sheet.getName() + '] — modo=' + modo + ' hdr=' + hdrIdx + ' iClave=' + iClave + ' iMonto=' + iMonto);
 
     for (let i = hdrIdx + 1; i < rows.length; i++) {
-      const row  = rows[i];
-      const ctro = String(row[iCtro] || '').trim();
-      if (!ctro || ctro.toUpperCase().includes('TOTAL') || ctro === '') continue;
+      const row   = rows[i];
+      const clave = String(row[iClave] || '').trim();
+      if (!clave || clave.toUpperCase().includes('TOTAL') || clave === '') continue;
 
-      const raw  = row[iNeto];
-      const neto = typeof raw === 'number' ? raw : parsearMonto(String(raw || ''));
-      if (!neto || neto <= 0) continue;
+      const raw   = row[iMonto];
+      const monto = typeof raw === 'number' ? raw : parsearMonto(String(raw || ''));
+      if (!monto || monto <= 0) continue;
 
-      const clave = mapearCentro(ctro);
-      totales[clave] = (totales[clave] || 0) + neto;
+      // En modo ctro, mapear al nombre canónico del centro de costo
+      const key = modo === 'ctro' ? mapearCentro(clave) : clave;
+      totales[key] = (totales[key] || 0) + monto;
     }
   }
 
@@ -233,8 +249,8 @@ function parsearGSheetTangoMO(file) {
     .filter(r => r.monto > 100)
     .sort((a, b) => b.monto - a.monto);
 
-  Logger.log('Tango GSheet "' + file.getName() + '" — ' + result.length + ' centros, total=' +
-    result.reduce((s,r) => s + r.monto, 0));
+  Logger.log('Tango GSheet "' + file.getName() + '" — ' + result.length + ' obras/centros, total=' +
+    result.reduce((s, r) => s + r.monto, 0));
   return result;
 }
 

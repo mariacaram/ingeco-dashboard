@@ -481,6 +481,24 @@
   </div>
 
   <div class="section">
+    <div class="section-title">Mano de Obra por Obra · <span id="mes-label-mo-detalle"></span> <span class="badge real">TANGO — Mauro Orellana</span></div>
+    <div class="table-wrap">
+      <table id="tabla-mo-detalle">
+        <thead>
+          <tr>
+            <th>Obra / Sector</th>
+            <th class="num">MO Total Mes</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-mo-detalle">
+          <tr><td colspan="2" class="nd" style="text-align:center;padding:20px;">Presioná "Actualizar datos" para cargar desde Drive</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="nota-fuente"><strong>Fuente:</strong> <a href="https://drive.google.com/drive/folders/1hQZoJovbFDHNsJhNiGMEueH1bLfXuuCP" target="_blank">Carpeta TANGO (Mauro Orellana)</a> — columnas OBRA + TOTAL QUINCENA C/REDONDEO PARA PAGO EN EFECTIVO — suma de ambas quincenas del mes</div>
+  </div>
+
+  <div class="section">
     <div class="section-title">Alquiler Interno de Equipos · <span id="mes-label-alquiler"></span> <span class="badge real">Partes diarios — Adrián Caram</span></div>
     <div class="table-wrap">
       <table>
@@ -1586,6 +1604,35 @@ function renderOCInsumos() {
   tbody.innerHTML = filas + totalFila;
 }
 
+function renderMODetalle() {
+  const tbody   = document.getElementById('tbody-mo-detalle');
+  const mesLabel = document.getElementById('mes-label-mo-detalle');
+  if (mesLabel) mesLabel.textContent = MES[mesActual] || mesActual;
+  if (!tbody) return;
+
+  const mo = getMO(mesActual);
+  if (mo.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="2" class="nd" style="text-align:center;padding:20px;">Sin datos TANGO para ' + (MES[mesActual] || mesActual) + ' — actualizá datos</td></tr>';
+    return;
+  }
+
+  const total = mo.reduce((s, r) => s + r.monto, 0);
+
+  const filas = mo.map(r => `
+    <tr>
+      <td>${r.centro}</td>
+      <td class="num neg-val">${fmt(r.monto)}</td>
+    </tr>`).join('');
+
+  const totalFila = `
+    <tr style="background:#f8fafc;font-weight:700;border-top:2px solid var(--border);">
+      <td style="padding:8px 12px;">TOTAL Mano de Obra</td>
+      <td class="num neg-val" style="padding:8px 12px;">${fmt(total)}</td>
+    </tr>`;
+
+  tbody.innerHTML = filas + totalFila;
+}
+
 function renderOCPlanta() {
   const tbody = document.getElementById('tbody-oc-planta');
   tbody.innerHTML = OC_PLANTA.map(oc => `
@@ -1938,6 +1985,7 @@ function renderAll() {
   renderMargen();
   renderCobrosReal();
   renderOCInsumos();
+  renderMODetalle();
   renderAlquilerEquipos();
   renderPipeline();
   renderCostoFinanciero();
@@ -2061,6 +2109,7 @@ function setMes(mes) {
   });
   renderMargen();
   renderOCInsumos();
+  renderMODetalle();
   renderAlquilerEquipos();
   renderCtroCosto();
 }
