@@ -1245,12 +1245,13 @@ function renderMargen() {
   if (mesLabel) mesLabel.textContent = MES[mesActual];
 
   // Calcular totales de egresos para el mes seleccionado
-  const ocMes    = OC_INSUMOS[mesActual] ? OC_INSUMOS[mesActual].total : null;
-  const moArr    = getMO(mesActual);
+  const ocMes     = OC_INSUMOS[mesActual] ? OC_INSUMOS[mesActual].total : null;
+  const moArr     = getMO(mesActual);
   const moMensual = moArr.length > 0 ? moArr.reduce((s, r) => s + r.monto, 0) : null;
+  const alqMes    = ALQUILER_EQUIPOS[mesActual] ? ALQUILER_EQUIPOS[mesActual].totalArs : null;
   const totalEgresos = (ocMes != null && moMensual != null) ? ocMes + moMensual : null;
 
-  // Actualizar KPI de Egresos
+  // Actualizar KPI de Egresos (OC + MO, sin alquiler — el alquiler tiene su propia tarjeta)
   const kpiEg = document.getElementById('kpi-egresos');
   if (kpiEg) {
     if (totalEgresos != null) {
@@ -1265,28 +1266,36 @@ function renderMargen() {
     }
   }
 
-  // Actualizar KPI de Margen estimado
-  const cobMes = COBROS_REAL[mesActual] ? COBROS_REAL[mesActual].total : null;
+  // Margen = Total A Cobrar − OC Insumos − MO TANGO − Alquiler Equipos
+  const obras = GENERADO_POR_OBRA && GENERADO_POR_OBRA.obras ? GENERADO_POR_OBRA.obras : [];
+  const totalACobrar = obras.length > 0
+    ? obras.reduce((s, o) => s + (o.aCobrar ?? o.generado ?? 0), 0)
+    : null;
+  const totalEgresosConAlq = totalEgresos != null
+    ? totalEgresos + (alqMes || 0)
+    : null;
+
   const kpiMg  = document.getElementById('kpi-margen-est');
   const kpiMgFormula = document.getElementById('kpi-margen-formula');
   if (kpiMg) {
-    if (cobMes != null && totalEgresos != null) {
-      const margenVal = cobMes - totalEgresos;
-      const pct = ((margenVal / cobMes) * 100).toFixed(1);
+    if (totalACobrar != null && totalEgresosConAlq != null) {
+      const margenVal = totalACobrar - totalEgresosConAlq;
+      const pct = ((margenVal / totalACobrar) * 100).toFixed(1);
       kpiMg.textContent = fmt(margenVal) + ' (' + pct + '%)';
       kpiMg.className   = 'kpi-value ' + (margenVal >= 0 ? 'pos-val' : 'neg-val');
       document.getElementById('kpi-margen-sub').textContent =
-        'Cobros ' + MES[mesActual] + ' − Egresos estimados';
+        'A Cobrar ' + MES[mesActual] + ' − Egresos + Alquiler';
       if (kpiMgFormula) {
         const partes = [];
-        if (ocMes != null)    partes.push('OC ' + fmt(ocMes));
-        if (moMensual != null) partes.push('MO ' + fmt(moMensual));
-        kpiMgFormula.textContent = fmt(cobMes) + ' − (' + partes.join(' + ') + ')';
+        if (ocMes != null)     partes.push('OC ' + fmt(ocMes));
+        if (moMensual != null)  partes.push('MO ' + fmt(moMensual));
+        if (alqMes != null)     partes.push('Alq. ' + fmt(alqMes));
+        kpiMgFormula.textContent = fmt(totalACobrar) + ' − (' + partes.join(' + ') + ')';
       }
     } else {
       kpiMg.textContent = 'sin dato';
       kpiMg.className   = 'kpi-value nd';
-      if (kpiMgFormula) kpiMgFormula.textContent = 'A Cobrar − (OC Insumos + MO TANGO)';
+      if (kpiMgFormula) kpiMgFormula.textContent = 'A Cobrar − (OC Insumos + MO TANGO + Alquiler)';
     }
   }
 
