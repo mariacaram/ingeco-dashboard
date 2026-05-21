@@ -49,7 +49,7 @@ function doGet(e) {
     if (useCache) {
       const cached = PROPS.getProperty(CACHE_KEY);
       data = cached ? JSON.parse(cached) : buildData();
-      // generadoPorObra y alquilerEquipos se guardan en claves separadas (son grandes)
+      // Cada campo grande se guarda en su propia clave (límite 9 KB por propiedad)
       if (data && !data.generadoPorObra) {
         const cachedObras = PROPS.getProperty(CACHE_KEY + '_obras');
         if (cachedObras) data.generadoPorObra = JSON.parse(cachedObras);
@@ -58,21 +58,32 @@ function doGet(e) {
         const cachedAlquiler = PROPS.getProperty(CACHE_KEY + '_alquiler');
         if (cachedAlquiler) data.alquilerEquipos = JSON.parse(cachedAlquiler);
       }
+      if (data && !data.moCtroCosto) {
+        const cachedMo = PROPS.getProperty(CACHE_KEY + '_mo');
+        if (cachedMo) data.moCtroCosto = JSON.parse(cachedMo);
+      }
+      if (data && !data.ocInsumos) {
+        const cachedOc = PROPS.getProperty(CACHE_KEY + '_oc');
+        if (cachedOc) data.ocInsumos = JSON.parse(cachedOc);
+      }
     } else {
       data = buildData();
-      // Guardar en cache: datos pequeños por un lado, obras por otro
-      // (PropertiesService tiene límite de 9 KB por propiedad)
+      // Guardar cada campo en su propia clave — PropertiesService tiene límite de 9 KB por propiedad
       try {
-        const small = { status: data.status, timestamp: data.timestamp,
-                        moCtroCosto: data.moCtroCosto, ocInsumos: data.ocInsumos };
-        PROPS.setProperty(CACHE_KEY, JSON.stringify(small));
-      } catch(ce) { Logger.log('Cache write (small) error: ' + ce); }
+        PROPS.setProperty(CACHE_KEY, JSON.stringify({ status: data.status, timestamp: data.timestamp }));
+      } catch(ce) { Logger.log('Cache write error: ' + ce); }
       try {
         if (data.generadoPorObra) PROPS.setProperty(CACHE_KEY + '_obras', JSON.stringify(data.generadoPorObra));
       } catch(ce) { Logger.log('Cache write (obras) error: ' + ce); }
       try {
         if (data.alquilerEquipos) PROPS.setProperty(CACHE_KEY + '_alquiler', JSON.stringify(data.alquilerEquipos));
       } catch(ce) { Logger.log('Cache write (alquiler) error: ' + ce); }
+      try {
+        if (data.moCtroCosto) PROPS.setProperty(CACHE_KEY + '_mo', JSON.stringify(data.moCtroCosto));
+      } catch(ce) { Logger.log('Cache write (mo) error: ' + ce); }
+      try {
+        if (data.ocInsumos) PROPS.setProperty(CACHE_KEY + '_oc', JSON.stringify(data.ocInsumos));
+      } catch(ce) { Logger.log('Cache write (oc) error: ' + ce); }
     }
 
     const json = JSON.stringify(data);
@@ -104,7 +115,11 @@ function doGet(e) {
 function actualizarNocturno() {
   try {
     const data = buildData();
-    PROPS.setProperty(CACHE_KEY, JSON.stringify(data));
+    PROPS.setProperty(CACHE_KEY, JSON.stringify({ status: data.status, timestamp: data.timestamp }));
+    if (data.generadoPorObra) PROPS.setProperty(CACHE_KEY + '_obras',   JSON.stringify(data.generadoPorObra));
+    if (data.alquilerEquipos) PROPS.setProperty(CACHE_KEY + '_alquiler', JSON.stringify(data.alquilerEquipos));
+    if (data.moCtroCosto)     PROPS.setProperty(CACHE_KEY + '_mo',       JSON.stringify(data.moCtroCosto));
+    if (data.ocInsumos)       PROPS.setProperty(CACHE_KEY + '_oc',       JSON.stringify(data.ocInsumos));
     Logger.log('Cache actualizado: ' + data.timestamp);
   } catch (err) {
     Logger.log('Error en trigger nocturno: ' + err.toString());
