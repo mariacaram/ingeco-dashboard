@@ -592,10 +592,10 @@
 <div class="tab-panel" id="tab-planta">
   <div class="kpi-grid">
     <div class="kpi-card">
-      <div class="kpi-label">Tn totales (feb/mar)</div>
-      <div class="kpi-value nd">sin dato</div>
-      <div class="kpi-sub">API no extrajo datos 2026</div>
-      <div class="fuente">REMITOS OFICIALES (Nico Dall'Agata) — columna Tn Caliente/Frío sin precios cargados al 12/05/2026</div>
+      <div class="kpi-label">Tn producidas · <span id="mes-label-planta"></span></div>
+      <div class="kpi-value nd" id="kpi-tn-total">Actualizá datos</div>
+      <div class="kpi-sub" id="kpi-tn-sub">Caliente + Frío del mes</div>
+      <div class="fuente">REMITOS OFICIALES (Nico Dall'Agata) — Tn Caliente + Frío</div>
     </div>
     <div class="kpi-card neg">
       <div class="kpi-label">Insumos planta Feb 2026</div>
@@ -668,10 +668,10 @@
       <div class="table-wrap">
         <table>
           <thead><tr><th>Mes</th><th class="num">OC Insumos (Guillermo)</th><th class="num">N° órdenes</th><th class="num">Tn Caliente</th><th class="num">Tn Frío</th></tr></thead>
-          <tbody>
-            <tr><td>Febrero 2026</td><td class="num neg-val">$18.600.000</td><td class="num">3 OC</td><td class="nd num">sin dato</td><td class="nd num">sin dato</td></tr>
-            <tr><td>Marzo 2026</td><td class="num neg-val">$20.100.000</td><td class="num">4 OC</td><td class="nd num">sin dato</td><td class="nd num">sin dato</td></tr>
-            <tr><td>Abril 2026 (parcial)</td><td class="num neg-val">$17.900.000</td><td class="num">2 OC</td><td class="nd num">sin dato</td><td class="nd num">sin dato</td></tr>
+          <tbody id="tbody-planta-produccion">
+            <tr><td>Febrero 2026</td><td class="num neg-val">$18.600.000</td><td class="num">3 OC</td><td class="nd num" id="tn-feb-caliente">—</td><td class="nd num" id="tn-feb-frio">—</td></tr>
+            <tr><td>Marzo 2026</td><td class="num neg-val">$20.100.000</td><td class="num">4 OC</td><td class="nd num" id="tn-mar-caliente">—</td><td class="nd num" id="tn-mar-frio">—</td></tr>
+            <tr><td>Abril 2026 (parcial)</td><td class="num neg-val">$17.900.000</td><td class="num">2 OC</td><td class="nd num" id="tn-abr-caliente">—</td><td class="nd num" id="tn-abr-frio">—</td></tr>
           </tbody>
         </table>
       </div>
@@ -1080,6 +1080,7 @@ let GENERADO_POR_OBRA = null;
 // Alquiler interno de equipos — se carga desde Apps Script
 // { abr: { totalArs, tcUsd, porObra: [{obra, costoArs, horasTot, equipos: [{codigo, clasificacion, marca, modelo, pfUsd, horas, costoArs}]}] } }
 let ALQUILER_EQUIPOS = {};
+let REMITOS_ASFALTO = {}; // { feb: {caliente, frio, total}, mar: {...}, abr: {...} }
 
 // Centros de costo MO por mes — cargado desde la carpeta TANGO de Mauro (Apps Script)
 // { ene: [{centro, monto}], feb: [...], mar: [...], abr: [...] }  (monto = suma ambas quincenas)
@@ -1998,12 +1999,39 @@ function openOCPanel(obraName) {
 // Pegá acá la URL de tu Web App después de hacer el deploy en Apps Script:
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwXe_MLjncMNA4-v8GLfmvhQFZG0cuMeXzSHIBccBIUUTTpXEvJuLhek-mC_S4twVCu9A/exec';
 
+function renderPlanta() {
+  const mesLabel = document.getElementById('mes-label-planta');
+  if (mesLabel) mesLabel.textContent = MES[mesActual] || mesActual;
+
+  const kpiVal = document.getElementById('kpi-tn-total');
+  const kpiSub = document.getElementById('kpi-tn-sub');
+  const rem = REMITOS_ASFALTO[mesActual];
+
+  if (rem && rem.total > 0) {
+    if (kpiVal) { kpiVal.textContent = rem.total + ' tn'; kpiVal.className = 'kpi-value pos-val'; }
+    if (kpiSub) kpiSub.textContent = 'Caliente: ' + rem.caliente + ' tn · Frío: ' + rem.frio + ' tn';
+  } else {
+    if (kpiVal) { kpiVal.textContent = 'sin dato'; kpiVal.className = 'kpi-value nd'; }
+    if (kpiSub) kpiSub.textContent = 'Actualizá datos para cargar desde Drive';
+  }
+
+  // Actualizar celdas de la tabla por mes fijo (feb/mar/abr)
+  for (const mes of ['feb', 'mar', 'abr']) {
+    const r = REMITOS_ASFALTO[mes];
+    const elC = document.getElementById('tn-' + mes + '-caliente');
+    const elF = document.getElementById('tn-' + mes + '-frio');
+    if (elC) { elC.textContent = r ? r.caliente + ' tn' : '—'; elC.className = r ? 'num' : 'nd num'; }
+    if (elF) { elF.textContent = r ? r.frio     + ' tn' : '—'; elF.className = r ? 'num' : 'nd num'; }
+  }
+}
+
 function renderAll() {
   renderMargen();
   renderCobrosReal();
   renderOCInsumos();
   renderMODetalle();
   renderAlquilerEquipos();
+  renderPlanta();
   renderPipeline();
   renderCostoFinanciero();
   renderOCPlanta();
@@ -2087,6 +2115,9 @@ async function refreshData() {
       if (data.alquilerEquipos) {
         Object.assign(ALQUILER_EQUIPOS, data.alquilerEquipos);
       }
+      if (data.remitosAsfalto && typeof data.remitosAsfalto === 'object') {
+        Object.assign(REMITOS_ASFALTO, data.remitosAsfalto);
+      }
       renderAll();
       updateTimestamp(data.timestamp);
       btn.textContent = '✓ Actualizado';
@@ -2128,6 +2159,7 @@ function setMes(mes) {
   renderOCInsumos();
   renderMODetalle();
   renderAlquilerEquipos();
+  renderPlanta();
   renderCtroCosto();
 }
 
@@ -2197,6 +2229,9 @@ if (APPS_SCRIPT_URL) {
         }
         if (data.alquilerEquipos) {
           Object.assign(ALQUILER_EQUIPOS, data.alquilerEquipos);
+        }
+        if (data.remitosAsfalto && typeof data.remitosAsfalto === 'object') {
+          Object.assign(REMITOS_ASFALTO, data.remitosAsfalto);
         }
         renderAll();
         updateTimestamp(data.timestamp);

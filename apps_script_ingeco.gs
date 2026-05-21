@@ -26,7 +26,8 @@ const FILE_IDS = {
   maestroObras: '1VbG7DPqaOSlYkvQxbxag-4P2sOoRJQwWGccbx9OMyBM',  // Maestro de Obras con COD_OBRA
   fernandoObras:'1vGY8-saBKS4XAwd4RRqacNYRS7W0KV9brDBEo3_Jn0A',  // Obras activas (Fernando Solís)
   equiposFlota: '1PEcPzwrQ8kE2evmUlrFq9wPbgWOR92MPl3LEqcSYbIk',  // Equipos + PF mensual (Adrián)
-  usageEquipos: '1CPnhO1M78vwARe21ye_Xcr0hiLIrKtR3zzANsJgc5d4',  // Partes diarios por equipo (una pestaña por COD)
+  usageEquipos:   '1CPnhO1M78vwARe21ye_Xcr0hiLIrKtR3zzANsJgc5d4',  // Partes diarios por equipo (una pestaña por COD)
+  remitosAsfalto: '13z7EEuVIedOwl85d_f8MEoJGCEioZO7m9Cbn8MWxihI',  // REMITOS OFICIALES (Nico Dall'Agata)
 };
 
 // Tipo de cambio USD → ARS oficial promedio mensual (Banco Nación Argentina)
@@ -66,6 +67,10 @@ function doGet(e) {
         const cachedOc = PROPS.getProperty(CACHE_KEY + '_oc');
         if (cachedOc) data.ocInsumos = JSON.parse(cachedOc);
       }
+      if (data && !data.remitosAsfalto) {
+        const cachedRem = PROPS.getProperty(CACHE_KEY + '_remitos');
+        if (cachedRem) data.remitosAsfalto = JSON.parse(cachedRem);
+      }
     } else {
       data = buildData();
       // Guardar cada campo en su propia clave — PropertiesService tiene límite de 9 KB por propiedad
@@ -84,6 +89,9 @@ function doGet(e) {
       try {
         if (data.ocInsumos) PROPS.setProperty(CACHE_KEY + '_oc', JSON.stringify(data.ocInsumos));
       } catch(ce) { Logger.log('Cache write (oc) error: ' + ce); }
+      try {
+        if (data.remitosAsfalto) PROPS.setProperty(CACHE_KEY + '_remitos', JSON.stringify(data.remitosAsfalto));
+      } catch(ce) { Logger.log('Cache write (remitos) error: ' + ce); }
     }
 
     const json = JSON.stringify(data);
@@ -120,6 +128,7 @@ function actualizarNocturno() {
     if (data.alquilerEquipos) PROPS.setProperty(CACHE_KEY + '_alquiler', JSON.stringify(data.alquilerEquipos));
     if (data.moCtroCosto)     PROPS.setProperty(CACHE_KEY + '_mo',       JSON.stringify(data.moCtroCosto));
     if (data.ocInsumos)       PROPS.setProperty(CACHE_KEY + '_oc',       JSON.stringify(data.ocInsumos));
+    if (data.remitosAsfalto)  PROPS.setProperty(CACHE_KEY + '_remitos',  JSON.stringify(data.remitosAsfalto));
     Logger.log('Cache actualizado: ' + data.timestamp);
   } catch (err) {
     Logger.log('Error en trigger nocturno: ' + err.toString());
@@ -140,6 +149,8 @@ function buildData() {
   catch(e) { Logger.log('generadoPorObra error: ' + e); result.generadoPorObra = null; }
   try { result.alquilerEquipos  = leerAlquilerEquipos(); }
   catch(e) { Logger.log('alquilerEquipos error: ' + e); result.alquilerEquipos = null; }
+  try { result.remitosAsfalto   = leerRemitosAsfalto(); }
+  catch(e) { Logger.log('remitosAsfalto error: ' + e); result.remitosAsfalto = null; }
   return result;
 }
 
@@ -828,6 +839,89 @@ function parsearHoras(raw) {
     if (!isNaN(n)) return n;
   }
   return 0;
+}
+
+// ============================================================
+// REMITOS OFICIALES — Tn Caliente y Frío producidas por mes
+// Fuente: Google Sheet de Nico Dall'Agata
+// Columnas clave: CANT. (cantidad en TN), U.D. (debe ser "TN"),
+//   DESCRIPCION (ASFALTO CALIENTE / ASFALTO FRIO), Mes, Año
+// ============================================================
+function leerRemitosAsfalto() {
+  try {
+    const ss     = SpreadsheetApp.openById(FILE_IDS.remitosAsfalto);
+    const sheets = ss.getSheets();
+    const MES_MAP = { 1:'ene', 2:'feb', 3:'mar', 4:'abr', 5:'may', 6:'jun',
+                      7:'jul', 8:'ago', 9:'sep', 10:'oct', 11:'nov', 12:'dic' };
+    const resultado = {};
+
+    for (const sheet of sheets) {
+      const rows = sheet.getDataRange().getValues();
+
+      // Buscar fila de encabezados que tenga CANT. y U.D./U.M.
+      let hdrIdx = -1, iCant = -1, iUD = -1, iDesc = -1, iMes = -1, iAnio = -1;
+      for (let i = 0; i < Math.min(20, rows.length); i++) {
+        const cells = rows[i].map(c => String(c).toUpperCase().trim());
+        const iC = cells.findIndex(c => c === 'CANT.' || c === 'CANT' || c === 'CANTIDAD');
+        const iU = cells.findIndex(c => c === 'U.D.' || c === 'U.M.' || c === 'UD' || c === 'UNIDAD');
+        if (iC >= 0 && iU >= 0) {
+          hdrIdx = i; iCant = iC; iUD = iU;
+          iDesc = cells.findIndex(c => c === 'DESCRIPCION' || c === 'DESCRIPCIÓN');
+          iMes  = cells.findIndex(c => c === 'MES');
+          iAnio = cells.findIndex(c => c === 'AÑO' || c === 'ANO' || c === 'AÑO');
+          break;
+        }
+      }
+      if (hdrIdx < 0) continue;
+      Logger.log('Remitos [' + sheet.getName() + ']: hdr=' + hdrIdx + ' iCant=' + iCant + ' iUD=' + iUD + ' iDesc=' + iDesc + ' iMes=' + iMes + ' iAnio=' + iAnio);
+
+      for (let i = hdrIdx + 1; i < rows.length; i++) {
+        const row = rows[i];
+
+        const ud = String(row[iUD] || '').toUpperCase().trim();
+        if (ud !== 'TN') continue;
+
+        const desc = String(row[iDesc] || '').toUpperCase().trim();
+        if (!desc.includes('ASFALTO')) continue;
+
+        // Mes y año
+        const mesRaw  = row[iMes];
+        const anioRaw = row[iAnio];
+        let mesNum  = typeof mesRaw  === 'number' ? mesRaw  : parseInt(String(mesRaw  || ''));
+        let anioNum = typeof anioRaw === 'number' ? anioRaw : parseInt(String(anioRaw || ''));
+        if (isNaN(mesNum) || isNaN(anioNum)) continue;
+        if (anioNum < 100) anioNum += 2000; // 26 → 2026
+        if (anioNum !== 2026) continue;
+
+        const mesKey = MES_MAP[mesNum];
+        if (!mesKey) continue;
+
+        const cant = typeof row[iCant] === 'number' ? row[iCant]
+                   : parseFloat(String(row[iCant] || '').replace(',', '.')) || 0;
+        if (cant <= 0) continue;
+
+        if (!resultado[mesKey]) resultado[mesKey] = { caliente: 0, frio: 0, total: 0 };
+        if (desc.includes('CALIENTE'))                    resultado[mesKey].caliente += cant;
+        else if (desc.includes('FRI') || desc.includes('FRÍO')) resultado[mesKey].frio     += cant;
+        resultado[mesKey].total += cant;
+      }
+    }
+
+    // Redondear a 1 decimal
+    for (const mes of Object.keys(resultado)) {
+      const r = resultado[mes];
+      r.caliente = Math.round(r.caliente * 10) / 10;
+      r.frio     = Math.round(r.frio     * 10) / 10;
+      r.total    = Math.round(r.total    * 10) / 10;
+    }
+
+    Logger.log('Remitos Asfalto 2026: ' + JSON.stringify(resultado));
+    return resultado;
+
+  } catch (err) {
+    Logger.log('leerRemitosAsfalto error: ' + err.toString());
+    return null;
+  }
 }
 
 function jsonResponse(obj) {
