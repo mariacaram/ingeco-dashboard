@@ -1222,14 +1222,19 @@ const FUENTES = [
 
 function fmt(n) {
   if (n == null) return '—';
-  if (n >= 1e9) return '$' + (n/1e9).toFixed(2) + 'B';
-  if (n >= 1e6) return '$' + (n/1e6).toFixed(1) + 'M';
+  if (n >= 1e9) return '$' + (n/1e9).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + 'B';
+  if (n >= 1e6) return '$' + (n/1e6).toLocaleString('es-AR', {minimumFractionDigits: 1, maximumFractionDigits: 1}) + 'M';
   return '$' + n.toLocaleString('es-AR', {minimumFractionDigits: 0, maximumFractionDigits: 0});
 }
 
 function fmtFull(n) {
   if (n == null) return '—';
   return '$' + n.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
+function fmtTn(n) {
+  if (n == null || isNaN(n)) return '—';
+  return n.toLocaleString('es-AR', {minimumFractionDigits: 1, maximumFractionDigits: 1});
 }
 
 function nd(text) {
@@ -2008,8 +2013,8 @@ function renderPlanta() {
   const rem = REMITOS_ASFALTO[mesActual];
 
   if (rem && rem.total > 0) {
-    if (kpiVal) { kpiVal.textContent = rem.total + ' tn'; kpiVal.className = 'kpi-value pos-val'; }
-    if (kpiSub) kpiSub.textContent = 'Caliente: ' + rem.caliente + ' tn · Frío: ' + rem.frio + ' tn';
+    if (kpiVal) { kpiVal.textContent = fmtTn(rem.total) + ' tn'; kpiVal.className = 'kpi-value pos-val'; }
+    if (kpiSub) kpiSub.textContent = 'Caliente: ' + fmtTn(rem.caliente) + ' tn · Frío: ' + fmtTn(rem.frio) + ' tn';
   } else {
     if (kpiVal) { kpiVal.textContent = 'sin dato'; kpiVal.className = 'kpi-value nd'; }
     if (kpiSub) kpiSub.textContent = 'Actualizá datos para cargar desde Drive';
@@ -2020,8 +2025,8 @@ function renderPlanta() {
     const r = REMITOS_ASFALTO[mes];
     const elC = document.getElementById('tn-' + mes + '-caliente');
     const elF = document.getElementById('tn-' + mes + '-frio');
-    if (elC) { elC.textContent = r ? r.caliente + ' tn' : '—'; elC.className = r ? 'num' : 'nd num'; }
-    if (elF) { elF.textContent = r ? r.frio     + ' tn' : '—'; elF.className = r ? 'num' : 'nd num'; }
+    if (elC) { elC.textContent = r ? fmtTn(r.caliente) + ' tn' : '—'; elC.className = r ? 'num' : 'nd num'; }
+    if (elF) { elF.textContent = r ? fmtTn(r.frio)     + ' tn' : '—'; elF.className = r ? 'num' : 'nd num'; }
   }
 }
 
