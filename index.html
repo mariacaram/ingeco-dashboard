@@ -2024,10 +2024,10 @@ function renderEgresosChart() {
   if (!container) return;
   if (mesLbl) mesLbl.textContent = MES[mesActual] || mesActual;
 
-  const ocMes  = OC_INSUMOS[mesActual]       ? OC_INSUMOS[mesActual].total          : null;
+  const ocMes  = OC_INSUMOS[mesActual]       ? OC_INSUMOS[mesActual].total         : null;
   const moArr  = getMOObra(mesActual);
-  const moMes  = moArr.length > 0            ? moArr.reduce((s,r) => s+r.monto, 0)  : null;
-  const alqMes = ALQUILER_EQUIPOS[mesActual] ? ALQUILER_EQUIPOS[mesActual].totalArs  : null;
+  const moMes  = moArr.length > 0            ? moArr.reduce((s,r) => s+r.monto, 0) : null;
+  const alqMes = ALQUILER_EQUIPOS[mesActual] ? ALQUILER_EQUIPOS[mesActual].totalArs : null;
 
   if (ocMes == null && moMes == null && alqMes == null) {
     container.innerHTML = '<div class="nd" style="text-align:center;padding:20px;font-size:13px;">Actualizá datos para ver el gráfico</div>';
@@ -2035,46 +2035,56 @@ function renderEgresosChart() {
   }
 
   const total = (ocMes || 0) + (moMes || 0) + (alqMes || 0);
-
   const items = [
-    { label: 'OC Insumos',       valor: ocMes,  color: '#f59e0b' },
-    { label: 'Mano de Obra',     valor: moMes,  color: '#ef4444' },
-    { label: 'Alquiler Equipos', valor: alqMes, color: '#3b82f6' },
-  ].filter(i => i.valor != null && i.valor > 0);
+    { label: 'OC Insumos',       valor: ocMes  || 0, color: '#f59e0b' },
+    { label: 'Mano de Obra',     valor: moMes  || 0, color: '#ef4444' },
+    { label: 'Alquiler Equipos', valor: alqMes || 0, color: '#3b82f6' },
+  ].filter(i => i.valor > 0);
 
-  // Barra apilada superior
-  const stackedSegments = items.map(item => {
-    const pct = total > 0 ? (item.valor / total * 100).toFixed(1) : 0;
-    return `<div title="${item.label}: ${fmt(item.valor)} (${pct}%)" style="flex:${item.valor};background:${item.color};height:100%;"></div>`;
+  // ── Donut chart SVG ──────────────────────────────────────────
+  const SIZE = 200, CX = 100, CY = 100, R = 72, SW = 32;
+  const C = 2 * Math.PI * R;
+  const GAP = 3; // px entre segmentos
+
+  let accLen = 0;
+  const arcs = items.map(item => {
+    const dash   = (item.valor / total) * C - GAP;
+    const offset = C / 4 - accLen;
+    accLen += (item.valor / total) * C;
+    return `<circle cx="${CX}" cy="${CY}" r="${R}" fill="none"
+      stroke="${item.color}" stroke-width="${SW}"
+      stroke-dasharray="${Math.max(0, dash)} ${C}"
+      stroke-dashoffset="${offset}"
+      stroke-linecap="butt"/>`;
   }).join('');
 
-  const stackedBar = `
-    <div style="display:flex;height:14px;border-radius:7px;overflow:hidden;margin-bottom:20px;gap:2px;">
-      ${stackedSegments}
-    </div>`;
+  const svg = `
+    <svg width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}" style="display:block;">
+      <circle cx="${CX}" cy="${CY}" r="${R}" fill="none" stroke="#f1f5f9" stroke-width="${SW}"/>
+      ${arcs}
+      <text x="${CX}" y="${CY - 10}" text-anchor="middle" font-size="10" fill="#94a3b8" font-family="inherit" font-weight="600">EGRESOS</text>
+      <text x="${CX}" y="${CY + 8}" text-anchor="middle" font-size="15" fill="#1e293b" font-family="inherit" font-weight="700">${fmt(total)}</text>
+    </svg>`;
 
-  // Barras individuales
-  const barras = items.map(item => {
-    const pct = total > 0 ? (item.valor / total * 100).toFixed(1) : 0;
+  // ── Leyenda ──────────────────────────────────────────────────
+  const leyenda = items.map(item => {
+    const pct = (item.valor / total * 100).toFixed(1);
     return `
-      <div style="margin-bottom:14px;">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;">
-          <span style="font-size:13px;font-weight:600;color:var(--text);">${item.label}</span>
-          <span style="font-size:13px;">${fmt(item.valor)} <span style="font-size:11px;color:var(--muted);margin-left:4px;">${pct}%</span></span>
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);">
+        <div style="width:14px;height:14px;border-radius:3px;background:${item.color};flex-shrink:0;"></div>
+        <div style="flex:1;">
+          <div style="font-size:12px;color:var(--muted);font-weight:600;">${item.label}</div>
+          <div style="font-size:14px;color:var(--text);font-weight:700;">${fmt(item.valor)}</div>
         </div>
-        <div style="background:#f1f5f9;border-radius:5px;height:18px;overflow:hidden;">
-          <div style="background:${item.color};width:${pct}%;height:100%;border-radius:5px;transition:width 0.6s ease;opacity:0.85;min-width:${pct > 0 ? '4px' : '0'};"></div>
-        </div>
+        <div style="font-size:20px;font-weight:800;color:${item.color};">${pct}<span style="font-size:12px;font-weight:600;">%</span></div>
       </div>`;
   }).join('');
 
-  const totalRow = `
-    <div style="border-top:1px solid var(--border);padding-top:10px;margin-top:6px;display:flex;justify-content:space-between;">
-      <span style="font-size:12px;font-weight:700;color:var(--muted);">TOTAL EGRESOS</span>
-      <span style="font-size:14px;font-weight:700;color:var(--neg);">${fmt(total)}</span>
+  container.innerHTML = `
+    <div style="display:flex;align-items:center;gap:28px;flex-wrap:wrap;padding:4px 0;">
+      <div style="flex-shrink:0;">${svg}</div>
+      <div style="flex:1;min-width:200px;">${leyenda}</div>
     </div>`;
-
-  container.innerHTML = stackedBar + barras + totalRow;
 }
 
 function renderMOClasif() {
