@@ -399,7 +399,7 @@
       <div class="kpi-label">Alquiler interno equipos</div>
       <div class="kpi-value neg-val" id="kpi-alquiler-equipos">sin dato</div>
       <div class="kpi-sub" id="kpi-alquiler-sub">Actualizá datos para cargar</div>
-      <div class="fuente">Partes diarios equipos (Adrián) · TC dólar oficial promedio mensual (BNA)</div>
+      <div class="fuente"><a href="https://docs.google.com/spreadsheets/d/1CPnhO1M78vwARe21ye_Xcr0hiLIrKtR3zzANsJgc5d4/edit?gid=51278017#gid=51278017" target="_blank">Partes diarios equipos (Adrián)</a> · TC dólar oficial promedio mensual (BNA)</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">Margen estimado</div>
@@ -1251,8 +1251,8 @@ function renderMargen() {
       kpiEg.textContent = fmt(totalEgresos);
       kpiEg.className = 'kpi-value neg-val';
       document.getElementById('kpi-egresos-sub').textContent = 'OC Insumos + MO real del mes (TANGO)';
-      document.getElementById('kpi-egresos-fuente').textContent =
-        'OC: Guillermo Konicek — MO: TANGO ambas quincenas (Mauro Orellana)';
+      document.getElementById('kpi-egresos-fuente').innerHTML =
+        '<a href="https://docs.google.com/spreadsheets/d/1_lhq9c1MddkrK1Tf0kexRtgqw5aPhmZWiQkAIRjpfxs/edit?gid=42005977#gid=42005977" target="_blank">OC: Guillermo Konicek</a> — <a href="https://drive.google.com/drive/u/0/folders/1hQZoJovbFDHNsJhNiGMEueH1bLfXuuCP" target="_blank">MO: TANGO ambas quincenas (Mauro Orellana)</a>';
     } else {
       kpiEg.textContent = 'sin dato';
       kpiEg.className = 'kpi-value nd';
