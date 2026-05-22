@@ -1163,9 +1163,10 @@ function leerStockAsfalto(remitosData) {
           if (fechaForm <= fechaBase) continue;
 
           var raw = rows[i][iQty];
-          var qty = typeof raw === 'number' ? raw
-                  : parseFloat(String(raw || '').replace(',', '.')) || 0;
-          if (qty <= 0) continue;
+          var qtyKg = typeof raw === 'number' ? raw
+                    : parseFloat(String(raw || '').replace(',', '.')) || 0;
+          if (qtyKg <= 0) continue;
+          var qty = qtyKg / 1000; // formulario carga en kg → convertir a tn
 
           ingresos += qty;
           ingresosDetalle.push({
