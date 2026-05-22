@@ -637,8 +637,8 @@
     <div style="display:flex;align-items:stretch;gap:12px;margin-top:16px;flex-wrap:wrap;">
       <div style="flex:1;min-width:160px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center;">
         <div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.06em;margin-bottom:8px;">STOCK ASFALTO (MATERIA PRIMA)</div>
-        <div style="font-size:32px;font-weight:800;color:#16a34a;">700 tn</div>
-        <div style="font-size:11px;color:#16a34a;margin-top:4px;">✅ Real — Agustín 07/05</div>
+        <div style="font-size:32px;font-weight:800;color:#16a34a;" id="stock-mp-valor">700 tn</div>
+        <div style="font-size:11px;color:#16a34a;margin-top:4px;" id="stock-mp-label">✅ Real — Agustín 07/05</div>
       </div>
 
       <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 4px;color:var(--muted);">
@@ -648,23 +648,58 @@
 
       <div style="flex:1;min-width:160px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center;">
         <div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.06em;margin-bottom:8px;">MEZCLA TOTAL PRODUCIBLE</div>
-        <div style="font-size:32px;font-weight:800;color:var(--text);">14.000 tn</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:4px;">700 tn × 20</div>
+        <div style="font-size:32px;font-weight:800;color:var(--text);" id="stock-producible-valor">14.000 tn</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;" id="stock-producible-sub">700 tn × 20</div>
       </div>
 
     </div>
 
     <!-- Fila resumen total -->
-    <div style="margin-top:14px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:14px 16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+    <div style="margin-top:14px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:14px 16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;" id="stock-total-row">
       <span style="font-size:13px;color:var(--text);">14.000 tn producible &nbsp;+&nbsp; 35 tn frío terminado <span style="color:var(--muted);font-size:12px;">(❄ reserva Agustín)</span> &nbsp;=&nbsp;</span>
-      <span style="font-size:20px;font-weight:800;color:#16a34a;">14.035 tn</span>
+      <span style="font-size:20px;font-weight:800;color:#16a34a;" id="stock-total-valor">14.035 tn</span>
       <span style="margin-left:auto;font-size:11px;font-weight:700;color:#16a34a;background:#dcfce7;border:1px solid #86efac;border-radius:5px;padding:3px 8px;">Stock total disponible</span>
     </div>
 
     <!-- Notas -->
     <div style="margin-top:10px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px 16px;font-size:12px;color:var(--text);line-height:1.7;">
-      <div>📐 <strong>Fórmula:</strong> 25 tn asfalto (1 camión) → 500 tn mezcla. Ratio ×20. Con 700 tn stock → <strong>14.000 tn mezcla producible</strong> (caliente o frío) + 35 tn frío ya terminadas = <strong>14.035 tn total</strong>.</div>
+      <div id="stock-formula-nota">📐 <strong>Fórmula:</strong> 25 tn asfalto (1 camión) → 500 tn mezcla. Ratio ×20. Con 700 tn stock → <strong>14.000 tn mezcla producible</strong> (caliente o frío) + 35 tn frío ya terminadas = <strong>14.035 tn total</strong>.</div>
       <div style="margin-top:6px;">📋 <strong>Formulario de ingresos listo.</strong> Cuando entre asfalto nuevo, se registra en el form y suma al stock. Por ahora sin ingresos registrados — base: 700 tn al 07/05.</div>
+    </div>
+  </div>
+
+  <!-- Ajuste de stock -->
+  <div class="section" style="border:2px solid #fde68a;background:linear-gradient(135deg,#fffbeb,#fff);">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+      <div style="font-size:15px;font-weight:700;color:var(--text);">✏️ Ajuste de stock</div>
+      <span style="font-size:11px;font-weight:700;background:#fef3c7;color:#92400e;border:1px solid #fde68a;border-radius:12px;padding:2px 10px;">Agustín</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+      <!-- Stock actual display -->
+      <div style="background:var(--card);border:1.5px solid #86efac;border-radius:10px;padding:12px 20px;text-align:center;min-width:130px;">
+        <div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.06em;margin-bottom:6px;">STOCK ACTUAL</div>
+        <div style="font-size:26px;font-weight:800;color:#16a34a;" id="ajuste-stock-actual">700 tn</div>
+        <div style="font-size:10px;color:#16a34a;margin-top:4px;" id="ajuste-stock-fecha">Agustín · 07/05/2026</div>
+      </div>
+      <div style="font-size:24px;color:var(--muted);">→</div>
+      <!-- Input form -->
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <label style="font-size:12px;font-weight:600;color:var(--text);">Ingresá el nuevo valor de stock:</label>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <input type="number" id="ajuste-input" min="0" step="0.5" placeholder="ej: 680"
+            style="width:110px;padding:8px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:15px;font-weight:700;color:var(--text);outline:none;"
+            onkeydown="if(event.key==='Enter') ajustarStock()">
+          <span style="font-size:13px;color:var(--muted);font-weight:600;">tn</span>
+          <button onclick="ajustarStock()" id="ajuste-btn"
+            style="padding:8px 18px;background:var(--accent);border:none;border-radius:7px;color:#fff;font-weight:700;cursor:pointer;font-size:13px;transition:opacity .2s;">
+            Guardar ajuste
+          </button>
+        </div>
+        <div id="ajuste-feedback" style="font-size:12px;min-height:16px;"></div>
+      </div>
+    </div>
+    <div class="nota-fuente" style="margin-top:12px;">
+      <strong>Registro:</strong> Se guarda en <a href="https://docs.google.com/spreadsheets/d/1yZArsIKYMfq9UPUXyiASXtDNXyubTjFx3PPW2VjG-uA/edit?gid=60310599#gid=60310599" target="_blank">Formulario Ingreso Asfalto Agustín → pestaña Ajuste de stock</a>
     </div>
   </div>
 
@@ -1086,6 +1121,9 @@ let GENERADO_POR_OBRA = null;
 // { abr: { totalArs, tcUsd, porObra: [{obra, costoArs, horasTot, equipos: [{codigo, clasificacion, marca, modelo, pfUsd, horas, costoArs}]}] } }
 let ALQUILER_EQUIPOS = {};
 let REMITOS_ASFALTO = {}; // { feb: {caliente, frio, total}, mar: {...}, abr: {...} }
+let stockAsfalto = 700;
+let stockFecha   = '07/05/2026';
+let stockUsuario = 'Agustín';
 
 // Centros de costo MO por mes — cargado desde la carpeta TANGO de Mauro (Apps Script)
 // { ene: [{centro, monto, clasificacion}], ... }  clasificacion: "Obra" | "Taller" | "Pta. Asfalto"
@@ -2024,6 +2062,116 @@ function getOCPlanta(mes) {
   return { total: items.reduce((s, i) => s + i.monto, 0), nOC: items.reduce((s, i) => s + i.nOC, 0) };
 }
 
+function renderStockDisplay() {
+  const FRIO_FIJO = 35;
+  const producible = Math.round(stockAsfalto * 20);
+  const total      = producible + FRIO_FIJO;
+  const el = {
+    mpValor:       document.getElementById('stock-mp-valor'),
+    mpLabel:       document.getElementById('stock-mp-label'),
+    prodValor:     document.getElementById('stock-producible-valor'),
+    prodSub:       document.getElementById('stock-producible-sub'),
+    totalValor:    document.getElementById('stock-total-valor'),
+    formulaNota:   document.getElementById('stock-formula-nota'),
+    ajusteActual:  document.getElementById('ajuste-stock-actual'),
+    ajusteFecha:   document.getElementById('ajuste-stock-fecha'),
+  };
+  const stockStr   = fmtTn(stockAsfalto);
+  const prodStr    = producible.toLocaleString('es-AR');
+  const totalStr   = total.toLocaleString('es-AR');
+  const fechaCorta = stockFecha.substring(0, 5); // dd/mm
+  if (el.mpValor)     el.mpValor.textContent     = stockStr + ' tn';
+  if (el.mpLabel)     el.mpLabel.textContent      = '✅ Real — ' + stockUsuario + ' ' + fechaCorta;
+  if (el.prodValor)   el.prodValor.textContent    = prodStr + ' tn';
+  if (el.prodSub)     el.prodSub.textContent      = stockStr + ' tn × 20';
+  if (el.totalValor)  el.totalValor.textContent   = totalStr + ' tn';
+  if (el.formulaNota) el.formulaNota.innerHTML    =
+    '📐 <strong>Fórmula:</strong> 25 tn asfalto (1 camión) → 500 tn mezcla. Ratio ×20. Con ' + stockStr +
+    ' tn stock → <strong>' + prodStr + ' tn mezcla producible</strong> (caliente o frío) + ' + FRIO_FIJO +
+    ' tn frío ya terminadas = <strong>' + totalStr + ' tn total</strong>.';
+  if (el.ajusteActual) el.ajusteActual.textContent = stockStr + ' tn';
+  if (el.ajusteFecha)  el.ajusteFecha.textContent  = stockUsuario + ' · ' + stockFecha;
+}
+
+function ajustarStock() {
+  const input = document.getElementById('ajuste-input');
+  const btn   = document.getElementById('ajuste-btn');
+  const fb    = document.getElementById('ajuste-feedback');
+  if (!input || !btn || !fb) return;
+
+  const nuevoValor = parseFloat(input.value);
+  if (isNaN(nuevoValor) || nuevoValor < 0) {
+    fb.textContent = '⚠ Ingresá un número válido mayor a 0.';
+    fb.style.color = 'var(--neg)';
+    return;
+  }
+  if (!APPS_SCRIPT_URL) {
+    fb.textContent = '⚠ URL de Apps Script no configurada — no se puede guardar.';
+    fb.style.color = 'var(--neg)';
+    return;
+  }
+
+  const stockAntes = stockAsfalto;
+  btn.disabled     = true;
+  btn.textContent  = '⏳ Guardando...';
+  btn.style.opacity = '.7';
+  fb.textContent   = '';
+
+  const cbName = 'ajusteCb_' + Date.now();
+  const script = document.createElement('script');
+
+  const tid = setTimeout(() => {
+    delete window[cbName];
+    if (document.body.contains(script)) document.body.removeChild(script);
+    fb.textContent = '⚠ Sin respuesta del servidor. Verificá tu conexión.';
+    fb.style.color = 'var(--neg)';
+    btn.disabled   = false; btn.textContent = 'Guardar ajuste'; btn.style.opacity = '1';
+  }, 12000);
+
+  window[cbName] = function(data) {
+    clearTimeout(tid);
+    delete window[cbName];
+    if (document.body.contains(script)) document.body.removeChild(script);
+
+    if (data.status === 'ok') {
+      const now = new Date();
+      const dd  = String(now.getDate()).padStart(2, '0');
+      const mm  = String(now.getMonth() + 1).padStart(2, '0');
+      const aaaa = now.getFullYear();
+
+      stockAsfalto = nuevoValor;
+      stockFecha   = dd + '/' + mm + '/' + aaaa;
+      stockUsuario = 'Agustín';
+
+      renderStockDisplay();
+      input.value  = '';
+      fb.innerHTML = '✅ Stock actualizado: <strong>' + fmtTn(nuevoValor) + ' tn</strong> (antes: ' + fmtTn(stockAntes) + ' tn)';
+      fb.style.color = 'var(--pos)';
+      btn.textContent  = '✓ Guardado';
+      btn.style.opacity = '1';
+      setTimeout(() => {
+        btn.disabled    = false;
+        btn.textContent = 'Guardar ajuste';
+        fb.textContent  = '';
+      }, 5000);
+    } else {
+      fb.textContent = '⚠ Error: ' + (data.message || 'respuesta inesperada del servidor');
+      fb.style.color = 'var(--neg)';
+      btn.disabled   = false; btn.textContent = 'Guardar ajuste'; btn.style.opacity = '1';
+    }
+  };
+
+  const params = new URLSearchParams({
+    action:     'ajusteStock',
+    stockAntes: stockAntes,
+    stockNuevo: nuevoValor,
+    usuario:    'Agustín',
+    callback:   cbName,
+  });
+  script.src = APPS_SCRIPT_URL + '?' + params.toString();
+  document.body.appendChild(script);
+}
+
 function renderPlanta() {
   const mesLabel = document.getElementById('mes-label-planta');
   if (mesLabel) mesLabel.textContent = MES[mesActual] || mesActual;
@@ -2106,6 +2254,7 @@ function renderPlanta() {
     if (elF) { elF.textContent = r ? fmtTn(r.frio)     + ' tn' : '—'; elF.className = r ? 'num' : 'nd num'; }
   }
 
+  renderStockDisplay();
   renderPlantaCosto();
   renderPlantaCharts();
 }
@@ -2462,6 +2611,11 @@ async function refreshData() {
       if (data.remitosAsfalto && typeof data.remitosAsfalto === 'object') {
         Object.assign(REMITOS_ASFALTO, data.remitosAsfalto);
       }
+      if (data.stockAsfalto && data.stockAsfalto.valor != null) {
+        stockAsfalto = data.stockAsfalto.valor;
+        if (data.stockAsfalto.fecha)   stockFecha   = data.stockAsfalto.fecha;
+        if (data.stockAsfalto.usuario) stockUsuario = data.stockAsfalto.usuario;
+      }
       renderAll();
       updateTimestamp(data.timestamp);
       btn.textContent = '✓ Actualizado';
@@ -2578,6 +2732,11 @@ if (APPS_SCRIPT_URL) {
         }
         if (data.remitosAsfalto && typeof data.remitosAsfalto === 'object') {
           Object.assign(REMITOS_ASFALTO, data.remitosAsfalto);
+        }
+        if (data.stockAsfalto && data.stockAsfalto.valor != null) {
+          stockAsfalto = data.stockAsfalto.valor;
+          if (data.stockAsfalto.fecha)   stockFecha   = data.stockAsfalto.fecha;
+          if (data.stockAsfalto.usuario) stockUsuario = data.stockAsfalto.usuario;
         }
         renderAll();
         updateTimestamp(data.timestamp);

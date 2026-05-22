@@ -28,6 +28,7 @@ const FILE_IDS = {
   equiposFlota: '1PEcPzwrQ8kE2evmUlrFq9wPbgWOR92MPl3LEqcSYbIk',  // Equipos + PF mensual (Adrián)
   usageEquipos:   '1CPnhO1M78vwARe21ye_Xcr0hiLIrKtR3zzANsJgc5d4',  // Partes diarios por equipo (una pestaña por COD)
   remitosAsfalto: '13z7EEuVIedOwl85d_f8MEoJGCEioZO7m9Cbn8MWxihI',  // REMITOS OFICIALES (Nico Dall'Agata)
+  ajusteStock:    '1yZArsIKYMfq9UPUXyiASXtDNXyubTjFx3PPW2VjG-uA',  // Formulario Ingreso Asfalto Agustín
 };
 
 // Tipo de cambio USD → ARS oficial promedio mensual (Banco Nación Argentina)
@@ -44,6 +45,22 @@ const CACHE_KEY = 'ingeco_cache';
 function doGet(e) {
   try {
     const callback = e && e.parameter && e.parameter.callback;
+    const action   = e && e.parameter && e.parameter.action;
+
+    // ── Ajuste de stock ──────────────────────────────────────────
+    if (action === 'ajusteStock') {
+      const stockAntes = parseFloat((e.parameter.stockAntes || '0').replace(',', '.'));
+      const stockNuevo = parseFloat((e.parameter.stockNuevo || '0').replace(',', '.'));
+      const usuario    = e.parameter.usuario || 'Agustín';
+      const resultado  = guardarAjusteStock(stockAntes, stockNuevo, usuario);
+      const json       = JSON.stringify(resultado);
+      if (callback) {
+        return ContentService.createTextOutput(callback + '(' + json + ')')
+          .setMimeType(ContentService.MimeType.JAVASCRIPT);
+      }
+      return ContentService.createTextOutput(json).setMimeType(ContentService.MimeType.JSON);
+    }
+
     const useCache  = e && e.parameter && e.parameter.cache === '1';
 
     let data;
@@ -151,6 +168,8 @@ function buildData() {
   catch(e) { Logger.log('alquilerEquipos error: ' + e); result.alquilerEquipos = null; }
   try { result.remitosAsfalto   = leerRemitosAsfalto(); }
   catch(e) { Logger.log('remitosAsfalto error: ' + e); result.remitosAsfalto = null; }
+  try { result.stockAsfalto     = leerStockAsfalto(); }
+  catch(e) { Logger.log('stockAsfalto error: ' + e); result.stockAsfalto = null; }
   return result;
 }
 
@@ -1061,4 +1080,48 @@ function diagnosticoEquipos() {
   } catch(e) { Logger.log('ERROR leyendo partes diarios: ' + e); }
 
   Logger.log('\n=== FIN DIAGNÓSTICO EQUIPOS ===');
+}
+
+// ============================================================
+// AJUSTE DE STOCK DE ASFALTO
+// ============================================================
+
+function guardarAjusteStock(stockAntes, stockNuevo, usuario) {
+  try {
+    const ss    = SpreadsheetApp.openById(FILE_IDS.ajusteStock);
+    const sheet = ss.getSheetByName('Ajuste de stock');
+    if (!sheet) {
+      return { status: 'error', message: 'No se encontró la pestaña "Ajuste de stock"' };
+    }
+    const tz    = 'America/Argentina/Buenos_Aires';
+    const now   = new Date();
+    const fecha = Utilities.formatDate(now, tz, 'dd/MM/yyyy');
+    const hora  = Utilities.formatDate(now, tz, 'HH:mm:ss');
+    sheet.appendRow([fecha, hora, usuario, stockAntes, stockNuevo]);
+    Logger.log('Ajuste de stock guardado: ' + stockAntes + ' → ' + stockNuevo + ' (' + usuario + ')');
+    return { status: 'ok', stockNuevo: stockNuevo, timestamp: now.toISOString() };
+  } catch (err) {
+    Logger.log('guardarAjusteStock error: ' + err.toString());
+    return { status: 'error', message: err.toString() };
+  }
+}
+
+function leerStockAsfalto() {
+  try {
+    const ss    = SpreadsheetApp.openById(FILE_IDS.ajusteStock);
+    const sheet = ss.getSheetByName('Ajuste de stock');
+    if (!sheet) return { valor: 700, fecha: '07/05/2026', usuario: 'Agustín (base)' };
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { valor: 700, fecha: '07/05/2026', usuario: 'Agustín (base)' };
+    const row = sheet.getRange(lastRow, 1, 1, 5).getValues()[0];
+    return {
+      valor:   Number(row[4]) || 700,
+      fecha:   String(row[0] || '07/05/2026'),
+      hora:    String(row[1] || ''),
+      usuario: String(row[2] || 'Agustín'),
+    };
+  } catch (err) {
+    Logger.log('leerStockAsfalto error: ' + err.toString());
+    return { valor: 700, fecha: '07/05/2026', usuario: 'Agustín (base)' };
+  }
 }
