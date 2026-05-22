@@ -627,7 +627,7 @@
   <div class="section" style="border:2px solid #22c55e33;background:linear-gradient(135deg,#f0fdf4,#fff);">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;">
       <div>
-        <div style="font-size:15px;font-weight:700;color:var(--text);">🏗 Stock de asfalto y capacidad de producción</div>
+        <div style="font-size:15px;font-weight:700;color:var(--text);">🏭 Stock de asfalto y capacidad de producción</div>
         <div style="font-size:12px;color:var(--muted);margin-top:3px;">✅ Corte real confirmado por Agustín · 07/05/2026. Se suman ingresos cuando entren por el formulario.</div>
       </div>
       <span class="badge real" style="flex-shrink:0;margin-left:12px;">✅ Real — Agustín</span>
@@ -652,13 +652,6 @@
         <div style="font-size:11px;color:var(--muted);margin-top:4px;">700 tn × 20</div>
       </div>
 
-      <div style="display:flex;align-items:center;justify-content:center;padding:0 4px;font-size:14px;font-weight:700;color:var(--muted);">VS.</div>
-
-      <div style="flex:1;min-width:160px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center;">
-        <div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.06em;margin-bottom:8px;">COMPROMISOS ACTIVOS</div>
-        <div style="font-size:32px;font-weight:800;color:#f59e0b;">— tn</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:4px;">Obras en ejecución</div>
-      </div>
     </div>
 
     <!-- Fila resumen total -->
@@ -672,6 +665,28 @@
     <div style="margin-top:10px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px 16px;font-size:12px;color:var(--text);line-height:1.7;">
       <div>📐 <strong>Fórmula:</strong> 25 tn asfalto (1 camión) → 500 tn mezcla. Ratio ×20. Con 700 tn stock → <strong>14.000 tn mezcla producible</strong> (caliente o frío) + 35 tn frío ya terminadas = <strong>14.035 tn total</strong>.</div>
       <div style="margin-top:6px;">📋 <strong>Formulario de ingresos listo.</strong> Cuando entre asfalto nuevo, se registra en el form y suma al stock. Por ahora sin ingresos registrados — base: 700 tn al 07/05.</div>
+    </div>
+  </div>
+
+  <!-- Costo de producción caliente / frío -->
+  <div class="section">
+    <div class="section-title">Costo de producción · <span id="mes-label-planta-costo"></span></div>
+    <div id="planta-costo-container">
+      <div class="nd" style="text-align:center;padding:20px;font-size:13px;">Actualizá datos para ver el desglose</div>
+    </div>
+  </div>
+
+  <!-- Gráficos históricos -->
+  <div class="grid2">
+    <div class="section">
+      <div class="section-title">Producción mensual <span class="badge real">Remitos · Real</span></div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">Tn totales (caliente + frío)</div>
+      <div id="planta-chart-produccion"></div>
+    </div>
+    <div class="section">
+      <div class="section-title">Insumos planta de asfalto <span class="badge real">Guillermo</span></div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">Total planta por mes ($)</div>
+      <div id="planta-chart-insumos"></div>
     </div>
   </div>
 
@@ -2089,6 +2104,153 @@ function renderPlanta() {
     const elF = document.getElementById('tn-' + mes + '-frio');
     if (elC) { elC.textContent = r ? fmtTn(r.caliente) + ' tn' : '—'; elC.className = r ? 'num' : 'nd num'; }
     if (elF) { elF.textContent = r ? fmtTn(r.frio)     + ' tn' : '—'; elF.className = r ? 'num' : 'nd num'; }
+  }
+
+  renderPlantaCosto();
+  renderPlantaCharts();
+}
+
+function renderPlantaCosto() {
+  const container = document.getElementById('planta-costo-container');
+  const mesLbl    = document.getElementById('mes-label-planta-costo');
+  if (!container) return;
+  if (mesLbl) mesLbl.textContent = MES[mesActual] || mesActual;
+
+  const rem     = REMITOS_ASFALTO[mesActual];
+  const tnCal   = rem && rem.caliente > 0 ? rem.caliente : null;
+  const tnFrio  = rem && rem.frio     > 0 ? rem.frio     : null;
+  const tnTotal = (tnCal != null || tnFrio != null) ? (tnCal || 0) + (tnFrio || 0) : null;
+
+  const ocPlanta = getOCPlanta(mesActual);
+  const ocTotal  = ocPlanta ? ocPlanta.total : null;
+
+  const moArr   = getMOPlanta(mesActual);
+  const moTotal = moArr.length > 0 ? moArr.reduce((s, r) => s + r.monto, 0) : null;
+
+  if (tnTotal == null && ocTotal == null && moTotal == null) {
+    container.innerHTML = '<div class="nd" style="text-align:center;padding:20px;font-size:13px;">Actualizá datos para ver el desglose caliente / frío</div>';
+    return;
+  }
+
+  // Distribuir OC y MO proporcionalmente según toneladas
+  const rCal  = (tnTotal && tnTotal > 0 && tnCal  != null) ? tnCal  / tnTotal : 0.5;
+  const rFrio = 1 - rCal;
+
+  const ocCal   = ocTotal  != null ? ocTotal  * rCal  : null;
+  const ocFrio  = ocTotal  != null ? ocTotal  * rFrio : null;
+  const moCal   = moTotal  != null ? moTotal  * rCal  : null;
+  const moFrio  = moTotal  != null ? moTotal  * rFrio : null;
+
+  const costoCal  = (ocCal  != null || moCal  != null) ? (ocCal  || 0) + (moCal  || 0) : null;
+  const costoFrio = (ocFrio != null || moFrio != null) ? (ocFrio || 0) + (moFrio || 0) : null;
+
+  const cptnCal  = costoCal  != null && tnCal  ? Math.round(costoCal  / tnCal)  : null;
+  const cptnFrio = costoFrio != null && tnFrio ? Math.round(costoFrio / tnFrio) : null;
+
+  function col(titulo, tn, oc, mo, cptn, bColor, bgColor) {
+    const nd = '<span class="nd" style="font-size:13px;">—</span>';
+    const rowStyle = 'display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);';
+    const labelStyle = 'font-size:12px;color:var(--muted);';
+    return `
+      <div style="flex:1;min-width:200px;border:2px solid ${bColor};border-radius:10px;overflow:hidden;">
+        <div style="background:${bgColor};padding:12px 16px;font-size:13px;font-weight:700;color:var(--text);letter-spacing:.04em;">${titulo}</div>
+        <div style="padding:4px 16px 0;">
+          <div style="${rowStyle}">
+            <span style="${labelStyle}">Toneladas</span>
+            <span style="font-size:15px;font-weight:700;">${tn != null ? fmtTn(tn) + ' tn' : nd}</span>
+          </div>
+          <div style="${rowStyle}">
+            <span style="${labelStyle}">Insumos (Guillermo)</span>
+            <span style="font-size:15px;font-weight:700;color:#d97706;">${oc != null ? fmt(Math.round(oc)) : nd}</span>
+          </div>
+          <div style="${rowStyle}">
+            <span style="${labelStyle}">MO (Mauro)</span>
+            <span style="font-size:15px;font-weight:700;color:#ef4444;">${mo != null ? fmt(Math.round(mo)) : nd}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;margin-top:2px;">
+            <span style="font-size:12px;font-weight:700;color:var(--text);">Costo / tn</span>
+            <span style="font-size:17px;font-weight:800;color:var(--neg);">${cptn != null ? '$' + cptn.toLocaleString('es-AR') + '/tn' : nd}</span>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  container.innerHTML = `
+    <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">Insumos y MO distribuidos proporcionalmente según toneladas de cada proceso</div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;">
+      ${col('🔴 MEZCLA CALIENTE', tnCal, ocCal, moCal, cptnCal, '#fca5a5', '#fef2f2')}
+      ${col('❄ ASFALTO FRÍO', tnFrio, ocFrio, moFrio, cptnFrio, '#93c5fd', '#eff6ff')}
+    </div>`;
+}
+
+function renderPlantaCharts() {
+  const MES_CORTO = { ene: 'Ene', feb: 'Feb', mar: 'Mar', abr: 'Abr', may: 'May',
+                      jun: 'Jun', jul: 'Jul', ago: 'Ago', sep: 'Sep', oct: 'Oct', nov: 'Nov', dic: 'Dic' };
+
+  // ── Gráfico 1: Producción mensual (barras apiladas caliente + frío) ──
+  const prodEl = document.getElementById('planta-chart-produccion');
+  if (prodEl) {
+    const meses = Object.keys(REMITOS_ASFALTO).filter(m => REMITOS_ASFALTO[m] && REMITOS_ASFALTO[m].total > 0);
+    if (meses.length === 0) {
+      prodEl.innerHTML = '<div class="nd" style="text-align:center;padding:24px;font-size:13px;">Actualizá datos para ver el gráfico</div>';
+    } else {
+      const maxTn   = Math.max(...meses.map(m => REMITOS_ASFALTO[m].total));
+      const W = 300, H = 170, YBASE = H - 36, CHARTH = YBASE - 16;
+      const BAR_W = Math.min(44, Math.floor((W - 20) / meses.length * 0.55));
+      const STEP  = Math.floor((W - 20) / meses.length);
+      let bars = '', lbls = '';
+      meses.forEach((mes, i) => {
+        const rem   = REMITOS_ASFALTO[mes];
+        const cx    = 10 + STEP * i + STEP / 2;
+        const x     = cx - BAR_W / 2;
+        const hTot  = Math.round(rem.total    / maxTn * CHARTH);
+        const hFrio = Math.round((rem.frio || 0) / maxTn * CHARTH);
+        const hCal  = hTot - hFrio;
+        bars += `<rect x="${x}" y="${YBASE - hTot}"  width="${BAR_W}" height="${hCal}"  fill="#f97316" rx="2 2 0 0"/>`;
+        bars += `<rect x="${x}" y="${YBASE - hFrio}" width="${BAR_W}" height="${hFrio}" fill="#60a5fa" rx="0 0 2 2"/>`;
+        bars += `<text x="${cx}" y="${YBASE - hTot - 4}" text-anchor="middle" font-size="9" fill="var(--text)" font-weight="600">${fmtTn(rem.total)}</text>`;
+        lbls += `<text x="${cx}" y="${YBASE + 16}" text-anchor="middle" font-size="10" fill="var(--muted)">${MES_CORTO[mes] || mes}</text>`;
+      });
+      prodEl.innerHTML = `
+        <svg width="100%" viewBox="0 0 ${W} ${H}" style="display:block;overflow:visible;">
+          <line x1="8" y1="${YBASE}" x2="${W-8}" y2="${YBASE}" stroke="#e2e8f0" stroke-width="1"/>
+          ${bars}${lbls}
+        </svg>
+        <div style="display:flex;gap:14px;justify-content:center;margin-top:2px;">
+          <span style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:4px;"><span style="display:inline-block;width:10px;height:10px;background:#f97316;border-radius:2px;"></span>Caliente</span>
+          <span style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:4px;"><span style="display:inline-block;width:10px;height:10px;background:#60a5fa;border-radius:2px;"></span>Frío</span>
+        </div>`;
+    }
+  }
+
+  // ── Gráfico 2: Insumos planta por mes ──
+  const insEl = document.getElementById('planta-chart-insumos');
+  if (insEl) {
+    const mesesOC = Object.keys(OC_INSUMOS).filter(m => getOCPlanta(m) != null);
+    if (mesesOC.length === 0) {
+      insEl.innerHTML = '<div class="nd" style="text-align:center;padding:24px;font-size:13px;">Sin datos de OC para la planta</div>';
+    } else {
+      const vals   = mesesOC.map(m => getOCPlanta(m).total);
+      const maxVal = Math.max(...vals);
+      const W = 300, H = 170, YBASE = H - 36, CHARTH = YBASE - 16;
+      const BAR_W = Math.min(44, Math.floor((W - 20) / mesesOC.length * 0.55));
+      const STEP  = Math.floor((W - 20) / mesesOC.length);
+      let bars = '', lbls = '';
+      mesesOC.forEach((mes, i) => {
+        const val = getOCPlanta(mes).total;
+        const cx  = 10 + STEP * i + STEP / 2;
+        const x   = cx - BAR_W / 2;
+        const h   = Math.round(val / maxVal * CHARTH);
+        bars += `<rect x="${x}" y="${YBASE - h}" width="${BAR_W}" height="${h}" fill="#f59e0b" rx="2 2 0 0"/>`;
+        bars += `<text x="${cx}" y="${YBASE - h - 4}" text-anchor="middle" font-size="9" fill="var(--text)" font-weight="600">${fmt(val)}</text>`;
+        lbls += `<text x="${cx}" y="${YBASE + 16}" text-anchor="middle" font-size="10" fill="var(--muted)">${MES_CORTO[mes] || mes}</text>`;
+      });
+      insEl.innerHTML = `
+        <svg width="100%" viewBox="0 0 ${W} ${H}" style="display:block;overflow:visible;">
+          <line x1="8" y1="${YBASE}" x2="${W-8}" y2="${YBASE}" stroke="#e2e8f0" stroke-width="1"/>
+          ${bars}${lbls}
+        </svg>`;
+    }
   }
 }
 
