@@ -2084,6 +2084,10 @@ function renderEgresosChart() {
     <div style="display:flex;align-items:center;gap:28px;flex-wrap:wrap;padding:4px 0;">
       <div style="flex-shrink:0;">${svg}</div>
       <div style="flex:1;min-width:200px;">${leyenda}</div>
+    </div>
+    <div style="border-top:2px solid var(--border);margin-top:8px;padding-top:10px;display:flex;justify-content:space-between;align-items:baseline;">
+      <span style="font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.05em;">TOTAL EGRESOS</span>
+      <span style="font-size:18px;font-weight:800;color:var(--neg);">${fmt(total)}</span>
     </div>`;
 }
 
