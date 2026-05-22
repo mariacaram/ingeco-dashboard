@@ -168,7 +168,7 @@ function buildData() {
   catch(e) { Logger.log('alquilerEquipos error: ' + e); result.alquilerEquipos = null; }
   try { result.remitosAsfalto   = leerRemitosAsfalto(); }
   catch(e) { Logger.log('remitosAsfalto error: ' + e); result.remitosAsfalto = null; }
-  try { result.stockAsfalto     = leerStockAsfalto(); }
+  try { result.stockAsfalto     = leerStockAsfalto(result.remitosAsfalto); }
   catch(e) { Logger.log('stockAsfalto error: ' + e); result.stockAsfalto = null; }
   return result;
 }
@@ -1106,22 +1106,119 @@ function guardarAjusteStock(stockAntes, stockNuevo, usuario) {
   }
 }
 
-function leerStockAsfalto() {
+// remitosData: resultado ya calculado de leerRemitosAsfalto() — se reutiliza para no leer Drive dos veces
+function leerStockAsfalto(remitosData) {
+  const TZ = 'America/Argentina/Buenos_Aires';
+  // Punto de partida fijo (corte real confirmado por Agustín)
+  const BASE_STOCK  = 700;
+  const BASE_FECHA  = new Date(2026, 4, 7, 0, 0, 0); // 07/05/2026
+  const BASE_USUARIO = 'Agustín';
+
   try {
-    const ss    = SpreadsheetApp.openById(FILE_IDS.ajusteStock);
-    const sheet = ss.getSheetByName('Ajuste de stock');
-    if (!sheet) return { valor: 700, fecha: '07/05/2026', usuario: 'Agustín (base)' };
-    const lastRow = sheet.getLastRow();
-    if (lastRow < 2) return { valor: 700, fecha: '07/05/2026', usuario: 'Agustín (base)' };
-    const row = sheet.getRange(lastRow, 1, 1, 5).getValues()[0];
+    const ss = SpreadsheetApp.openById(FILE_IDS.ajusteStock);
+
+    // ── 1. Checkpoint: último ajuste manual ──────────────────────
+    let stockBase   = BASE_STOCK;
+    let fechaBase   = BASE_FECHA;
+    let usuarioBase = BASE_USUARIO;
+
+    const sheetAjuste = ss.getSheetByName('Ajuste de stock');
+    if (sheetAjuste && sheetAjuste.getLastRow() >= 2) {
+      const lastRow = sheetAjuste.getLastRow();
+      const row = sheetAjuste.getRange(lastRow, 1, 1, 5).getValues()[0];
+      const nuevoStock = Number(row[4]);
+      if (!isNaN(nuevoStock) && nuevoStock >= 0) {
+        stockBase = nuevoStock;
+        const parts = String(row[0] || '').split('/');
+        if (parts.length === 3) {
+          fechaBase = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+        }
+        usuarioBase = String(row[2] || BASE_USUARIO);
+      }
+    }
+
+    // ── 2. Ingresos desde formulario (solo después del checkpoint) ──
+    let ingresos = 0;
+    const ingresosDetalle = [];
+    const sheetForm = ss.getSheetByName('Respuestas de formulario 1');
+
+    if (sheetForm && sheetForm.getLastRow() >= 2) {
+      const rows    = sheetForm.getDataRange().getValues();
+      const headers = rows[0].map(function(h) { return String(h).toLowerCase().trim(); });
+      Logger.log('StockAsfalto — Form headers: ' + headers.join(' | '));
+
+      // Detectar columna de cantidad de asfalto ingresado
+      const iQty = headers.findIndex(function(h) {
+        return h.includes('cantidad') || h.includes('tonelada') ||
+               h.includes('kilogra') || h.includes(' tn') || h === 'tn' ||
+               (h.includes('asfalto') && !h.includes('marca'));
+      });
+      Logger.log('StockAsfalto — iQty=' + iQty + (iQty >= 0 ? ' ("' + headers[iQty] + '")' : ' (no encontrado)'));
+
+      if (iQty >= 0) {
+        for (var i = 1; i < rows.length; i++) {
+          var rawFecha = rows[i][0];
+          var fechaForm = rawFecha instanceof Date ? rawFecha : new Date(rawFecha);
+          if (!fechaForm || isNaN(fechaForm.getTime())) continue;
+          if (fechaForm <= fechaBase) continue;
+
+          var raw = rows[i][iQty];
+          var qty = typeof raw === 'number' ? raw
+                  : parseFloat(String(raw || '').replace(',', '.')) || 0;
+          if (qty <= 0) continue;
+
+          ingresos += qty;
+          ingresosDetalle.push({
+            fecha:    Utilities.formatDate(fechaForm, TZ, 'dd/MM/yyyy'),
+            cantidad: Math.round(qty * 10) / 10
+          });
+        }
+      }
+    }
+
+    // ── 3. Consumo desde REMITOS (meses posteriores al checkpoint) ──
+    // 500 tn mezcla requieren 25 tn de asfalto → tn asfalto = tn mezcla / 20
+    const RATIO = 20;
+    const MES_NUM = { ene:1, feb:2, mar:3, abr:4, may:5, jun:6,
+                      jul:7, ago:8, sep:9, oct:10, nov:11, dic:12 };
+    let consumo = 0;
+    const consumoDetalle = [];
+    const remitos = remitosData || {};
+
+    for (var mes in remitos) {
+      var numMes = MES_NUM[mes];
+      if (!numMes) continue;
+      var inicioMes = new Date(2026, numMes - 1, 1);
+      // Solo meses que empiecen DESPUÉS del checkpoint
+      if (inicioMes <= fechaBase) continue;
+      var tnMezcla  = remitos[mes].total || 0;
+      var tnAsfalto = tnMezcla / RATIO;
+      consumo += tnAsfalto;
+      consumoDetalle.push({
+        mes:      mes,
+        tnMezcla: Math.round(tnMezcla * 10) / 10,
+        tnAsfalto: Math.round(tnAsfalto * 10) / 10
+      });
+    }
+
+    const stockActual = stockBase + ingresos - consumo;
+    Logger.log('StockAsfalto: base=' + stockBase + ' + ing=' + ingresos + ' - cons=' + consumo + ' = ' + stockActual);
+
     return {
-      valor:   Number(row[4]) || 700,
-      fecha:   String(row[0] || '07/05/2026'),
-      hora:    String(row[1] || ''),
-      usuario: String(row[2] || 'Agustín'),
+      valor:           Math.round(stockActual * 10) / 10,
+      stockBase:       stockBase,
+      fechaBase:       Utilities.formatDate(fechaBase, TZ, 'dd/MM/yyyy'),
+      usuarioBase:     usuarioBase,
+      ingresos:        Math.round(ingresos * 10) / 10,
+      consumo:         Math.round(consumo * 10) / 10,
+      ingresosDetalle: ingresosDetalle,
+      consumoDetalle:  consumoDetalle,
     };
+
   } catch (err) {
     Logger.log('leerStockAsfalto error: ' + err.toString());
-    return { valor: 700, fecha: '07/05/2026', usuario: 'Agustín (base)' };
+    return { valor: BASE_STOCK, stockBase: BASE_STOCK, ingresos: 0, consumo: 0,
+             fechaBase: Utilities.formatDate(BASE_FECHA, 'America/Argentina/Buenos_Aires', 'dd/MM/yyyy'),
+             usuarioBase: BASE_USUARIO, ingresosDetalle: [], consumoDetalle: [] };
   }
 }
