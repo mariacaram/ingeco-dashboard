@@ -409,6 +409,13 @@
     </div>
   </div>
 
+  <div class="section" id="egr-chart-section">
+    <div class="section-title">Desglose de Egresos · <span id="mes-label-egr-chart"></span></div>
+    <div id="egr-chart-container">
+      <div class="nd" style="text-align:center;padding:20px;font-size:13px;">Actualizá datos para ver el gráfico</div>
+    </div>
+  </div>
+
   <div class="section">
     <div class="section-title">
       Margen por Obra · <span id="mes-label-resumen-obra"></span>
@@ -2011,6 +2018,65 @@ function renderPlanta() {
   }
 }
 
+function renderEgresosChart() {
+  const container = document.getElementById('egr-chart-container');
+  const mesLbl    = document.getElementById('mes-label-egr-chart');
+  if (!container) return;
+  if (mesLbl) mesLbl.textContent = MES[mesActual] || mesActual;
+
+  const ocMes  = OC_INSUMOS[mesActual]       ? OC_INSUMOS[mesActual].total          : null;
+  const moArr  = getMOObra(mesActual);
+  const moMes  = moArr.length > 0            ? moArr.reduce((s,r) => s+r.monto, 0)  : null;
+  const alqMes = ALQUILER_EQUIPOS[mesActual] ? ALQUILER_EQUIPOS[mesActual].totalArs  : null;
+
+  if (ocMes == null && moMes == null && alqMes == null) {
+    container.innerHTML = '<div class="nd" style="text-align:center;padding:20px;font-size:13px;">Actualizá datos para ver el gráfico</div>';
+    return;
+  }
+
+  const total = (ocMes || 0) + (moMes || 0) + (alqMes || 0);
+
+  const items = [
+    { label: 'OC Insumos',       valor: ocMes,  color: '#f59e0b' },
+    { label: 'Mano de Obra',     valor: moMes,  color: '#ef4444' },
+    { label: 'Alquiler Equipos', valor: alqMes, color: '#3b82f6' },
+  ].filter(i => i.valor != null && i.valor > 0);
+
+  // Barra apilada superior
+  const stackedSegments = items.map(item => {
+    const pct = total > 0 ? (item.valor / total * 100).toFixed(1) : 0;
+    return `<div title="${item.label}: ${fmt(item.valor)} (${pct}%)" style="flex:${item.valor};background:${item.color};height:100%;"></div>`;
+  }).join('');
+
+  const stackedBar = `
+    <div style="display:flex;height:14px;border-radius:7px;overflow:hidden;margin-bottom:20px;gap:2px;">
+      ${stackedSegments}
+    </div>`;
+
+  // Barras individuales
+  const barras = items.map(item => {
+    const pct = total > 0 ? (item.valor / total * 100).toFixed(1) : 0;
+    return `
+      <div style="margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;">
+          <span style="font-size:13px;font-weight:600;color:var(--text);">${item.label}</span>
+          <span style="font-size:13px;">${fmt(item.valor)} <span style="font-size:11px;color:var(--muted);margin-left:4px;">${pct}%</span></span>
+        </div>
+        <div style="background:#f1f5f9;border-radius:5px;height:18px;overflow:hidden;">
+          <div style="background:${item.color};width:${pct}%;height:100%;border-radius:5px;transition:width 0.6s ease;opacity:0.85;min-width:${pct > 0 ? '4px' : '0'};"></div>
+        </div>
+      </div>`;
+  }).join('');
+
+  const totalRow = `
+    <div style="border-top:1px solid var(--border);padding-top:10px;margin-top:6px;display:flex;justify-content:space-between;">
+      <span style="font-size:12px;font-weight:700;color:var(--muted);">TOTAL EGRESOS</span>
+      <span style="font-size:14px;font-weight:700;color:var(--neg);">${fmt(total)}</span>
+    </div>`;
+
+  container.innerHTML = stackedBar + barras + totalRow;
+}
+
 function renderMOClasif() {
   const mesLabel = MES[mesActual] || mesActual;
 
@@ -2053,6 +2119,7 @@ function renderMOClasif() {
 
 function renderAll() {
   renderMargen();
+  renderEgresosChart();
   renderCobrosReal();
   renderOCInsumos();
   renderMODetalle();
@@ -2183,8 +2250,10 @@ function setMes(mes) {
       (i === 0 && mes === 'feb') || (i === 1 && mes === 'mar') || (i === 2 && mes === 'abr'));
   });
   renderMargen();
+  renderEgresosChart();
   renderOCInsumos();
   renderMODetalle();
+  renderMOClasif();
   renderAlquilerEquipos();
   renderPlanta();
   renderCtroCosto();
