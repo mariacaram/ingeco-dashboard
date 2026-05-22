@@ -1190,15 +1190,28 @@ function leerStockAsfalto(remitosData) {
       var numMes = MES_NUM[mes];
       if (!numMes) continue;
       var inicioMes = new Date(2026, numMes - 1, 1);
-      // Solo meses que empiecen DESPUÉS del checkpoint
-      if (inicioMes <= fechaBase) continue;
-      var tnMezcla  = remitos[mes].total || 0;
-      var tnAsfalto = tnMezcla / RATIO;
+      var finMes    = new Date(2026, numMes, 0);    // último día del mes
+
+      // Mes completamente anterior al checkpoint → ignorar
+      if (finMes < fechaBase) continue;
+
+      var tnMezcla = remitos[mes].total || 0;
+      var fraccion = 1; // mes completo por defecto
+
+      // El checkpoint cae DENTRO del mes → pro-ratear por días restantes
+      if (inicioMes < fechaBase && fechaBase <= finMes) {
+        var diasMes       = finMes.getDate();
+        var diasRestantes = Math.max(0, diasMes - fechaBase.getDate());
+        fraccion          = diasRestantes / diasMes;
+      }
+
+      var tnAsfalto = (tnMezcla * fraccion) / RATIO;
       consumo += tnAsfalto;
       consumoDetalle.push({
-        mes:      mes,
-        tnMezcla: Math.round(tnMezcla * 10) / 10,
-        tnAsfalto: Math.round(tnAsfalto * 10) / 10
+        mes:       mes,
+        tnMezcla:  Math.round(tnMezcla * fraccion * 10) / 10,
+        tnAsfalto: Math.round(tnAsfalto * 10) / 10,
+        pct:       Math.round(fraccion * 100)
       });
     }
 
