@@ -717,6 +717,39 @@ function leerGeneradoPorObra() {
 // Costo por obra: prorrateado por horas trabajadas en el mes
 // TC: dólar oficial promedio mensual (TC_USD_MENSUAL)
 // ============================================================
+
+// Devuelve el TC mensual desde la tabla hardcodeada o, si no está,
+// lo obtiene automáticamente del promedio diario de estadisticasbcra.site
+function fetchTCMensual(mesKey) {
+  if (TC_USD_MENSUAL[mesKey] != null) return TC_USD_MENSUAL[mesKey];
+
+  const MES_NUM = { ene:'01', feb:'02', mar:'03', abr:'04', may:'05', jun:'06',
+                    jul:'07', ago:'08', sep:'09', oct:'10', nov:'11', dic:'12' };
+  const mesNum = MES_NUM[mesKey];
+  if (!mesNum) return 1400;
+
+  const year = String(new Date().getFullYear());
+  const prefix = year + '-' + mesNum + '-';
+
+  try {
+    const url = 'https://api.estadisticasbcra.site/usd_of';
+    const resp = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+    if (resp.getResponseCode() !== 200) return 1400;
+
+    const data = JSON.parse(resp.getContentText());
+    const dias = data.filter(function(item) { return item.d && item.d.startsWith(prefix); });
+    if (dias.length === 0) return 1400;
+
+    const avg = Math.round(dias.reduce(function(s, i) { return s + i.v; }, 0) / dias.length);
+    Logger.log('TC auto-fetch ' + mesKey + ' ' + year + ': ' + avg + ' (n=' + dias.length + ')');
+    TC_USD_MENSUAL[mesKey] = avg; // cache para re-uso dentro de la misma ejecución
+    return avg;
+  } catch(e) {
+    Logger.log('fetchTCMensual(' + mesKey + ') error: ' + e);
+    return 1400;
+  }
+}
+
 function leerAlquilerEquipos() {
   try {
     // 1. Leer precios — solo equipos con PF definido (maquinaria pesada)
@@ -803,7 +836,7 @@ function leerAlquilerEquipos() {
     // 3. Calcular costos prorrateados por horas
     const resultado = {};
     for (const mes of meses) {
-      const tc = TC_USD_MENSUAL[mes] || 1400;
+      const tc = fetchTCMensual(mes);
       const porObra = {};
       let totalMes  = 0;
 
