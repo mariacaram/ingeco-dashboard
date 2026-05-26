@@ -168,7 +168,11 @@ function buildData() {
   catch(e) { Logger.log('alquilerEquipos error: ' + e); result.alquilerEquipos = null; }
   try { result.remitosAsfalto   = leerRemitosAsfalto(); }
   catch(e) { Logger.log('remitosAsfalto error: ' + e); result.remitosAsfalto = null; }
-  try { result.stockAsfalto     = leerStockAsfalto(result.remitosAsfalto); }
+  try {
+    result.stockAsfalto = leerStockAsfalto(result.remitosAsfalto);
+    // _detalle tiene objetos Date internos — no se envía al dashboard
+    if (result.remitosAsfalto) delete result.remitosAsfalto._detalle;
+  }
   catch(e) { Logger.log('stockAsfalto error: ' + e); result.stockAsfalto = null; }
   return result;
 }
@@ -882,29 +886,32 @@ function leerRemitosAsfalto() {
   try {
     const ss     = SpreadsheetApp.openById(FILE_IDS.remitosAsfalto);
     const sheets = ss.getSheets();
+    const TZ = 'America/Argentina/Buenos_Aires';
     const MES_MAP = { 1:'ene', 2:'feb', 3:'mar', 4:'abr', 5:'may', 6:'jun',
                       7:'jul', 8:'ago', 9:'sep', 10:'oct', 11:'nov', 12:'dic' };
     const resultado = {};
+    const detalle   = []; // por fila, con Date real — solo se usa internamente
 
     for (const sheet of sheets) {
       const rows = sheet.getDataRange().getValues();
 
       // Buscar fila de encabezados que tenga CANT. y U.D./U.M.
-      let hdrIdx = -1, iCant = -1, iUD = -1, iDesc = -1, iMes = -1, iAnio = -1;
+      let hdrIdx = -1, iCant = -1, iUD = -1, iDesc = -1, iMes = -1, iAnio = -1, iFecha = -1;
       for (let i = 0; i < Math.min(20, rows.length); i++) {
         const cells = rows[i].map(c => String(c).toUpperCase().trim());
         const iC = cells.findIndex(c => c === 'CANT.' || c === 'CANT' || c === 'CANTIDAD');
         const iU = cells.findIndex(c => c === 'U.D.' || c === 'U.M.' || c === 'UD' || c === 'UNIDAD');
         if (iC >= 0 && iU >= 0) {
           hdrIdx = i; iCant = iC; iUD = iU;
-          iDesc = cells.findIndex(c => c === 'DESCRIPCION' || c === 'DESCRIPCIÓN');
-          iMes  = cells.findIndex(c => c === 'MES');
-          iAnio = cells.findIndex(c => c === 'AÑO' || c === 'ANO' || c === 'AÑO');
+          iDesc  = cells.findIndex(c => c === 'DESCRIPCION' || c === 'DESCRIPCIÓN');
+          iMes   = cells.findIndex(c => c === 'MES');
+          iAnio  = cells.findIndex(c => c === 'AÑO' || c === 'ANO' || c === 'AÑO');
+          iFecha = cells.findIndex(c => c === 'FECHA');
           break;
         }
       }
       if (hdrIdx < 0) continue;
-      Logger.log('Remitos [' + sheet.getName() + ']: hdr=' + hdrIdx + ' iCant=' + iCant + ' iUD=' + iUD + ' iDesc=' + iDesc + ' iMes=' + iMes + ' iAnio=' + iAnio);
+      Logger.log('Remitos [' + sheet.getName() + ']: hdr=' + hdrIdx + ' iCant=' + iCant + ' iUD=' + iUD + ' iDesc=' + iDesc + ' iMes=' + iMes + ' iAnio=' + iAnio + ' iFecha=' + iFecha);
 
       for (let i = hdrIdx + 1; i < rows.length; i++) {
         const row = rows[i];
@@ -915,25 +922,51 @@ function leerRemitosAsfalto() {
         const desc = String(row[iDesc] || '').toUpperCase().trim();
         if (!desc.includes('ASFALTO')) continue;
 
-        // Mes y año
-        const mesRaw  = row[iMes];
-        const anioRaw = row[iAnio];
-        let mesNum  = typeof mesRaw  === 'number' ? mesRaw  : parseInt(String(mesRaw  || ''));
-        let anioNum = typeof anioRaw === 'number' ? anioRaw : parseInt(String(anioRaw || ''));
-        if (isNaN(mesNum) || isNaN(anioNum)) continue;
-        if (anioNum < 100) anioNum += 2000; // 26 → 2026
-        if (anioNum !== 2026) continue;
-
-        const mesKey = MES_MAP[mesNum];
-        if (!mesKey) continue;
-
         const cant = typeof row[iCant] === 'number' ? row[iCant]
                    : parseFloat(String(row[iCant] || '').replace(',', '.')) || 0;
         if (cant <= 0) continue;
 
+        const tipo = desc.includes('CALIENTE') ? 'caliente'
+                   : (desc.includes('FRI') || desc.includes('FRÍO')) ? 'frio' : null;
+
+        // ── Fecha exacta (columna FECHA, formato mm/dd/aaaa) ──────────────────
+        var fechaObj = null;
+        if (iFecha >= 0 && row[iFecha] !== '' && row[iFecha] != null) {
+          var rawF = row[iFecha];
+          if (rawF instanceof Date) {
+            fechaObj = new Date(rawF.getFullYear(), rawF.getMonth(), rawF.getDate());
+          } else {
+            var parts = String(rawF).trim().split('/');
+            if (parts.length === 3) {
+              var m = parseInt(parts[0]), d = parseInt(parts[1]), y = parseInt(parts[2]);
+              if (y < 100) y += 2000;
+              if (!isNaN(m) && !isNaN(d) && !isNaN(y)) fechaObj = new Date(y, m - 1, d, 0, 0, 0);
+            }
+          }
+        }
+
+        // ── Mes/año para el agregado mensual ────────────────────────────────
+        var mesNum, anioNum;
+        if (fechaObj && !isNaN(fechaObj.getTime())) {
+          mesNum  = fechaObj.getMonth() + 1;
+          anioNum = fechaObj.getFullYear();
+          // Guardar en detalle con objeto Date real
+          detalle.push({ fecha: fechaObj, fechaStr: Utilities.formatDate(fechaObj, TZ, 'dd/MM/yyyy'), tipo: tipo, cant: Math.round(cant * 10) / 10 });
+        } else {
+          // Fallback: columnas MES / AÑO
+          var mesRaw  = row[iMes],  anioRaw = row[iAnio];
+          mesNum  = typeof mesRaw  === 'number' ? mesRaw  : parseInt(String(mesRaw  || ''));
+          anioNum = typeof anioRaw === 'number' ? anioRaw : parseInt(String(anioRaw || ''));
+          if (isNaN(mesNum) || isNaN(anioNum)) continue;
+          if (anioNum < 100) anioNum += 2000;
+        }
+        if (anioNum !== 2026) continue;
+        const mesKey = MES_MAP[mesNum];
+        if (!mesKey) continue;
+
         if (!resultado[mesKey]) resultado[mesKey] = { caliente: 0, frio: 0, total: 0 };
-        if (desc.includes('CALIENTE'))                    resultado[mesKey].caliente += cant;
-        else if (desc.includes('FRI') || desc.includes('FRÍO')) resultado[mesKey].frio     += cant;
+        if (tipo === 'caliente')  resultado[mesKey].caliente += cant;
+        else if (tipo === 'frio') resultado[mesKey].frio     += cant;
         resultado[mesKey].total += cant;
       }
     }
@@ -947,6 +980,8 @@ function leerRemitosAsfalto() {
     }
 
     Logger.log('Remitos Asfalto 2026: ' + JSON.stringify(resultado));
+    Logger.log('Remitos detalle: ' + detalle.length + ' filas con fecha exacta');
+    resultado._detalle = detalle; // Date objects — se borra antes de serializar
     return resultado;
 
   } catch (err) {
@@ -1177,42 +1212,62 @@ function leerStockAsfalto(remitosData) {
       }
     }
 
-    // ── 3. Consumo desde REMITOS (meses posteriores al checkpoint) ──
-    // 500 tn mezcla requieren 25 tn de asfalto → tn asfalto = tn mezcla / 20
+    // ── 3. Consumo desde REMITOS ─────────────────────────────────────────────
+    // 500 tn mezcla requieren 25 tn asfalto → tn asfalto = tn mezcla / 20
     const RATIO = 20;
-    const MES_NUM = { ene:1, feb:2, mar:3, abr:4, may:5, jun:6,
-                      jul:7, ago:8, sep:9, oct:10, nov:11, dic:12 };
     let consumo = 0;
     const consumoDetalle = [];
     const remitos = remitosData || {};
 
-    for (var mes in remitos) {
-      var numMes = MES_NUM[mes];
-      if (!numMes) continue;
-      var inicioMes = new Date(2026, numMes - 1, 1);
-      var finMes    = new Date(2026, numMes, 0);    // último día del mes
+    if (remitos._detalle && remitos._detalle.length > 0) {
+      // ── Modo exacto: fecha por fila, incluir si fecha >= fechaBase ──────────
+      // Se usa >= para incluir remitos cargados el mismo día del ajuste de stock
+      var filasFiltradas = remitos._detalle.filter(function(r) { return r.fecha >= fechaBase; });
+      Logger.log('StockAsfalto — detalle exacto: ' + filasFiltradas.length + ' filas >= ' + Utilities.formatDate(fechaBase, TZ, 'dd/MM/yyyy'));
 
-      // Mes completamente anterior al checkpoint → ignorar
-      if (finMes < fechaBase) continue;
-
-      var tnMezcla = remitos[mes].total || 0;
-      var fraccion = 1; // mes completo por defecto
-
-      // El checkpoint cae DENTRO del mes → pro-ratear por días restantes
-      if (inicioMes < fechaBase && fechaBase <= finMes) {
-        var diasMes       = finMes.getDate();
-        var diasRestantes = Math.max(0, diasMes - fechaBase.getDate());
-        fraccion          = diasRestantes / diasMes;
+      for (var f = 0; f < filasFiltradas.length; f++) {
+        var r = filasFiltradas[f];
+        var tnAsfalto = r.cant / RATIO;
+        consumo += tnAsfalto;
+        consumoDetalle.push({
+          fecha:     r.fechaStr,
+          tipo:      r.tipo,
+          caliente:  r.tipo === 'caliente' ? r.cant : 0,
+          frio:      r.tipo === 'frio'     ? r.cant : 0,
+          tnMezcla:  r.cant,
+          tnAsfalto: Math.round(tnAsfalto * 10) / 10,
+          exacto:    true,
+        });
       }
+    } else {
+      // ── Fallback: pro-rateo mensual si no hay fechas exactas ────────────────
+      const MES_NUM = { ene:1, feb:2, mar:3, abr:4, may:5, jun:6,
+                        jul:7, ago:8, sep:9, oct:10, nov:11, dic:12 };
+      for (var mes in remitos) {
+        var numMes = MES_NUM[mes];
+        if (!numMes) continue;
+        var inicioMes = new Date(2026, numMes - 1, 1);
+        var finMes    = new Date(2026, numMes, 0);
+        if (finMes < fechaBase) continue;
 
-      var tnAsfalto = (tnMezcla * fraccion) / RATIO;
-      consumo += tnAsfalto;
-      consumoDetalle.push({
-        mes:       mes,
-        tnMezcla:  Math.round(tnMezcla * fraccion * 10) / 10,
-        tnAsfalto: Math.round(tnAsfalto * 10) / 10,
-        pct:       Math.round(fraccion * 100)
-      });
+        var tnMezcla = remitos[mes].total || 0;
+        var fraccion = 1;
+        if (inicioMes < fechaBase && fechaBase <= finMes) {
+          var diasMes       = finMes.getDate();
+          var diasRestantes = Math.max(0, diasMes - fechaBase.getDate());
+          fraccion          = diasRestantes / diasMes;
+        }
+        var tnAsfaltoM = (tnMezcla * fraccion) / RATIO;
+        consumo += tnAsfaltoM;
+        consumoDetalle.push({
+          mes:       mes,
+          tnMezcla:  Math.round(tnMezcla * fraccion * 10) / 10,
+          tnAsfalto: Math.round(tnAsfaltoM * 10) / 10,
+          pct:       Math.round(fraccion * 100),
+          caliente:  Math.round((remitos[mes].caliente || 0) * fraccion * 10) / 10,
+          frio:      Math.round((remitos[mes].frio     || 0) * fraccion * 10) / 10,
+        });
+      }
     }
 
     const stockActual = stockBase + ingresos - consumo;

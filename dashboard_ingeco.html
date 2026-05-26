@@ -366,6 +366,7 @@
   <button class="tab-btn" onclick="openTab('flujo')">Flujo de Fondos</button>
   <button class="tab-btn" onclick="openTab('estructura')">Estructura</button>
   <button class="tab-btn" onclick="openTab('fuentes')">Fuentes de Datos</button>
+  <button class="tab-btn" onclick="openTab('metodologia')">Rentabilidad</button>
 </div>
 
 <!-- CONTENT -->
@@ -659,6 +660,9 @@
     <div style="margin-top:14px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px 16px;font-size:13px;line-height:2;" id="stock-formula-desglose">
       <span style="color:var(--muted);font-size:11px;">Actualizá datos para ver el cálculo</span>
     </div>
+
+    <!-- Tabla de movimientos post-corte: salidas caliente/frío + ingresos -->
+    <div id="salidas-post-corte" style="display:none;margin-top:10px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px 16px;font-size:12px;"></div>
 
     <div style="margin-top:10px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:14px 16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;" id="stock-total-row">
       <span style="font-size:13px;color:var(--text);">14.000 tn producible &nbsp;+&nbsp; 35 tn frío terminado <span style="color:var(--muted);font-size:12px;">(❄ reserva Agustín)</span> &nbsp;=&nbsp;</span>
@@ -983,6 +987,129 @@
   </div>
 </div>
 
+<!-- ================================================================ -->
+<!-- TAB 8: RENTABILIDAD / METODOLOGÍA -->
+<!-- ================================================================ -->
+<div class="tab-panel" id="tab-metodologia">
+
+  <!-- Marco conceptual: 3 unidades -->
+  <div class="section">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+      <div>
+        <div class="section-title" style="margin-bottom:4px;">¿Cómo medimos si INGECO es rentable?</div>
+        <div style="font-size:13px;color:var(--muted);">3 unidades de negocio · cada una con su propio P&amp;L · consolidación al final</div>
+      </div>
+      <span style="font-size:11px;font-weight:700;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:12px;padding:3px 12px;">Marco conceptual</span>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px;">
+
+      <!-- OBRAS -->
+      <div style="background:linear-gradient(135deg,#f0fdf4,#fff);border:2px solid #86efac;border-radius:12px;padding:16px;">
+        <div style="font-size:13px;font-weight:800;color:#15803d;margin-bottom:10px;">🏗 MARGEN OBRAS</div>
+        <div style="font-size:12px;line-height:2.1;color:var(--text);">
+          <div><span style="color:#15803d;font-weight:700;">+</span> Ingresos certificados / facturados</div>
+          <div style="padding-left:14px;color:var(--muted);font-size:11px;">Fernando Solís — campo "A Cobrar"</div>
+          <div><span style="color:#dc2626;font-weight:700;">−</span> OC Insumos de obra</div>
+          <div><span style="color:#dc2626;font-weight:700;">−</span> Mano de obra Obras (TANGO)</div>
+          <div><span style="color:#dc2626;font-weight:700;">−</span> Alquiler interno de máquinas <span style="font-size:10px;color:#6b7280;">↕</span></div>
+          <div style="margin-top:8px;padding-top:8px;border-top:1px solid #86efac;font-weight:700;color:#15803d;font-size:13px;">= Margen Obras</div>
+        </div>
+      </div>
+
+      <!-- TALLER -->
+      <div style="background:linear-gradient(135deg,#fffbeb,#fff);border:2px solid #fde68a;border-radius:12px;padding:16px;">
+        <div style="font-size:13px;font-weight:800;color:#92400e;margin-bottom:10px;">🔧 TALLER MECÁNICO</div>
+        <div style="font-size:12px;line-height:2.1;color:var(--text);">
+          <div><span style="color:#15803d;font-weight:700;">+</span> Alquiler cobrado a obras <span style="font-size:10px;color:#6b7280;">↕ interna</span></div>
+          <div style="padding-left:14px;color:var(--muted);font-size:11px;">Adrián — PF mensual × horas usadas</div>
+          <div><span style="color:#dc2626;font-weight:700;">−</span> Mano de obra Taller (TANGO)</div>
+          <div><span style="color:#dc2626;font-weight:700;">−</span> OC Taller (repuestos, etc.)</div>
+          <div style="padding-left:14px;color:var(--muted);font-size:11px;">⏳ pendiente clasificación en OC</div>
+          <div style="margin-top:8px;padding-top:8px;border-top:1px solid #fde68a;font-weight:700;color:#92400e;font-size:13px;">= Resultado Taller</div>
+        </div>
+        <div style="margin-top:8px;background:#fef3c7;border-radius:6px;padding:5px 9px;font-size:10px;color:#92400e;line-height:1.5;">
+          ↕ El alquiler es una transferencia interna: costo para Obras, ingreso para Taller. Se cancela en la consolidación.
+        </div>
+      </div>
+
+      <!-- PLANTA -->
+      <div style="background:linear-gradient(135deg,#eff6ff,#fff);border:2px solid #93c5fd;border-radius:12px;padding:16px;">
+        <div style="font-size:13px;font-weight:800;color:#1d4ed8;margin-bottom:10px;">🏭 PLANTA ASFALTO + TRITURADO</div>
+        <div style="font-size:12px;line-height:2.1;color:var(--text);">
+          <div><span style="color:#15803d;font-weight:700;">+</span> Ingresos por producto terminado</div>
+          <div style="padding-left:14px;color:var(--muted);font-size:11px;">⏳ pendiente criterio de valorización</div>
+          <div><span style="color:#dc2626;font-weight:700;">−</span> OC Insumos planta (asfalto, FO, etc.)</div>
+          <div><span style="color:#dc2626;font-weight:700;">−</span> Mano de obra Planta (TANGO)</div>
+          <div><span style="color:#dc2626;font-weight:700;">−</span> Gastos de cantera / triturado</div>
+          <div style="padding-left:14px;color:var(--muted);font-size:11px;">⏳ pendiente fuente de datos</div>
+          <div style="margin-top:8px;padding-top:8px;border-top:1px solid #93c5fd;font-weight:700;color:#1d4ed8;font-size:13px;">= Resultado Planta</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Ecuación consolidada -->
+    <div style="margin-top:16px;background:#f8fafc;border:1.5px solid var(--border);border-radius:10px;padding:14px 20px;text-align:center;font-size:13px;line-height:2.8;flex-wrap:wrap;">
+      <span style="font-weight:700;color:#15803d;">Margen Obras</span>
+      &nbsp;+&nbsp;
+      <span style="font-weight:700;color:#92400e;">Resultado Taller</span>
+      &nbsp;+&nbsp;
+      <span style="font-weight:700;color:#1d4ed8;">Resultado Planta</span>
+      &nbsp;&nbsp;−&nbsp;&nbsp;
+      <span style="font-weight:700;color:#dc2626;">Gastos de Estructura</span>
+      &nbsp;&nbsp;=&nbsp;&nbsp;
+      <span style="font-size:17px;font-weight:900;color:var(--primary);">RESULTADO INGECO</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:5px;">
+      * Alquiler interno (↕) no aparece en la consolidación — el costo de Obras y el ingreso del Taller se cancelan mutuamente.
+    </div>
+  </div>
+
+  <!-- Cuadro de Resultados dinámico -->
+  <div class="section">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+      <div>
+        <div class="section-title" style="margin-bottom:2px;">Cuadro de Resultados · <span id="mes-label-rentabilidad"></span></div>
+        <div style="font-size:12px;color:var(--muted);">Con los datos disponibles. Las líneas ⏳ están incompletas.</div>
+      </div>
+    </div>
+    <!-- Inputs manuales: ingresos de planta por mes -->
+    <div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:8px;padding:12px 16px;margin-bottom:14px;">
+      <div style="font-size:11px;font-weight:700;color:#15803d;margin-bottom:10px;">💰 Ingresos de Planta — completar a mano · se guarda en este navegador</div>
+      <div id="ingresos-planta-form" style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;"></div>
+    </div>
+
+    <div id="rentabilidad-pl">
+      <div style="text-align:center;padding:32px;font-size:13px;color:var(--muted);">Actualizá datos para ver el cuadro de resultados</div>
+    </div>
+  </div>
+
+  <!-- Hoja de ruta: qué falta -->
+  <div class="section" style="border:1.5px solid #fde68a;background:linear-gradient(135deg,#fffbeb,#fff);">
+    <div class="section-title" style="color:#92400e;margin-bottom:12px;">🗺 Qué falta para el cuadro completo</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;">
+      <div style="background:#fff;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;">
+        <div style="font-size:12px;font-weight:700;color:#92400e;margin-bottom:5px;">💰 Ingresos de Planta</div>
+        <div style="font-size:12px;color:var(--text);line-height:1.7;">Valorizar la mezcla producida. Opciones: precio de mercado $/tn, precio de transferencia a obras, o costo + margen. Una vez definido el criterio se multiplica por los TN de remitos.</div>
+      </div>
+      <div style="background:#fff;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;">
+        <div style="font-size:12px;font-weight:700;color:#92400e;margin-bottom:5px;">🏢 Gastos de Estructura</div>
+        <div style="font-size:12px;color:var(--text);line-height:1.7;">Administración, dirección, seguros, impuestos s/activos, etc. No pertenecen a ninguna unidad pero son costos reales. Fuente sugerida: TANGO, cuentas de gastos generales.</div>
+      </div>
+      <div style="background:#fff;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;">
+        <div style="font-size:12px;font-weight:700;color:#92400e;margin-bottom:5px;">🔧 OC Taller</div>
+        <div style="font-size:12px;color:var(--text);line-height:1.7;">Repuestos, lubricantes, insumos de mantenimiento. Requiere que Guillermo clasifique estas OC como "Taller" en la planilla (hoy van al total sin distinción).</div>
+      </div>
+      <div style="background:#fff;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;">
+        <div style="font-size:12px;font-weight:700;color:#92400e;margin-bottom:5px;">⛏ Gastos de Cantera</div>
+        <div style="font-size:12px;color:var(--text);line-height:1.7;">Explosivos, permisos de extracción, royalties o alquiler de cantera. Definir si es costo fijo mensual o proporcional a las TN trituradas.</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
 </div><!-- /content -->
 
 <script>
@@ -1126,6 +1253,13 @@ let GENERADO_POR_OBRA = null;
 // { abr: { totalArs, tcUsd, porObra: [{obra, costoArs, horasTot, equipos: [{codigo, clasificacion, marca, modelo, pfUsd, horas, costoArs}]}] } }
 let ALQUILER_EQUIPOS = {};
 let REMITOS_ASFALTO = {}; // { feb: {caliente, frio, total}, mar: {...}, abr: {...} }
+
+// Ingresos de Planta — ingresados a mano, persisten en localStorage
+let INGRESOS_PLANTA = (function() {
+  try { return JSON.parse(localStorage.getItem('ingeco_ingresos_planta') || '{}'); }
+  catch(e) { return {}; }
+})();
+
 let stockAsfalto = 700;
 let stockFecha   = '07/05/2026';
 let stockUsuario = 'Agustín';
@@ -1803,6 +1937,194 @@ function renderTallerLiq() {
   if (el) el.textContent = fmt(total);
 }
 
+function renderRentabilidad() {
+  const mesLbl = document.getElementById('mes-label-rentabilidad');
+  if (mesLbl) mesLbl.textContent = MES[mesActual] || mesActual;
+
+  const el = document.getElementById('rentabilidad-pl');
+  if (!el) return;
+
+  // ── Render inputs manuales de ingresos de planta ─────────────────────────
+  const formEl = document.getElementById('ingresos-planta-form');
+  if (formEl) {
+    const meses = Object.keys(MES);
+    formEl.innerHTML = meses.map(m => {
+      const v = INGRESOS_PLANTA[m];
+      const isCurrent = m === mesActual;
+      return `<div style="display:flex;flex-direction:column;gap:4px;${isCurrent ? 'border:2px solid #16a34a;border-radius:8px;padding:8px 12px;background:#fff;' : 'padding:4px 0;'}">
+        <label style="font-size:11px;font-weight:700;color:${isCurrent ? '#15803d' : 'var(--muted)'};">${(MES[m] || m).replace(' 2026', '')}${isCurrent ? ' ← mes actual' : ''}</label>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <span style="font-size:12px;color:var(--muted);">$</span>
+          <input type="number" min="0" step="100000"
+            value="${v != null ? Math.round(v) : ''}"
+            placeholder="sin dato"
+            style="width:148px;padding:5px 8px;border:1.5px solid ${v != null ? '#86efac' : 'var(--border)'};border-radius:6px;font-size:12px;text-align:right;"
+            onchange="setIngresosPlanta('${m}', this.value)"
+            onkeydown="if(event.key==='Enter'){setIngresosPlanta('${m}',this.value);this.blur();}">
+          <span style="font-size:13px;color:#16a34a;">${v != null ? '✓' : ''}</span>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // ── Recopilar datos disponibles ──────────────────────────────────────────
+  const obras       = GENERADO_POR_OBRA && GENERADO_POR_OBRA.obras ? GENERADO_POR_OBRA.obras : [];
+  const ingObras    = obras.length > 0 ? obras.reduce((s, o) => s + (o.aCobrar ?? o.generado ?? 0), 0) : null;
+
+  const moObrasArr  = getMOObra(mesActual);
+  const moObras     = moObrasArr.length  > 0 ? moObrasArr.reduce((s, r)  => s + r.monto, 0) : null;
+  const moTallerArr = getMOTaller(mesActual);
+  const moTaller    = moTallerArr.length > 0 ? moTallerArr.reduce((s, r) => s + r.monto, 0) : null;
+  const moPlantaArr = getMOPlanta(mesActual);
+  const moPlanta    = moPlantaArr.length > 0 ? moPlantaArr.reduce((s, r) => s + r.monto, 0) : null;
+
+  const alqMes      = ALQUILER_EQUIPOS[mesActual] ? ALQUILER_EQUIPOS[mesActual].totalArs : null;
+  const ocTotalMes  = OC_INSUMOS[mesActual] ? OC_INSUMOS[mesActual].total : null;
+  const ocPlantaObj = getOCPlanta(mesActual);
+  const ocPlanta    = ocPlantaObj ? ocPlantaObj.total : null;
+  // OC Obras ≈ total − planta (taller OC aún sin clasificar)
+  const ocObras     = (ocTotalMes != null && ocPlanta != null) ? ocTotalMes - ocPlanta
+                    : (ocTotalMes != null)                     ? ocTotalMes : null;
+
+  // Ingresos Planta ingresados a mano
+  const ingPlanta = INGRESOS_PLANTA[mesActual] != null ? INGRESOS_PLANTA[mesActual] : null;
+
+  // ── Márgenes por unidad ──────────────────────────────────────────────────
+  // Margen Obras (el alquiler es costo real de la unidad Obras)
+  const costoObras  = (moObras  != null ? moObras  : 0)
+                    + (ocObras  != null ? ocObras  : 0)
+                    + (alqMes   != null ? alqMes   : 0);
+  const margenObras = ingObras != null ? ingObras - costoObras : null;
+
+  // Resultado Taller: revenue = alquiler cobrado a obras; costo = MO taller
+  const resultTaller = alqMes != null
+    ? alqMes - (moTaller != null ? moTaller : 0)
+    : null;
+
+  // Resultado Planta
+  const egresosPlanta = (moPlanta != null ? moPlanta : 0) + (ocPlanta != null ? ocPlanta : 0);
+  const resultPlanta  = ingPlanta != null ? ingPlanta - egresosPlanta : null;
+
+  // ── Consolidado parcial (alquiler se cancela entre Obras y Taller) ────────
+  const consolidadoConocido = (ingObras != null)
+    ? ingObras
+      - (moObras    != null ? moObras    : 0)
+      - (ocObras    != null ? ocObras    : 0)
+      - (moTaller   != null ? moTaller   : 0)
+      - (moPlanta   != null ? moPlanta   : 0)
+      - (ocPlanta   != null ? ocPlanta   : 0)
+      + (ingPlanta  != null ? ingPlanta  : 0)
+    : null;
+
+  // ── Helpers de render ────────────────────────────────────────────────────
+  const $ = v => v != null ? '$ ' + Math.abs(Math.round(v)).toLocaleString('es-AR') : null;
+  const neg = v => v != null && v < 0;
+  const colorVal = (v, invert) => {
+    if (v == null) return 'var(--muted)';
+    if (invert) return v > 0 ? 'var(--neg)' : 'var(--pos)';
+    return v >= 0 ? 'var(--pos)' : 'var(--neg)';
+  };
+
+  function badge(status) {
+    if (status === 'real')    return '<span style="font-size:10px;background:#f0fdf4;color:#15803d;border:1px solid #86efac;border-radius:10px;padding:1px 7px;white-space:nowrap;">✅ Real</span>';
+    if (status === 'aprox')   return '<span style="font-size:10px;background:#fefce8;color:#713f12;border:1px solid #fde68a;border-radius:10px;padding:1px 7px;white-space:nowrap;">≈ Aprox</span>';
+    if (status === 'parcial') return '<span style="font-size:10px;background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;border-radius:10px;padding:1px 7px;white-space:nowrap;">⚠ Parcial</span>';
+    return '<span style="font-size:10px;background:#f1f5f9;color:#94a3b8;border:1px solid #cbd5e1;border-radius:10px;padding:1px 7px;white-space:nowrap;">⏳ Pendiente</span>';
+  }
+
+  function row(concepto, status, valor, signo, opts) {
+    opts = opts || {};
+    const indent  = opts.indent  || 0;
+    const isTotal = opts.isTotal || false;
+    const nota    = opts.nota    || '';
+    const colorFn = signo === 'neg' ? (v => v != null && v > 0 ? 'var(--neg)' : 'var(--pos)')
+                  : signo === 'res' ? (v => v != null ? (v >= 0 ? 'var(--pos)' : 'var(--neg)') : 'var(--muted)')
+                  : () => 'var(--muted)';
+    const displayVal = valor != null ? (signo === 'neg' ? '− ' : '') + $(valor) : '—';
+    const valColor   = valor != null ? colorFn(valor) : 'var(--muted)';
+    const bg         = isTotal ? 'background:#f8fafc;' : '';
+    const fw         = isTotal ? 'font-weight:700;' : '';
+    const bdr        = isTotal ? 'border-top:2px solid var(--border);' : 'border-bottom:1px solid #f1f5f9;';
+    const pad        = 8 + indent * 14;
+    return `<tr style="${bg}${bdr}">
+      <td style="padding:7px ${pad}px 7px ${pad}px;${fw}font-size:12px;">${concepto}${nota ? '<span style="font-size:10px;color:var(--muted);margin-left:6px;">' + nota + '</span>' : ''}</td>
+      <td style="padding:7px 10px;text-align:center;">${badge(status)}</td>
+      <td style="padding:7px 12px 7px 0;text-align:right;${fw}font-size:12px;color:${valColor};">${displayVal}</td>
+    </tr>`;
+  }
+
+  function sectionHeader(title, color) {
+    return `<tr><td colspan="3" style="padding:10px 8px 4px;font-size:11px;font-weight:800;letter-spacing:.07em;color:${color};background:#fafafa;border-top:2px solid var(--border);">${title}</td></tr>`;
+  }
+
+  // ── Construir tabla ───────────────────────────────────────────────────────
+  let rows = '';
+
+  // OBRAS
+  rows += sectionHeader('🏗 OBRAS', '#15803d');
+  rows += row('+ Ingresos certificados / A cobrar', ingObras != null ? 'real' : 'pend', ingObras, '', { nota: obras.length > 0 ? obras.length + ' obras' : '' });
+  rows += row('− OC Insumos de obra', ocObras != null ? (ocPlanta != null ? 'aprox' : 'real') : 'pend', ocObras, 'neg', { indent: 1, nota: ocPlanta != null ? '(total − planta)' : '' });
+  rows += row('− Mano de obra Obras', moObras != null ? 'real' : 'pend', moObras, 'neg', { indent: 1 });
+  rows += row('− Alquiler interno de máquinas ↕', alqMes != null ? 'real' : 'pend', alqMes, 'neg', { indent: 1, nota: 'transferencia interna' });
+  rows += row('= Margen Obras', margenObras != null ? (ocPlanta != null ? 'parcial' : 'real') : 'pend', margenObras, 'res', { isTotal: true });
+
+  // TALLER
+  rows += sectionHeader('🔧 TALLER MECÁNICO', '#92400e');
+  rows += row('+ Alquiler cobrado a obras ↕', alqMes != null ? 'real' : 'pend', alqMes, '', { nota: 'cancela con costo de Obras' });
+  rows += row('− Mano de obra Taller', moTaller != null ? 'real' : 'pend', moTaller, 'neg', { indent: 1 });
+  rows += row('− OC Taller (repuestos, etc.)', 'pend', null, 'neg', { indent: 1, nota: 'pendiente clasificación' });
+  rows += row('= Resultado Taller', resultTaller != null ? 'parcial' : 'pend', resultTaller, 'res', { isTotal: true, nota: 'sin OC Taller' });
+
+  // PLANTA
+  rows += sectionHeader('🏭 PLANTA ASFALTO + TRITURADO', '#1d4ed8');
+  rows += row('+ Ingresos por mezcla producida', ingPlanta != null ? 'real' : 'pend', ingPlanta, '', { nota: ingPlanta == null ? 'completar arriba ↑' : '' });
+  rows += row('− OC Insumos planta', ocPlanta != null ? 'real' : 'pend', ocPlanta, 'neg', { indent: 1 });
+  rows += row('− Mano de obra Planta', moPlanta != null ? 'real' : 'pend', moPlanta, 'neg', { indent: 1 });
+  rows += row('− Gastos de cantera / triturado', 'pend', null, 'neg', { indent: 1, nota: 'pendiente fuente' });
+  const resultPlantaStatus = ingPlanta != null ? (egresosPlanta > 0 ? 'parcial' : 'real') : 'pend';
+  const resultPlantaVal    = ingPlanta != null ? resultPlanta : (egresosPlanta > 0 ? -egresosPlanta : null);
+  const resultPlantaNota   = ingPlanta != null ? '' : 'solo egresos conocidos';
+  rows += row('= Resultado Planta', resultPlantaStatus, resultPlantaVal, 'res', { isTotal: true, nota: resultPlantaNota });
+
+  // CONSOLIDACIÓN
+  rows += sectionHeader('📊 CONSOLIDACIÓN', '#1b3a5c');
+  rows += `<tr style="background:#f1f5f9;"><td colspan="3" style="padding:6px 10px;font-size:11px;color:var(--muted);">
+    Nota: el alquiler ↕ cancela entre Obras (costo) y Taller (ingreso). No aparece en la consolidación final.
+  </td></tr>`;
+  const consStatus = consolidadoConocido != null ? (ingPlanta != null ? 'parcial' : 'parcial') : 'pend';
+  const consNota   = ingPlanta == null ? 'sin ingresos de planta' : 'sin OC Taller, sin Estructura';
+  rows += row('Resultado consolidado conocido', consStatus, consolidadoConocido, 'res', { nota: consNota });
+  rows += row('− Gastos de Estructura', 'pend', null, 'neg', { indent: 1, nota: 'administración, dirección, seguros…' });
+  rows += `<tr style="background:#1b3a5c;">
+    <td style="padding:10px 8px;font-size:13px;font-weight:800;color:#fff;">= RESULTADO INGECO</td>
+    <td style="padding:10px;text-align:center;">${badge('pend')}</td>
+    <td style="padding:10px 12px 10px 0;text-align:right;font-size:16px;font-weight:900;color:${consolidadoConocido != null ? (consolidadoConocido >= 0 ? '#4ade80' : '#f87171') : '#94a3b8'};">
+      ${consolidadoConocido != null ? (consolidadoConocido >= 0 ? '+' : '−') + ' ' + Math.abs(Math.round(consolidadoConocido)).toLocaleString('es-AR') + ' <span style="font-size:11px;font-weight:400;color:#94a3b8;">(sin Planta ingreso ni Estructura)</span>' : '—'}
+    </td>
+  </tr>`;
+
+  el.innerHTML = `<div class="table-wrap"><table style="width:100%;border-collapse:collapse;">
+    <thead><tr style="background:#f8fafc;">
+      <th style="padding:8px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);">Concepto</th>
+      <th style="padding:8px;text-align:center;font-size:11px;font-weight:700;color:var(--muted);">Estado</th>
+      <th style="padding:8px 12px 8px 0;text-align:right;font-size:11px;font-weight:700;color:var(--muted);">${MES[mesActual] || mesActual}</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
+}
+
+function setIngresosPlanta(mes, rawVal) {
+  const v = parseFloat(String(rawVal).replace(/\./g, '').replace(',', '.'));
+  if (rawVal === '' || rawVal == null || rawVal === 0 || String(rawVal).trim() === '') {
+    delete INGRESOS_PLANTA[mes];
+  } else if (!isNaN(v) && v >= 0) {
+    INGRESOS_PLANTA[mes] = v;
+  }
+  try { localStorage.setItem('ingeco_ingresos_planta', JSON.stringify(INGRESOS_PLANTA)); }
+  catch(e) {}
+  renderRentabilidad();
+}
+
 function renderCtroCosto() {
   const tbody = document.getElementById('tbody-ctro-costo');
   if (!tbody) return;
@@ -2114,6 +2436,107 @@ function renderStockDisplay() {
         ? ' &nbsp;−&nbsp; <span style="color:#ef4444;font-weight:600;">' + fmtTn(cons) + ' tn</span><span style="color:var(--muted);font-size:11px;"> consumo</span>'
         : '') +
       ' &nbsp;=&nbsp; <span style="font-size:16px;font-weight:800;color:#16a34a;">' + stockStr + ' tn</span>';
+  }
+
+  // Tabla de movimientos post-corte
+  const elSalidas = document.getElementById('salidas-post-corte');
+  if (elSalidas) {
+    const cd = stockData.consumoDetalle  || [];
+    const id = stockData.ingresosDetalle || [];
+    if (cd.length === 0 && id.length === 0) {
+      elSalidas.style.display = 'none';
+    } else {
+      const MN = { ene:'Ene', feb:'Feb', mar:'Mar', abr:'Abr', may:'May', jun:'Jun',
+                   jul:'Jul', ago:'Ago', sep:'Sep', oct:'Oct', nov:'Nov', dic:'Dic' };
+      const fb = stockData.fechaBase || stockFecha;
+      let h = '<div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:10px;">📊 Movimientos post-corte (desde ' + fb + ')</div>';
+
+      if (cd.length > 0) {
+        const modoExacto = cd[0].exacto === true;
+        h += '<div style="font-size:11px;font-weight:700;color:#dc2626;margin-bottom:4px;">↘ SALIDAS — mezcla producida (Remitos' + (modoExacto ? ', fecha exacta' : ', pro-rateado') + ')</div>';
+        h += '<table style="width:100%;border-collapse:collapse;font-size:12px;">';
+        if (modoExacto) {
+          h += '<thead><tr style="background:#fef2f2;">' +
+               '<th style="padding:5px 8px;text-align:left;border-bottom:1px solid #fecaca;">Fecha</th>' +
+               '<th style="padding:5px 8px;text-align:right;border-bottom:1px solid #fecaca;">🔥 Cal.</th>' +
+               '<th style="padding:5px 8px;text-align:right;border-bottom:1px solid #fecaca;">❄ Frío</th>' +
+               '<th style="padding:5px 8px;text-align:right;border-bottom:1px solid #fecaca;">Mezcla</th>' +
+               '</tr></thead><tbody>';
+          let sumCal = 0, sumFrio = 0, sumTot = 0;
+          for (const row of cd) {
+            sumCal  += row.caliente || 0;
+            sumFrio += row.frio     || 0;
+            sumTot  += row.tnMezcla || 0;
+            h += '<tr style="border-bottom:1px solid #fee2e2;">' +
+                 '<td style="padding:5px 8px;">'                                                         + row.fecha + '</td>' +
+                 '<td style="padding:5px 8px;text-align:right;color:#b45309;">' + (row.caliente > 0 ? fmtTn(row.caliente) + ' tn' : '—') + '</td>' +
+                 '<td style="padding:5px 8px;text-align:right;color:#0369a1;">' + (row.frio     > 0 ? fmtTn(row.frio)     + ' tn' : '—') + '</td>' +
+                 '<td style="padding:5px 8px;text-align:right;font-weight:600;">' + fmtTn(row.tnMezcla) + ' tn</td>' +
+                 '</tr>';
+          }
+          if (cd.length > 1) {
+            h += '<tr style="background:#fff5f5;font-weight:700;">' +
+                 '<td style="padding:5px 8px;">Total</td>' +
+                 '<td style="padding:5px 8px;text-align:right;color:#b45309;">' + fmtTn(sumCal)  + ' tn</td>' +
+                 '<td style="padding:5px 8px;text-align:right;color:#0369a1;">' + fmtTn(sumFrio) + ' tn</td>' +
+                 '<td style="padding:5px 8px;text-align:right;">'               + fmtTn(sumTot)  + ' tn</td>' +
+                 '</tr>';
+          }
+        } else {
+          h += '<thead><tr style="background:#fef2f2;">' +
+               '<th style="padding:5px 8px;text-align:left;border-bottom:1px solid #fecaca;">Mes</th>' +
+               '<th style="padding:5px 8px;text-align:right;border-bottom:1px solid #fecaca;">🔥 Cal.</th>' +
+               '<th style="padding:5px 8px;text-align:right;border-bottom:1px solid #fecaca;">❄ Frío</th>' +
+               '<th style="padding:5px 8px;text-align:right;border-bottom:1px solid #fecaca;">Total mezcla</th>' +
+               '<th style="padding:5px 8px;text-align:right;border-bottom:1px solid #fecaca;">Período</th>' +
+               '</tr></thead><tbody>';
+          let sumCal = 0, sumFrio = 0, sumTot = 0;
+          for (const row of cd) {
+            sumCal  += row.caliente || 0;
+            sumFrio += row.frio     || 0;
+            sumTot  += row.tnMezcla || 0;
+            const per = row.pct < 100 ? row.pct + '% del mes' : 'mes completo';
+            h += '<tr style="border-bottom:1px solid #fee2e2;">' +
+                 '<td style="padding:5px 8px;">'                                                          + (MN[row.mes] || row.mes) + '</td>' +
+                 '<td style="padding:5px 8px;text-align:right;color:#b45309;">' + (row.caliente > 0 ? fmtTn(row.caliente) + ' tn' : '—') + '</td>' +
+                 '<td style="padding:5px 8px;text-align:right;color:#0369a1;">' + (row.frio     > 0 ? fmtTn(row.frio)     + ' tn' : '—') + '</td>' +
+                 '<td style="padding:5px 8px;text-align:right;font-weight:600;">' + fmtTn(row.tnMezcla) + ' tn</td>' +
+                 '<td style="padding:5px 8px;text-align:right;color:var(--muted);font-size:11px;">' + per + '</td>' +
+                 '</tr>';
+          }
+          if (cd.length > 1) {
+            h += '<tr style="background:#fff5f5;font-weight:700;">' +
+                 '<td style="padding:5px 8px;">Total</td>' +
+                 '<td style="padding:5px 8px;text-align:right;color:#b45309;">' + fmtTn(sumCal)  + ' tn</td>' +
+                 '<td style="padding:5px 8px;text-align:right;color:#0369a1;">' + fmtTn(sumFrio) + ' tn</td>' +
+                 '<td style="padding:5px 8px;text-align:right;">'               + fmtTn(sumTot)  + ' tn</td>' +
+                 '<td></td></tr>';
+          }
+          h += '<div style="font-size:10px;color:var(--muted);margin-top:4px;">⚠ Sin columna FECHA en Remitos — consumo pro-rateado por días desde el corte.</div>';
+        }
+        h += '</tbody></table>';
+        h += '<div style="font-size:10px;color:var(--muted);margin-top:4px;">Mezcla ÷ 20 = asfalto consumido &nbsp;·&nbsp; Total asfalto descontado: <strong>' + fmtTn(stockData.consumo || 0) + ' tn</strong></div>';
+      }
+
+      if (id.length > 0) {
+        h += '<div style="font-size:11px;font-weight:700;color:#16a34a;margin-top:12px;margin-bottom:4px;">↗ INGRESOS — formulario Agustín</div>';
+        h += '<table style="width:100%;border-collapse:collapse;font-size:12px;">';
+        h += '<thead><tr style="background:#f0fdf4;">' +
+             '<th style="padding:5px 8px;text-align:left;border-bottom:1px solid #bbf7d0;">Fecha</th>' +
+             '<th style="padding:5px 8px;text-align:right;border-bottom:1px solid #bbf7d0;">Cantidad</th>' +
+             '</tr></thead><tbody>';
+        for (const row of id) {
+          h += '<tr style="border-bottom:1px solid #dcfce7;">' +
+               '<td style="padding:5px 8px;">' + row.fecha + '</td>' +
+               '<td style="padding:5px 8px;text-align:right;font-weight:600;color:#16a34a;">+' + fmtTn(row.cantidad) + ' tn</td>' +
+               '</tr>';
+        }
+        h += '</tbody></table>';
+      }
+
+      elSalidas.innerHTML       = h;
+      elSalidas.style.display   = 'block';
+    }
   }
 
   if (el.formulaNota) el.formulaNota.innerHTML =
@@ -2566,6 +2989,7 @@ function renderAll() {
   renderReparaciones();
   renderTallerLiq();
   renderCtroCosto();
+  renderRentabilidad();
   renderFlujo();
   renderPersonas();
   renderFuentes();
@@ -2679,7 +3103,7 @@ function openTab(id) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-' + id).classList.add('active');
   const btns = document.querySelectorAll('.tab-btn');
-  const map = { margen: 0, cobros: 1, planta: 2, taller: 3, flujo: 4, estructura: 5, fuentes: 6 };
+  const map = { margen: 0, cobros: 1, planta: 2, taller: 3, flujo: 4, estructura: 5, fuentes: 6, metodologia: 7 };
   btns[map[id]].classList.add('active');
 }
 
@@ -2697,6 +3121,7 @@ function setMes(mes) {
   renderAlquilerEquipos();
   renderPlanta();
   renderCtroCosto();
+  renderRentabilidad();
 }
 
 // ================================================================
@@ -2742,6 +3167,7 @@ renderOCPlanta();
 renderReparaciones();
 renderTallerLiq();
 renderCtroCosto();
+renderRentabilidad();
 renderFlujo();
 renderPersonas();
 renderFuentes();
