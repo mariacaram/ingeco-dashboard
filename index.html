@@ -390,11 +390,17 @@
       <div class="kpi-sub" id="kpi-generado-sub">Suma de montos "A Cobrar" por obra activa</div>
       <div class="fuente" id="kpi-generado-fuente"><a href="https://docs.google.com/spreadsheets/d/1vGY8-saBKS4XAwd4RRqacNYRS7W0KV9brDBEo3_Jn0A/edit" target="_blank">Obras activas (Fernando Solís)</a></div>
     </div>
-    <div class="kpi-card">
-      <div class="kpi-label">Total Egresos (visible)</div>
-      <div class="kpi-value nd" id="kpi-egresos">sin dato</div>
-      <div class="kpi-sub" id="kpi-egresos-sub">Requiere OC Insumos + TANGO</div>
-      <div class="fuente" id="kpi-egresos-fuente">OC Insumos (Guillermo) + MO: TANGO ambas quincenas (Mauro Orellana)</div>
+    <div class="kpi-card neg">
+      <div class="kpi-label">OC Insumos</div>
+      <div class="kpi-value nd" id="kpi-oc-insumos">sin dato</div>
+      <div class="kpi-sub" id="kpi-oc-insumos-sub">Requiere datos de Guillermo</div>
+      <div class="fuente"><a href="https://docs.google.com/spreadsheets/d/1_lhq9c1MddkrK1Tf0kexRtgqw5aPhmZWiQkAIRjpfxs/edit?gid=42005977#gid=42005977" target="_blank">OC Insumos — Guillermo Konicek</a></div>
+    </div>
+    <div class="kpi-card neg">
+      <div class="kpi-label">Mano de Obra</div>
+      <div class="kpi-value nd" id="kpi-mo-obras">sin dato</div>
+      <div class="kpi-sub" id="kpi-mo-obras-sub">Requiere TANGO (Mauro)</div>
+      <div class="fuente"><a href="https://drive.google.com/drive/u/0/folders/1hQZoJovbFDHNsJhNiGMEueH1bLfXuuCP" target="_blank">TANGO ambas quincenas — Mauro Orellana</a></div>
     </div>
     <div class="kpi-card neg">
       <div class="kpi-label">Alquiler interno equipos</div>
@@ -1445,18 +1451,31 @@ function renderMargen() {
   const alqMes    = ALQUILER_EQUIPOS[mesActual] ? ALQUILER_EQUIPOS[mesActual].totalArs : null;
   const totalEgresos = (ocMes != null && moMensual != null) ? ocMes + moMensual : null;
 
-  // Actualizar KPI de Egresos (OC + MO, sin alquiler — el alquiler tiene su propia tarjeta)
-  const kpiEg = document.getElementById('kpi-egresos');
-  if (kpiEg) {
-    if (totalEgresos != null) {
-      kpiEg.textContent = fmt(totalEgresos);
-      kpiEg.className = 'kpi-value neg-val';
-      document.getElementById('kpi-egresos-sub').textContent = 'OC Insumos + MO real del mes (TANGO)';
-      document.getElementById('kpi-egresos-fuente').innerHTML =
-        '<a href="https://docs.google.com/spreadsheets/d/1_lhq9c1MddkrK1Tf0kexRtgqw5aPhmZWiQkAIRjpfxs/edit?gid=42005977#gid=42005977" target="_blank">OC: Guillermo Konicek</a> — <a href="https://drive.google.com/drive/u/0/folders/1hQZoJovbFDHNsJhNiGMEueH1bLfXuuCP" target="_blank">MO: TANGO ambas quincenas (Mauro Orellana)</a>';
+  // Card OC Insumos
+  const kpiOC = document.getElementById('kpi-oc-insumos');
+  if (kpiOC) {
+    if (ocMes != null) {
+      kpiOC.textContent = fmt(ocMes);
+      kpiOC.className   = 'kpi-value neg-val';
+      document.getElementById('kpi-oc-insumos-sub').textContent = 'Real — ' + (OC_INSUMOS[mesActual] ? OC_INSUMOS[mesActual].nOC + ' OC del mes' : 'del mes');
     } else {
-      kpiEg.textContent = 'sin dato';
-      kpiEg.className = 'kpi-value nd';
+      kpiOC.textContent = 'sin dato';
+      kpiOC.className   = 'kpi-value nd';
+      document.getElementById('kpi-oc-insumos-sub').textContent = 'Requiere datos de Guillermo';
+    }
+  }
+
+  // Card MO Obras
+  const kpiMO = document.getElementById('kpi-mo-obras');
+  if (kpiMO) {
+    if (moMensual != null) {
+      kpiMO.textContent = fmt(moMensual);
+      kpiMO.className   = 'kpi-value neg-val';
+      document.getElementById('kpi-mo-obras-sub').textContent = 'Real — ' + moArr.length + ' centros de costo';
+    } else {
+      kpiMO.textContent = 'sin dato';
+      kpiMO.className   = 'kpi-value nd';
+      document.getElementById('kpi-mo-obras-sub').textContent = 'Requiere TANGO (Mauro)';
     }
   }
 
