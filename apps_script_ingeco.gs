@@ -929,7 +929,7 @@ function leerRemitosAsfalto() {
       const rows = sheet.getDataRange().getValues();
 
       // Buscar fila de encabezados que tenga CANT. y U.D./U.M.
-      let hdrIdx = -1, iCant = -1, iUD = -1, iDesc = -1, iMes = -1, iAnio = -1, iFecha = -1;
+      let hdrIdx = -1, iCant = -1, iUD = -1, iDesc = -1, iMes = -1, iAnio = -1, iFecha = -1, iObra = -1;
       for (let i = 0; i < Math.min(20, rows.length); i++) {
         const cells = rows[i].map(c => String(c).toUpperCase().trim());
         const iC = cells.findIndex(c => c === 'CANT.' || c === 'CANT' || c === 'CANTIDAD');
@@ -940,6 +940,7 @@ function leerRemitosAsfalto() {
           iMes   = cells.findIndex(c => c === 'MES');
           iAnio  = cells.findIndex(c => c === 'AÑO' || c === 'ANO' || c === 'AÑO');
           iFecha = cells.findIndex(c => c === 'FECHA');
+          iObra  = cells.findIndex(c => c === 'OBRA');
           break;
         }
       }
@@ -961,6 +962,7 @@ function leerRemitosAsfalto() {
 
         const tipo = desc.includes('CALIENTE') ? 'caliente'
                    : (desc.includes('FRI') || desc.includes('FRÍO')) ? 'frio' : null;
+        const obra = iObra >= 0 ? String(row[iObra] || '').trim() : '';
 
         // ── Fecha exacta (columna FECHA, formato mm/dd/aaaa) ──────────────────
         var fechaObj = null;
@@ -984,7 +986,7 @@ function leerRemitosAsfalto() {
           mesNum  = fechaObj.getMonth() + 1;
           anioNum = fechaObj.getFullYear();
           // Guardar en detalle con objeto Date real
-          detalle.push({ fecha: fechaObj, fechaStr: Utilities.formatDate(fechaObj, TZ, 'dd/MM/yyyy'), tipo: tipo, cant: Math.round(cant * 10) / 10 });
+          detalle.push({ fecha: fechaObj, fechaStr: Utilities.formatDate(fechaObj, TZ, 'dd/MM/yyyy'), tipo: tipo, cant: Math.round(cant * 10) / 10, obra: obra });
         } else {
           // Fallback: columnas MES / AÑO
           var mesRaw  = row[iMes],  anioRaw = row[iAnio];
@@ -997,9 +999,20 @@ function leerRemitosAsfalto() {
         const mesKey = MES_MAP[mesNum];
         if (!mesKey) continue;
 
-        if (!resultado[mesKey]) resultado[mesKey] = { caliente: 0, frio: 0, total: 0 };
-        if (tipo === 'caliente')  resultado[mesKey].caliente += cant;
-        else if (tipo === 'frio') resultado[mesKey].frio     += cant;
+        if (!resultado[mesKey]) resultado[mesKey] = { caliente: 0, frio: 0, total: 0, porObra: {} };
+        if (tipo === 'caliente') {
+          resultado[mesKey].caliente += cant;
+          if (obra) {
+            if (!resultado[mesKey].porObra[obra]) resultado[mesKey].porObra[obra] = { caliente: 0, frio: 0 };
+            resultado[mesKey].porObra[obra].caliente = Math.round((resultado[mesKey].porObra[obra].caliente + cant) * 10) / 10;
+          }
+        } else if (tipo === 'frio') {
+          resultado[mesKey].frio += cant;
+          if (obra) {
+            if (!resultado[mesKey].porObra[obra]) resultado[mesKey].porObra[obra] = { caliente: 0, frio: 0 };
+            resultado[mesKey].porObra[obra].frio = Math.round((resultado[mesKey].porObra[obra].frio + cant) * 10) / 10;
+          }
+        }
         resultado[mesKey].total += cant;
       }
     }
