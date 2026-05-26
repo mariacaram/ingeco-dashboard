@@ -913,9 +913,10 @@ function parsearHoras(raw) {
 }
 
 // ============================================================
-// PRECIO DE MERCADO ASFALTO — $/tn por mes
+// PRECIO DE MERCADO ASFALTO — $/tn por tipo y mes
 // Fuente: Google Sheet cargado por María Caram
-// Formato esperado: columnas MES (ene/feb/…) y PRECIO_TN (número)
+// Formato: col A = Mes ("enero 2026"), col B = Valor caliente [Tn], col C = Valor frío [Tn]
+// Devuelve: { feb: { caliente: X, frio: Y }, mar: {...}, ... }
 // ============================================================
 function leerPrecioAsfalto() {
   try {
@@ -923,57 +924,69 @@ function leerPrecioAsfalto() {
     const sheet = ss.getSheets()[0];
     const rows  = sheet.getDataRange().getValues();
 
-    const MES_MAP = {
-      ene:1, enero:1, jan:1, january:1,
-      feb:2, febrero:2, february:2,
-      mar:3, marzo:3, march:3,
-      abr:4, abril:4, april:4,
-      may:5, mayo:5,
-      jun:6, junio:6, june:6,
-      jul:7, julio:7, july:7,
-      ago:8, agosto:8, august:8,
-      sep:9, septiembre:9, september:9,
-      oct:10, octubre:10, october:10,
-      nov:11, noviembre:11, november:11,
-      dic:12, diciembre:12, december:12,
+    const MES_NOMBRE = {
+      enero:1, febrero:2, marzo:3, abril:4, mayo:5, junio:6,
+      julio:7, agosto:8, septiembre:8, octubre:10, noviembre:11, diciembre:12,
+      january:1, february:2, march:3, april:4, may:5, june:6,
+      july:7, august:8, september:9, october:10, november:11, december:12,
     };
     const NUM_KEY = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
 
-    // Buscar fila de encabezado
-    let iMes = -1, iPrecio = -1, hdrIdx = -1;
-    for (let i = 0; i < Math.min(10, rows.length); i++) {
-      const cells = rows[i].map(c => String(c).toUpperCase().trim()
-        .replace(/[^A-Z0-9]/g, '_'));
-      const iM = cells.findIndex(c => c === 'MES');
-      const iP = cells.findIndex(c => c.startsWith('PRECIO'));
-      if (iM >= 0 && iP >= 0) { hdrIdx = i; iMes = iM; iPrecio = iP; break; }
+    // Detectar fila de encabezado: buscar columna con "MES" y columna con "CALIENTE"
+    let iMes = -1, iCal = -1, iFrio = -1, hdrIdx = -1;
+    for (let i = 0; i < Math.min(5, rows.length); i++) {
+      const cells = rows[i].map(c => String(c).toUpperCase().trim());
+      const iM = cells.findIndex(c => c === 'MES' || c === 'FECHA' || c === 'PERÍODO');
+      const iC = cells.findIndex(c => c.includes('CALIENTE'));
+      const iF = cells.findIndex(c => c.includes('FRIO') || c.includes('FRÍO') || c.includes('FRIA') || c.includes('FRÍA'));
+      if (iM >= 0 && (iC >= 0 || iF >= 0)) {
+        hdrIdx = i; iMes = iM; iCal = iC; iFrio = iF; break;
+      }
     }
     if (hdrIdx < 0) {
-      Logger.log('precioAsfalto: no se encontró encabezado MES+PRECIO');
-      return null;
+      Logger.log('precioAsfalto: no se encontró encabezado — buscando por posición (A=mes, B=cal, C=frío)');
+      // Fallback: asumir columnas A, B, C
+      hdrIdx = 0; iMes = 0; iCal = 1; iFrio = 2;
     }
+    Logger.log('precioAsfalto hdr=' + hdrIdx + ' iMes=' + iMes + ' iCal=' + iCal + ' iFrio=' + iFrio);
 
+    const parsePrecio = function(raw) {
+      if (raw == null || raw === '') return null;
+      if (typeof raw === 'number') return raw > 0 ? Math.round(raw) : null;
+      const n = parseFloat(String(raw).replace(/[$. ]/g, '').replace(',', '.'));
+      return !isNaN(n) && n > 0 ? Math.round(n) : null;
+    };
+
+    const curYear = new Date().getFullYear();
     const resultado = {};
-    for (let i = hdrIdx + 1; i < rows.length; i++) {
-      const raw   = String(rows[i][iMes] || '').toLowerCase().trim();
-      const precio = typeof rows[i][iPrecio] === 'number' ? rows[i][iPrecio]
-                   : parseFloat(String(rows[i][iPrecio] || '').replace(/[$.]/g, '').replace(',', '.'));
-      if (!raw || isNaN(precio) || precio <= 0) continue;
 
-      // Aceptar "feb", "febrero", "2" o "02"
-      let mesKey = null;
-      const asNum = parseInt(raw);
-      if (!isNaN(asNum) && asNum >= 1 && asNum <= 12) {
-        mesKey = NUM_KEY[asNum - 1];
-      } else {
-        const base = raw.slice(0, 3); // primeras 3 letras
-        const num  = MES_MAP[base] || MES_MAP[raw];
-        if (num) mesKey = NUM_KEY[num - 1];
+    for (let i = hdrIdx + 1; i < rows.length; i++) {
+      const rawMes = String(rows[i][iMes] instanceof Date
+        ? Utilities.formatDate(rows[i][iMes], 'America/Argentina/Buenos_Aires', 'MMMM yyyy')
+        : rows[i][iMes] || '').toLowerCase().trim();
+      if (!rawMes) continue;
+
+      // Parsear "enero 2026", "febrero", "feb", "2" — extraer mes y año
+      const tokens = rawMes.split(/[\s,/-]+/);
+      let mesNum = null, year = curYear;
+      for (const t of tokens) {
+        const n = parseInt(t);
+        if (!isNaN(n) && n >= 2000) { year = n; continue; }
+        if (!isNaN(n) && n >= 1 && n <= 12) { mesNum = n; continue; }
+        const nombre = MES_NOMBRE[t] || MES_NOMBRE[t.slice(0, 3)];
+        if (nombre) mesNum = nombre;
       }
-      if (mesKey) resultado[mesKey] = Math.round(precio);
+      if (!mesNum || year !== curYear) continue;
+
+      const pCal  = iCal  >= 0 ? parsePrecio(rows[i][iCal])  : null;
+      const pFrio = iFrio >= 0 ? parsePrecio(rows[i][iFrio]) : null;
+      if (pCal == null && pFrio == null) continue;
+
+      const mesKey = NUM_KEY[mesNum - 1];
+      resultado[mesKey] = { caliente: pCal, frio: pFrio };
     }
 
-    Logger.log('precioAsfalto — meses: ' + JSON.stringify(resultado));
+    Logger.log('precioAsfalto — ' + JSON.stringify(resultado));
     return resultado;
 
   } catch (e) {

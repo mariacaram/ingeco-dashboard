@@ -1269,7 +1269,7 @@ let GENERADO_POR_OBRA = null;
 // { abr: { totalArs, tcUsd, porObra: [{obra, costoArs, horasTot, equipos: [{codigo, clasificacion, marca, modelo, pfUsd, horas, costoArs}]}] } }
 let ALQUILER_EQUIPOS = {};
 let REMITOS_ASFALTO = {}; // { feb: {caliente, frio, total, porObra: {obraName: {caliente, frio}}}, ... }
-let PRECIO_ASFALTO  = {}; // { feb: precioTnARS, mar: ..., } — leído desde planilla
+let PRECIO_ASFALTO  = {}; // { feb: {caliente: X, frio: Y}, mar: {...} } — leído desde planilla
 
 // Ingresos de Planta — ingresados a mano, persisten en localStorage
 let INGRESOS_PLANTA = (function() {
@@ -1597,17 +1597,19 @@ function renderResumenObra() {
   const moArr2  = getMOObra(mesActual);
   const moTotal = moArr2.length > 0 ? moArr2.reduce((s, r) => s + r.monto, 0) : null;
 
-  // Tn caliente por obra desde remitos — base para prorratear MO
+  // Tn caliente/frío por obra desde remitos — base para prorratear MO y costo asfalto
   const remitosMes = REMITOS_ASFALTO[mesActual];
-  const tnPorObraKey = {};
+  const tnPorObraKey = {}, tnFrioPorObraKey = {};
   let tnCalTotal = 0;
   if (remitosMes && remitosMes.porObra) {
     Object.entries(remitosMes.porObra).forEach(([obra, v]) => {
       const k = obra.toLowerCase().trim();
-      tnPorObraKey[k] = (tnPorObraKey[k] || 0) + (v.caliente || 0);
+      tnPorObraKey[k]     = (tnPorObraKey[k]     || 0) + (v.caliente || 0);
+      tnFrioPorObraKey[k] = (tnFrioPorObraKey[k] || 0) + (v.frio     || 0);
       tnCalTotal += (v.caliente || 0);
     });
   }
+  const precioMesResumen = PRECIO_ASFALTO[mesActual] || null;
 
   let sumaCobrar = 0, sumaInsumos = 0, sumaAlquiler = 0, sumaMO = 0, sumaTn = 0;
 
@@ -1624,9 +1626,10 @@ function renderResumenObra() {
     const tnObra = tnPorObraKey[ck] || tnPorObraKey[nk] || 0;
     const moObra = (moTotal != null && tnCalTotal > 0 && tnObra > 0)
       ? Math.round(moTotal * (tnObra / tnCalTotal)) : null;
-    const precioTnMes = PRECIO_ASFALTO[mesActual] || null;
-    const costoAsfObra = (precioTnMes != null && tnObra > 0)
-      ? Math.round(tnObra * precioTnMes) : null;
+    const tnFrioObra = tnFrioPorObraKey[ck] || tnFrioPorObraKey[nk] || 0;
+    const costoAsfObra = (precioMesResumen != null && (tnObra > 0 || tnFrioObra > 0))
+      ? Math.round((tnObra * (precioMesResumen.caliente || 0)) + (tnFrioObra * (precioMesResumen.frio || 0)))
+      : null;
 
     const margen = aCobrar - insumos - (moObra || 0) - (costoAsfObra || 0) - alquiler;
     const mgColor = margen > 0 ? 'pos-val' : margen < 0 ? 'neg-val' : '';
@@ -1637,8 +1640,9 @@ function renderResumenObra() {
     if (moObra) sumaMO += moObra;
     sumaTn += tnObra;
 
-    const tnCell = tnObra > 0
-      ? `<span style="font-size:12px;" title="${fmtTn(tnObra)} tn${costoAsfObra != null ? ' → ' + fmt(costoAsfObra) : ''}">${fmtTn(tnObra)} tn${costoAsfObra != null ? '<br><small class="neg-val" style="font-size:10px;">' + fmt(costoAsfObra) + '</small>' : ''}</span>`
+    const tnLabel = tnObra > 0 ? fmtTn(tnObra) + ' tn' + (tnFrioObra > 0 ? ' + ' + fmtTn(tnFrioObra) + ' frío' : '') : null;
+    const tnCell = (tnObra > 0 || tnFrioObra > 0)
+      ? `<span style="font-size:12px;" title="${tnLabel}${costoAsfObra != null ? ' → ' + fmt(costoAsfObra) : ''}">${tnLabel}${costoAsfObra != null ? '<br><small class="neg-val" style="font-size:10px;">' + fmt(costoAsfObra) + '</small>' : ''}</span>`
       : '<span class="nd">—</span>';
     const moCell = moObra != null
       ? `<span class="neg-val" title="MO total × ${fmtTn(tnObra)}tn / ${fmtTn(tnCalTotal)}tn total">${fmt(moObra)}</span>`
@@ -2051,11 +2055,15 @@ function renderRentabilidad() {
                     : (ocTotalMes != null)                     ? ocTotalMes : null;
 
   // Ingresos Planta: precio mercado × tn caliente (automático) o ingreso manual como fallback
-  const remitosM       = REMITOS_ASFALTO[mesActual];
-  const tnCalienteMes  = remitosM && remitosM.caliente > 0 ? remitosM.caliente : null;
-  const precioTn       = PRECIO_ASFALTO[mesActual] || null;
-  const ingPlantaAsf   = (tnCalienteMes != null && precioTn != null)
-                         ? Math.round(tnCalienteMes * precioTn) : null;
+  const remitosM      = REMITOS_ASFALTO[mesActual];
+  const tnCalienteMes = remitosM && remitosM.caliente > 0 ? remitosM.caliente : null;
+  const tnFrioMes     = remitosM && remitosM.frio     > 0 ? remitosM.frio     : null;
+  const precioMes     = PRECIO_ASFALTO[mesActual] || null;
+  const pCal          = precioMes && precioMes.caliente > 0 ? precioMes.caliente : null;
+  const pFrio         = precioMes && precioMes.frio     > 0 ? precioMes.frio     : null;
+  const ingPlantaAsf  = (pCal != null && tnCalienteMes != null) || (pFrio != null && tnFrioMes != null)
+    ? Math.round((tnCalienteMes || 0) * (pCal || 0) + (tnFrioMes || 0) * (pFrio || 0))
+    : null;
   const ingPlantaManual = INGRESOS_PLANTA[mesActual] != null ? INGRESOS_PLANTA[mesActual] : null;
   // ingPlanta: usa cálculo automático si disponible, sino el manual
   const ingPlanta = ingPlantaAsf != null ? ingPlantaAsf : ingPlantaManual;
@@ -2143,7 +2151,11 @@ function renderRentabilidad() {
   rows += row('+ Ingresos certificados / A cobrar', ingObras != null ? 'real' : 'pend', ingObras, '', { nota: obras.length > 0 ? obras.length + ' obras' : '' });
   rows += row('− OC Insumos de obra', ocObras != null ? (ocPlanta != null ? 'aprox' : 'real') : 'pend', ocObras, 'neg', { indent: 1, nota: ocPlanta != null ? '(total − planta)' : '' });
   rows += row('− Mano de obra Obras', moObras != null ? 'real' : 'pend', moObras, 'neg', { indent: 1 });
-  rows += row('− Costo asfalto ↕', costoAsfaltoObras != null ? 'real' : 'pend', costoAsfaltoObras, 'neg', { indent: 1, nota: costoAsfaltoObras != null ? fmtTn(tnCalienteMes) + 'tn × $' + (precioTn || 0).toLocaleString('es-AR') + '/tn' : 'requiere precio en planilla' });
+  const notaAsfObras = costoAsfaltoObras != null
+    ? (tnCalienteMes ? fmtTn(tnCalienteMes) + 'tn cal × $' + (pCal || 0).toLocaleString('es-AR') : '')
+      + (tnFrioMes && pFrio ? (tnCalienteMes ? ' + ' : '') + fmtTn(tnFrioMes) + 'tn frío × $' + pFrio.toLocaleString('es-AR') : '')
+    : 'cargar precio en planilla';
+  rows += row('− Costo asfalto ↕', costoAsfaltoObras != null ? 'real' : 'pend', costoAsfaltoObras, 'neg', { indent: 1, nota: notaAsfObras });
   rows += row('− Alquiler interno de máquinas ↕', alqMes != null ? 'real' : 'pend', alqMes, 'neg', { indent: 1, nota: 'transferencia interna' });
   rows += row('= Margen Obras', margenObrasStatus, margenObras, 'res', { isTotal: true });
 
@@ -2156,8 +2168,9 @@ function renderRentabilidad() {
 
   // PLANTA
   const ingPlantaStatus = ingPlantaAsf != null ? 'real' : (ingPlantaManual != null ? 'aprox' : 'pend');
-  const ingPlantaNota   = ingPlantaAsf != null
-    ? fmtTn(tnCalienteMes) + ' tn × $' + (precioTn || 0).toLocaleString('es-AR') + '/tn'
+  const ingPlantaNota = ingPlantaAsf != null
+    ? (tnCalienteMes && pCal ? fmtTn(tnCalienteMes) + 'tn cal × $' + pCal.toLocaleString('es-AR') : '')
+      + (tnFrioMes && pFrio ? (tnCalienteMes && pCal ? ' + ' : '') + fmtTn(tnFrioMes) + 'tn frío × $' + pFrio.toLocaleString('es-AR') : '')
     : (ingPlantaManual != null ? 'ingresado manualmente' : 'cargar precio en planilla');
   rows += sectionHeader('🏭 PLANTA ASFALTO + TRITURADO', '#1d4ed8');
   rows += row('+ Venta interna mezcla ↕', ingPlantaStatus, ingPlanta, '', { nota: ingPlantaNota });
