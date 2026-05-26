@@ -29,6 +29,7 @@ const FILE_IDS = {
   usageEquipos:   '1CPnhO1M78vwARe21ye_Xcr0hiLIrKtR3zzANsJgc5d4',  // Partes diarios por equipo (una pestaña por COD)
   remitosAsfalto: '13z7EEuVIedOwl85d_f8MEoJGCEioZO7m9Cbn8MWxihI',  // REMITOS OFICIALES (Nico Dall'Agata)
   ajusteStock:    '1yZArsIKYMfq9UPUXyiASXtDNXyubTjFx3PPW2VjG-uA',  // Formulario Ingreso Asfalto Agustín
+  precioAsfalto:  '1lqKTXtDLT2FxyXurxjU1uE4epDOKs5SP8AXu5wAUsJ4',  // Precio de mercado asfalto $/tn por mes
 };
 
 // Tipo de cambio USD → ARS oficial promedio mensual (Banco Nación Argentina)
@@ -174,6 +175,8 @@ function buildData() {
     if (result.remitosAsfalto) delete result.remitosAsfalto._detalle;
   }
   catch(e) { Logger.log('stockAsfalto error: ' + e); result.stockAsfalto = null; }
+  try { result.precioAsfalto = leerPrecioAsfalto(); }
+  catch(e) { Logger.log('precioAsfalto error: ' + e); result.precioAsfalto = null; }
   return result;
 }
 
@@ -907,6 +910,76 @@ function parsearHoras(raw) {
     if (!isNaN(n)) return n;
   }
   return 0;
+}
+
+// ============================================================
+// PRECIO DE MERCADO ASFALTO — $/tn por mes
+// Fuente: Google Sheet cargado por María Caram
+// Formato esperado: columnas MES (ene/feb/…) y PRECIO_TN (número)
+// ============================================================
+function leerPrecioAsfalto() {
+  try {
+    const ss    = SpreadsheetApp.openById(FILE_IDS.precioAsfalto);
+    const sheet = ss.getSheets()[0];
+    const rows  = sheet.getDataRange().getValues();
+
+    const MES_MAP = {
+      ene:1, enero:1, jan:1, january:1,
+      feb:2, febrero:2, february:2,
+      mar:3, marzo:3, march:3,
+      abr:4, abril:4, april:4,
+      may:5, mayo:5,
+      jun:6, junio:6, june:6,
+      jul:7, julio:7, july:7,
+      ago:8, agosto:8, august:8,
+      sep:9, septiembre:9, september:9,
+      oct:10, octubre:10, october:10,
+      nov:11, noviembre:11, november:11,
+      dic:12, diciembre:12, december:12,
+    };
+    const NUM_KEY = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+
+    // Buscar fila de encabezado
+    let iMes = -1, iPrecio = -1, hdrIdx = -1;
+    for (let i = 0; i < Math.min(10, rows.length); i++) {
+      const cells = rows[i].map(c => String(c).toUpperCase().trim()
+        .replace(/[^A-Z0-9]/g, '_'));
+      const iM = cells.findIndex(c => c === 'MES');
+      const iP = cells.findIndex(c => c.startsWith('PRECIO'));
+      if (iM >= 0 && iP >= 0) { hdrIdx = i; iMes = iM; iPrecio = iP; break; }
+    }
+    if (hdrIdx < 0) {
+      Logger.log('precioAsfalto: no se encontró encabezado MES+PRECIO');
+      return null;
+    }
+
+    const resultado = {};
+    for (let i = hdrIdx + 1; i < rows.length; i++) {
+      const raw   = String(rows[i][iMes] || '').toLowerCase().trim();
+      const precio = typeof rows[i][iPrecio] === 'number' ? rows[i][iPrecio]
+                   : parseFloat(String(rows[i][iPrecio] || '').replace(/[$.]/g, '').replace(',', '.'));
+      if (!raw || isNaN(precio) || precio <= 0) continue;
+
+      // Aceptar "feb", "febrero", "2" o "02"
+      let mesKey = null;
+      const asNum = parseInt(raw);
+      if (!isNaN(asNum) && asNum >= 1 && asNum <= 12) {
+        mesKey = NUM_KEY[asNum - 1];
+      } else {
+        const base = raw.slice(0, 3); // primeras 3 letras
+        const num  = MES_MAP[base] || MES_MAP[raw];
+        if (num) mesKey = NUM_KEY[num - 1];
+      }
+      if (mesKey) resultado[mesKey] = Math.round(precio);
+    }
+
+    Logger.log('precioAsfalto — meses: ' + JSON.stringify(resultado));
+    return resultado;
+
+  } catch (e) {
+    Logger.log('leerPrecioAsfalto error: ' + e);
+    return null;
+  }
 }
 
 // ============================================================

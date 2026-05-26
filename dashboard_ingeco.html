@@ -1091,7 +1091,8 @@
     </div>
     <!-- Inputs manuales: ingresos de planta por mes -->
     <div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:8px;padding:12px 16px;margin-bottom:14px;">
-      <div style="font-size:11px;font-weight:700;color:#15803d;margin-bottom:10px;">💰 Ingresos de Planta — completar a mano · se guarda en este navegador</div>
+      <div style="font-size:11px;font-weight:700;color:#15803d;margin-bottom:4px;">💰 Otros ingresos de Planta (triturado, etc.) — completar a mano · se guarda en este navegador</div>
+      <div style="font-size:10px;color:var(--muted);margin-bottom:10px;">El ingreso por venta interna de asfalto se calcula automáticamente: tn caliente × precio/tn (planilla). Solo usá estos campos para ingresos adicionales o si no hay precio cargado.</div>
       <div id="ingresos-planta-form" style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;"></div>
     </div>
 
@@ -1268,6 +1269,7 @@ let GENERADO_POR_OBRA = null;
 // { abr: { totalArs, tcUsd, porObra: [{obra, costoArs, horasTot, equipos: [{codigo, clasificacion, marca, modelo, pfUsd, horas, costoArs}]}] } }
 let ALQUILER_EQUIPOS = {};
 let REMITOS_ASFALTO = {}; // { feb: {caliente, frio, total, porObra: {obraName: {caliente, frio}}}, ... }
+let PRECIO_ASFALTO  = {}; // { feb: precioTnARS, mar: ..., } — leído desde planilla
 
 // Ingresos de Planta — ingresados a mano, persisten en localStorage
 let INGRESOS_PLANTA = (function() {
@@ -1618,12 +1620,15 @@ function renderResumenObra() {
     const insumos  = ocPorNombre[nk]  || ocPorNombre[ck]  || 0;
     const alquiler = alqPorNombre[ck] || alqPorNombre[nk] || 0;
 
-    // Tn caliente y MO prorrateada por obra
+    // Tn caliente, MO prorrateada y costo asfalto por obra
     const tnObra = tnPorObraKey[ck] || tnPorObraKey[nk] || 0;
     const moObra = (moTotal != null && tnCalTotal > 0 && tnObra > 0)
       ? Math.round(moTotal * (tnObra / tnCalTotal)) : null;
+    const precioTnMes = PRECIO_ASFALTO[mesActual] || null;
+    const costoAsfObra = (precioTnMes != null && tnObra > 0)
+      ? Math.round(tnObra * precioTnMes) : null;
 
-    const margen = aCobrar - insumos - (moObra || 0) - alquiler;
+    const margen = aCobrar - insumos - (moObra || 0) - (costoAsfObra || 0) - alquiler;
     const mgColor = margen > 0 ? 'pos-val' : margen < 0 ? 'neg-val' : '';
 
     sumaCobrar  += aCobrar;
@@ -1633,7 +1638,7 @@ function renderResumenObra() {
     sumaTn += tnObra;
 
     const tnCell = tnObra > 0
-      ? `<span style="font-size:12px;color:var(--muted);">${fmtTn(tnObra)} tn</span>`
+      ? `<span style="font-size:12px;" title="${fmtTn(tnObra)} tn${costoAsfObra != null ? ' → ' + fmt(costoAsfObra) : ''}">${fmtTn(tnObra)} tn${costoAsfObra != null ? '<br><small class="neg-val" style="font-size:10px;">' + fmt(costoAsfObra) + '</small>' : ''}</span>`
       : '<span class="nd">—</span>';
     const moCell = moObra != null
       ? `<span class="neg-val" title="MO total × ${fmtTn(tnObra)}tn / ${fmtTn(tnCalTotal)}tn total">${fmt(moObra)}</span>`
@@ -2045,14 +2050,25 @@ function renderRentabilidad() {
   const ocObras     = (ocTotalMes != null && ocPlanta != null) ? ocTotalMes - ocPlanta
                     : (ocTotalMes != null)                     ? ocTotalMes : null;
 
-  // Ingresos Planta ingresados a mano
-  const ingPlanta = INGRESOS_PLANTA[mesActual] != null ? INGRESOS_PLANTA[mesActual] : null;
+  // Ingresos Planta: precio mercado × tn caliente (automático) o ingreso manual como fallback
+  const remitosM       = REMITOS_ASFALTO[mesActual];
+  const tnCalienteMes  = remitosM && remitosM.caliente > 0 ? remitosM.caliente : null;
+  const precioTn       = PRECIO_ASFALTO[mesActual] || null;
+  const ingPlantaAsf   = (tnCalienteMes != null && precioTn != null)
+                         ? Math.round(tnCalienteMes * precioTn) : null;
+  const ingPlantaManual = INGRESOS_PLANTA[mesActual] != null ? INGRESOS_PLANTA[mesActual] : null;
+  // ingPlanta: usa cálculo automático si disponible, sino el manual
+  const ingPlanta = ingPlantaAsf != null ? ingPlantaAsf : ingPlantaManual;
+
+  // Costo asfalto en obras = mismo valor que ingreso planta (transferencia interna)
+  const costoAsfaltoObras = ingPlantaAsf; // se cancela en consolidado
 
   // ── Márgenes por unidad ──────────────────────────────────────────────────
   // Margen Obras (el alquiler es costo real de la unidad Obras)
-  const costoObras  = (moObras  != null ? moObras  : 0)
-                    + (ocObras  != null ? ocObras  : 0)
-                    + (alqMes   != null ? alqMes   : 0);
+  const costoObras  = (moObras            != null ? moObras            : 0)
+                    + (ocObras            != null ? ocObras            : 0)
+                    + (alqMes             != null ? alqMes             : 0)
+                    + (costoAsfaltoObras  != null ? costoAsfaltoObras  : 0);
   const margenObras = ingObras != null ? ingObras - costoObras : null;
 
   // Resultado Taller: revenue = alquiler cobrado a obras; costo = MO taller
@@ -2064,7 +2080,7 @@ function renderRentabilidad() {
   const egresosPlanta = (moPlanta != null ? moPlanta : 0) + (ocPlanta != null ? ocPlanta : 0);
   const resultPlanta  = ingPlanta != null ? ingPlanta - egresosPlanta : null;
 
-  // ── Consolidado parcial (alquiler se cancela entre Obras y Taller) ────────
+  // ── Consolidado parcial (alquiler y asfalto se cancelan entre unidades) ──
   const consolidadoConocido = (ingObras != null)
     ? ingObras
       - (moObras    != null ? moObras    : 0)
@@ -2072,7 +2088,8 @@ function renderRentabilidad() {
       - (moTaller   != null ? moTaller   : 0)
       - (moPlanta   != null ? moPlanta   : 0)
       - (ocPlanta   != null ? ocPlanta   : 0)
-      + (ingPlanta  != null ? ingPlanta  : 0)
+      // costoAsfaltoObras e ingPlantaAsf se cancelan → no afectan el consolidado
+      + (ingPlantaManual != null ? ingPlantaManual : 0)
     : null;
 
   // ── Helpers de render ────────────────────────────────────────────────────
@@ -2120,12 +2137,15 @@ function renderRentabilidad() {
   let rows = '';
 
   // OBRAS
+  const margenObrasStatus = margenObras != null
+    ? (ocPlanta != null || costoAsfaltoObras != null ? 'parcial' : 'real') : 'pend';
   rows += sectionHeader('🏗 OBRAS', '#15803d');
   rows += row('+ Ingresos certificados / A cobrar', ingObras != null ? 'real' : 'pend', ingObras, '', { nota: obras.length > 0 ? obras.length + ' obras' : '' });
   rows += row('− OC Insumos de obra', ocObras != null ? (ocPlanta != null ? 'aprox' : 'real') : 'pend', ocObras, 'neg', { indent: 1, nota: ocPlanta != null ? '(total − planta)' : '' });
   rows += row('− Mano de obra Obras', moObras != null ? 'real' : 'pend', moObras, 'neg', { indent: 1 });
+  rows += row('− Costo asfalto ↕', costoAsfaltoObras != null ? 'real' : 'pend', costoAsfaltoObras, 'neg', { indent: 1, nota: costoAsfaltoObras != null ? fmtTn(tnCalienteMes) + 'tn × $' + (precioTn || 0).toLocaleString('es-AR') + '/tn' : 'requiere precio en planilla' });
   rows += row('− Alquiler interno de máquinas ↕', alqMes != null ? 'real' : 'pend', alqMes, 'neg', { indent: 1, nota: 'transferencia interna' });
-  rows += row('= Margen Obras', margenObras != null ? (ocPlanta != null ? 'parcial' : 'real') : 'pend', margenObras, 'res', { isTotal: true });
+  rows += row('= Margen Obras', margenObrasStatus, margenObras, 'res', { isTotal: true });
 
   // TALLER
   rows += sectionHeader('🔧 TALLER MECÁNICO', '#92400e');
@@ -2135,8 +2155,13 @@ function renderRentabilidad() {
   rows += row('= Resultado Taller', resultTaller != null ? 'parcial' : 'pend', resultTaller, 'res', { isTotal: true, nota: 'sin OC Taller' });
 
   // PLANTA
+  const ingPlantaStatus = ingPlantaAsf != null ? 'real' : (ingPlantaManual != null ? 'aprox' : 'pend');
+  const ingPlantaNota   = ingPlantaAsf != null
+    ? fmtTn(tnCalienteMes) + ' tn × $' + (precioTn || 0).toLocaleString('es-AR') + '/tn'
+    : (ingPlantaManual != null ? 'ingresado manualmente' : 'cargar precio en planilla');
   rows += sectionHeader('🏭 PLANTA ASFALTO + TRITURADO', '#1d4ed8');
-  rows += row('+ Ingresos por mezcla producida', ingPlanta != null ? 'real' : 'pend', ingPlanta, '', { nota: ingPlanta == null ? 'completar arriba ↑' : '' });
+  rows += row('+ Venta interna mezcla ↕', ingPlantaStatus, ingPlanta, '', { nota: ingPlantaNota });
+  rows += row('+ Otros ingresos (triturado, etc.)', ingPlantaManual != null && ingPlantaAsf != null ? 'real' : 'pend', ingPlantaAsf != null ? ingPlantaManual : null, '', { indent: 1, nota: 'completar arriba si aplica' });
   rows += row('− OC Insumos planta', ocPlanta != null ? 'real' : 'pend', ocPlanta, 'neg', { indent: 1 });
   rows += row('− Mano de obra Planta', moPlanta != null ? 'real' : 'pend', moPlanta, 'neg', { indent: 1 });
   rows += row('− Gastos de cantera / triturado', 'pend', null, 'neg', { indent: 1, nota: 'pendiente fuente' });
@@ -2148,7 +2173,7 @@ function renderRentabilidad() {
   // CONSOLIDACIÓN
   rows += sectionHeader('📊 CONSOLIDACIÓN', '#1b3a5c');
   rows += `<tr style="background:#f1f5f9;"><td colspan="3" style="padding:6px 10px;font-size:11px;color:var(--muted);">
-    Nota: el alquiler ↕ cancela entre Obras (costo) y Taller (ingreso). No aparece en la consolidación final.
+    Nota: alquiler ↕ y costo asfalto ↕ cancelan entre unidades. No afectan el consolidado final.
   </td></tr>`;
   const consStatus = consolidadoConocido != null ? (ingPlanta != null ? 'parcial' : 'parcial') : 'pend';
   const consNota   = ingPlanta == null ? 'sin ingresos de planta' : 'sin OC Taller, sin Estructura';
@@ -3169,6 +3194,9 @@ async function refreshData() {
       if (data.remitosAsfalto && typeof data.remitosAsfalto === 'object') {
         Object.assign(REMITOS_ASFALTO, data.remitosAsfalto);
       }
+      if (data.precioAsfalto && typeof data.precioAsfalto === 'object') {
+        Object.assign(PRECIO_ASFALTO, data.precioAsfalto);
+      }
       if (data.stockAsfalto && data.stockAsfalto.valor != null) {
         stockData    = data.stockAsfalto;
         stockAsfalto = data.stockAsfalto.valor;
@@ -3293,6 +3321,9 @@ if (APPS_SCRIPT_URL) {
         }
         if (data.remitosAsfalto && typeof data.remitosAsfalto === 'object') {
           Object.assign(REMITOS_ASFALTO, data.remitosAsfalto);
+        }
+        if (data.precioAsfalto && typeof data.precioAsfalto === 'object') {
+          Object.assign(PRECIO_ASFALTO, data.precioAsfalto);
         }
         if (data.stockAsfalto && data.stockAsfalto.valor != null) {
           stockData    = data.stockAsfalto;
