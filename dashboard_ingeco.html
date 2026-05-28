@@ -346,9 +346,7 @@
   <div style="display:flex; gap:20px; align-items:center;">
     <div class="month-selector">
       <label>Período:</label>
-      <button class="month-btn" onclick="setMes('feb')">Febrero 2026</button>
-      <button class="month-btn active" onclick="setMes('mar')">Marzo 2026</button>
-      <button class="month-btn" onclick="setMes('abr')">Abril 2026</button>
+      <div id="month-btns" style="display:flex;gap:6px;"></div>
     </div>
     <div class="refresh-area">
       <button class="btn-refresh" id="btn-refresh" onclick="refreshData()">🔄 Actualizar datos</button>
@@ -756,11 +754,7 @@
       <div class="table-wrap">
         <table>
           <thead><tr><th>Mes</th><th class="num">OC Insumos (Guillermo)</th><th class="num">N° órdenes</th><th class="num">Tn Caliente</th><th class="num">Tn Frío</th></tr></thead>
-          <tbody id="tbody-planta-produccion">
-            <tr><td>Febrero 2026</td><td class="num neg-val">$18.600.000</td><td class="num">3 OC</td><td class="nd num" id="tn-feb-caliente">—</td><td class="nd num" id="tn-feb-frio">—</td></tr>
-            <tr><td>Marzo 2026</td><td class="num neg-val">$20.100.000</td><td class="num">4 OC</td><td class="nd num" id="tn-mar-caliente">—</td><td class="nd num" id="tn-mar-frio">—</td></tr>
-            <tr><td>Abril 2026 (parcial)</td><td class="num neg-val">$17.900.000</td><td class="num">2 OC</td><td class="nd num" id="tn-abr-caliente">—</td><td class="nd num" id="tn-abr-frio">—</td></tr>
-          </tbody>
+          <tbody id="tbody-planta-produccion"></tbody>
         </table>
       </div>
       <div class="nota-fuente"><strong>Insumos:</strong> <a href="https://docs.google.com/spreadsheets/d/1_lhq9c1MddkrK1Tf0kexRtgqw5aPhmZWiQkAIRjpfxs/edit?gid=42005977#gid=42005977" target="_blank">OC Insumos para Obras (Guillermo Konicek)</a> — Leído: 13/05/2026 — filtro OC con descripción "Planta Asfalto/Warnes" — <strong>Tn:</strong> REMITOS OFICIALES (Nico Dall'Agata) — columna PRECIO vacía, tn sin precio; solicitar a Nico que complete el Google Sheet para habilitar Costo/tn</div>
@@ -1134,7 +1128,26 @@
 // DATOS EMBEBIDOS
 // ================================================================
 
-const MES = { feb: 'Febrero 2026', mar: 'Marzo 2026', abr: 'Abril 2026' };
+const MES = { ene:'Enero 2026', feb:'Febrero 2026', mar:'Marzo 2026', abr:'Abril 2026',
+              may:'Mayo 2026', jun:'Junio 2026', jul:'Julio 2026', ago:'Agosto 2026',
+              sep:'Septiembre 2026', oct:'Octubre 2026', nov:'Noviembre 2026', dic:'Diciembre 2026' };
+const MES_ORDER = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+
+function _renderMonthButtons() {
+  const available = new Set();
+  MES_ORDER.forEach(m => {
+    if (MO_CTRO_COSTO[m] || OC_INSUMOS[m] || ALQUILER_EQUIPOS[m] || REMITOS_ASFALTO[m]) available.add(m);
+    if (GENERADO_POR_OBRA && GENERADO_POR_OBRA.obrasPorMes && GENERADO_POR_OBRA.obrasPorMes[m]) available.add(m);
+  });
+  const meses = MES_ORDER.filter(m => available.has(m));
+  if (meses.length === 0) return;
+  if (!available.has(mesActual)) mesActual = meses[meses.length - 1];
+  const container = document.getElementById('month-btns');
+  if (!container) return;
+  container.innerHTML = meses.map(m =>
+    `<button class="month-btn${m === mesActual ? ' active' : ''}" data-mes="${m}" onclick="setMes('${m}')">${MES[m]}</button>`
+  ).join('');
+}
 let mesActual = 'mar';
 
 // Canal 82008 — dato real del archivo Cobros
@@ -2978,13 +2991,28 @@ function renderPlanta() {
     }
   }
 
-  // Tabla histórica (feb/mar/abr)
-  for (const mes of ['feb', 'mar', 'abr']) {
-    const r = REMITOS_ASFALTO[mes];
-    const elC = document.getElementById('tn-' + mes + '-caliente');
-    const elF = document.getElementById('tn-' + mes + '-frio');
-    if (elC) { elC.textContent = r ? fmtTn(r.caliente) + ' tn' : '—'; elC.className = r ? 'num' : 'nd num'; }
-    if (elF) { elF.textContent = r ? fmtTn(r.frio)     + ' tn' : '—'; elF.className = r ? 'num' : 'nd num'; }
+  // Tabla histórica — generada dinámicamente para todos los meses con remitos
+  const tbodyPlanta = document.getElementById('tbody-planta-produccion');
+  if (tbodyPlanta) {
+    const mesesRemitos = MES_ORDER.filter(m => REMITOS_ASFALTO[m]);
+    if (mesesRemitos.length === 0) {
+      tbodyPlanta.innerHTML = '<tr><td colspan="5" class="nd" style="text-align:center;padding:12px;">Sin datos de remitos — actualizá datos</td></tr>';
+    } else {
+      const fmtOC = v => v ? '$' + fmt(v) : '—';
+      tbodyPlanta.innerHTML = mesesRemitos.map(mes => {
+        const r = REMITOS_ASFALTO[mes];
+        const ocMes = OC_INSUMOS[mes];
+        const ocPlanta = ocMes ? ocMes.items.find(it => it.obra && it.obra.toLowerCase().includes('planta')) : null;
+        const ocVal = ocPlanta ? ocPlanta.monto : (ocMes ? null : null);
+        return `<tr>
+          <td>${MES[mes]}</td>
+          <td class="num neg-val">${ocVal ? fmtOC(ocVal) : '—'}</td>
+          <td class="num">${ocMes ? ocMes.nOC + ' OC' : '—'}</td>
+          <td class="${r && r.caliente > 0 ? 'num' : 'nd num'}">${r && r.caliente > 0 ? fmtTn(r.caliente) + ' tn' : '—'}</td>
+          <td class="${r && r.frio > 0 ? 'num' : 'nd num'}">${r && r.frio > 0 ? fmtTn(r.frio) + ' tn' : '—'}</td>
+        </tr>`;
+      }).join('');
+    }
   }
 
   renderStockDisplay();
@@ -3251,6 +3279,7 @@ function renderMOClasif() {
 }
 
 function renderAll() {
+  _renderMonthButtons();
   renderMargen();
   renderEgresosChart();
   renderCobrosReal();
@@ -3335,7 +3364,7 @@ async function refreshData() {
         Object.assign(MO_CTRO_COSTO, data.moCtroCosto);
       }
       if (data.ocInsumos) {
-        Object.keys(data.ocInsumos).forEach(m => { if (OC_INSUMOS[m]) Object.assign(OC_INSUMOS[m], data.ocInsumos[m]); });
+        Object.keys(data.ocInsumos).forEach(m => { if (OC_INSUMOS[m]) Object.assign(OC_INSUMOS[m], data.ocInsumos[m]); else OC_INSUMOS[m] = data.ocInsumos[m]; });
       }
       if (data.generadoPorObra) {
         GENERADO_POR_OBRA = data.generadoPorObra;
@@ -3388,9 +3417,8 @@ function openTab(id) {
 
 function setMes(mes) {
   mesActual = mes;
-  document.querySelectorAll('.month-btn').forEach((b, i) => {
-    b.classList.toggle('active',
-      (i === 0 && mes === 'feb') || (i === 1 && mes === 'mar') || (i === 2 && mes === 'abr'));
+  document.querySelectorAll('.month-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.mes === mes);
   });
   renderMargen();
   renderEgresosChart();
@@ -3463,7 +3491,7 @@ if (APPS_SCRIPT_URL) {
           Object.assign(MO_CTRO_COSTO, data.moCtroCosto);
         }
         if (data.ocInsumos) {
-          Object.keys(data.ocInsumos).forEach(m => { if (OC_INSUMOS[m]) Object.assign(OC_INSUMOS[m], data.ocInsumos[m]); });
+          Object.keys(data.ocInsumos).forEach(m => { if (OC_INSUMOS[m]) Object.assign(OC_INSUMOS[m], data.ocInsumos[m]); else OC_INSUMOS[m] = data.ocInsumos[m]; });
         }
         if (data.generadoPorObra) {
           GENERADO_POR_OBRA = data.generadoPorObra;
