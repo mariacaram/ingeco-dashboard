@@ -644,6 +644,7 @@ function leerGeneradoFernando() {
     const aCobrarSinMes     = {}; // cod: monto — sin período válido en año actual
     const nombrePorCodigo   = {};
     const detallesPorCodigo = {};
+    const tabSrcPorCodigo   = {}; // cod → 'MUNICIPIO' | 'VIALIDAD1' | 'OTROS INGRESOS'
 
     for (const sheet of sheets) {
       const tabName = sheet.getName().trim().toUpperCase();
@@ -725,6 +726,10 @@ function leerGeneradoFernando() {
         aCobrarPorCodigo[cod] = (aCobrarPorCodigo[cod] || 0) + monto;
 
         if (!nombrePorCodigo[cod] && nombre) nombrePorCodigo[cod] = nombre;
+        if (!tabSrcPorCodigo[cod]) {
+          tabSrcPorCodigo[cod] = esMunicipio ? 'MUNICIPIO'
+            : tabName.includes('VIALIDAD') ? 'VIALIDAD1' : 'OTROS INGRESOS';
+        }
         if (!detallesPorCodigo[cod]) detallesPorCodigo[cod] = [];
         detallesPorCodigo[cod].push({ nombre: nombre || cod, codigo: cod, monto: Math.round(monto) });
       }
@@ -739,6 +744,7 @@ function leerGeneradoFernando() {
       aCobrarSinMes:  aCobrarSinMes,
       nombreFernando: nombrePorCodigo,
       detalles:       detallesPorCodigo,
+      tabSrc:         tabSrcPorCodigo,
       tabsSinPeriodo: [],
     };
 
@@ -754,7 +760,7 @@ function leerGeneradoFernando() {
 function leerGeneradoPorObra() {
   try {
     const maestro = leerMaestroObras();
-    const { aCobrar, aCobrarPorMes, aCobrarSinMes, nombreFernando, detalles, tabsSinPeriodo } = leerGeneradoFernando();
+    const { aCobrar, aCobrarPorMes, aCobrarSinMes, nombreFernando, detalles, tabSrc, tabsSinPeriodo } = leerGeneradoFernando();
 
     // Helper: construye lista de obras desde un mapa { cod: monto }
     function _buildObras(montoPorCod) {
@@ -772,6 +778,7 @@ function leerGeneradoPorObra() {
           tipo:     info ? info.tipo    : '—',
           aCobrar:  montoRed,
           items:    detalles[cod] || [],
+          tabSrc:   tabSrc ? (tabSrc[cod] || null) : null,
         });
       }
       list.sort(function(a, b) { return b.aCobrar - a.aCobrar; });

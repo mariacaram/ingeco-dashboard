@@ -388,6 +388,7 @@
       <div class="kpi-label">Total A Cobrar</div>
       <div class="kpi-value nd" id="kpi-generado">Actualizá datos</div>
       <div class="kpi-sub" id="kpi-generado-sub">Suma de montos "A Cobrar" por obra activa</div>
+      <div id="kpi-generado-breakdown" style="font-size:10px;color:var(--muted);margin-top:5px;line-height:1.7;display:flex;flex-wrap:wrap;gap:4px 10px;"></div>
       <div class="fuente" id="kpi-generado-fuente"><a href="https://docs.google.com/spreadsheets/d/1vGY8-saBKS4XAwd4RRqacNYRS7W0KV9brDBEo3_Jn0A/edit" target="_blank" onclick="event.stopPropagation()">Obras activas (Fernando Solís)</a></div>
     </div>
     <div class="kpi-card neg">
@@ -1558,6 +1559,26 @@ function renderMargen() {
     const descPeriodo = _sinP.length > 0 ? ` · ${_sinP.length} sin período` : '';
     if (kpiGenSub) kpiGenSub.textContent = _obrasMes.length + ' obras en ' + (MES[mesActual] || mesActual) + descPeriodo;
     if (badge)     badge.textContent = (_obrasMes.length + _sinP.length) + ' obras · Fernando Solís';
+
+    // Desglose por pestaña de origen
+    const kpiBreak = document.getElementById('kpi-generado-breakdown');
+    if (kpiBreak) {
+      if (_obrasMes.length > 0) {
+        const TAB_LABELS = { 'MUNICIPIO': 'Municipio', 'VIALIDAD1': 'Vialidad', 'OTROS INGRESOS': 'Otros' };
+        const byTab = {};
+        _obrasMes.forEach(o => {
+          const t = o.tabSrc || 'Otros';
+          byTab[t] = (byTab[t] || 0) + (o.aCobrar ?? o.generado ?? 0);
+        });
+        const ORDER = ['MUNICIPIO', 'VIALIDAD1', 'OTROS INGRESOS'];
+        kpiBreak.innerHTML = ORDER
+          .filter(k => byTab[k] > 0)
+          .map(k => `<span style="white-space:nowrap;">${TAB_LABELS[k]}: <strong>${fmt(byTab[k])}</strong></span>`)
+          .join('<span style="color:var(--border);">·</span>');
+      } else {
+        kpiBreak.innerHTML = '';
+      }
+    }
 
     const buildRow = o => {
       const monto = o.aCobrar ?? o.generado ?? 0;
