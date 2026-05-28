@@ -385,9 +385,9 @@
 <div class="tab-panel active" id="tab-margen">
   <div class="kpi-grid">
     <div class="kpi-card pos" style="cursor:pointer;" onclick="openTotalACobrarPanel()" title="Ver detalle de certificados">
-      <div class="kpi-label">Total A Cobrar</div>
+      <div class="kpi-label">Total Certificado</div>
       <div class="kpi-value nd" id="kpi-generado">Actualizá datos</div>
-      <div class="kpi-sub" id="kpi-generado-sub">Suma de montos "A Cobrar" por obra activa</div>
+      <div class="kpi-sub" id="kpi-generado-sub">Certificados por período (A Cobrar + Cobradas)</div>
       <div id="kpi-generado-breakdown" style="font-size:10px;color:var(--muted);margin-top:5px;line-height:1.7;display:flex;flex-wrap:wrap;gap:4px 10px;"></div>
       <div class="fuente" id="kpi-generado-fuente"><a href="https://docs.google.com/spreadsheets/d/1vGY8-saBKS4XAwd4RRqacNYRS7W0KV9brDBEo3_Jn0A/edit" target="_blank" onclick="event.stopPropagation()">Obras activas (Fernando Solís)</a></div>
     </div>
@@ -2478,7 +2478,7 @@ function openTotalACobrarPanel() {
   }
 
   content.innerHTML = `
-    <div class="panel-title">Total A Cobrar</div>
+    <div class="panel-title">Total Certificado</div>
     <div class="panel-sub">${mesLabel} · Planilla Fernando Solís</div>
     <div class="panel-kpi">
       <div class="panel-kpi-item">
@@ -2538,7 +2538,7 @@ function openGeneradoPanel(codObra) {
     <div class="panel-sub"><code style="font-size:11px;">${obra.cod_obra}</code> · ${obra.cliente} · ${obra.tipo || '—'}</div>
     <div class="panel-kpi">
       <div class="panel-kpi-item">
-        <div class="panel-kpi-label">Total A Cobrar</div>
+        <div class="panel-kpi-label">Total Certificado</div>
         <div class="panel-kpi-val pos-val">${fmt(obra.aCobrar ?? obra.generado ?? 0)}</div>
       </div>
       <div class="panel-kpi-item">

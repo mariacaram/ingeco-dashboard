@@ -634,7 +634,7 @@ function leerGeneradoFernando() {
     // OTROS INGRESOS:     Monto=F(5), Fecha ejecución=P(15), sin filtro de estado
     // iMontoFallback: si Monto=0, usar esta columna (Monto Total = valor del contrato)
     const TAB_CONFIG = {
-      'OBRAS DE MUNICIPIO': { iMonto: 6,  iMontoFallback: 5,    iPeriodo: 17, iEstado: 4,    estadoFiltro: 'a cobrar', iCod: null, iNom: null },
+      'OBRAS DE MUNICIPIO': { iMonto: 6,  iMontoFallback: 5,    iPeriodo: 17, iEstado: 4,    estadoFiltro: ['a cobrar', 'cobrada'], iCod: null, iNom: null },
       'VIALIDAD1':          { iMonto: 8,  iMontoFallback: 7,    iPeriodo: 20, iEstado: null,  estadoFiltro: null,       iCod: 19,   iNom: 0 },
       'OTROS INGRESOS':     { iMonto: 5,  iMontoFallback: null, iPeriodo: 15, iEstado: null,  estadoFiltro: null,       iCod: 16,   iNom: 0 },
     };
@@ -691,9 +691,10 @@ function leerGeneradoFernando() {
         const row = rows[i];
 
         // Filtro de estado (solo OBRAS DE MUNICIPIO)
-        if (cfg.iEstado !== null) {
+        if (cfg.iEstado !== null && cfg.estadoFiltro !== null) {
           const estado = String(row[cfg.iEstado] || '').trim().toLowerCase();
-          if (estado !== cfg.estadoFiltro) continue;
+          const allowed = Array.isArray(cfg.estadoFiltro) ? cfg.estadoFiltro : [cfg.estadoFiltro];
+          if (!allowed.includes(estado)) continue;
         }
 
         // Monto fijo por columna; si es 0, usa Monto Total como estimado del contrato
