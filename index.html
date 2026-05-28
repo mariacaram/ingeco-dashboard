@@ -2401,7 +2401,7 @@ function openTotalACobrarPanel() {
   const buildFila = o => {
     const monto = o.aCobrar ?? o.generado ?? 0;
     const items = o.items && o.items.length > 0
-      ? o.items.map(it => `<div style="font-size:11px;color:var(--muted);padding:2px 0 2px 12px;border-left:2px solid var(--border);">${it.nombre} — <strong>${fmt(it.monto)}</strong></div>`).join('')
+      ? o.items.map(it => `<div style="font-size:11px;color:var(--muted);padding:2px 0 2px 12px;border-left:2px solid var(--border);">${it.nombre}${it.codigo ? ` <code style="font-size:10px;background:#f1f5f9;padding:1px 4px;border-radius:2px;">${it.codigo}</code>` : ''} — <strong>${fmt(it.monto)}</strong></div>`).join('')
       : '';
     return `<tr style="border-bottom:1px solid var(--border);vertical-align:top;">
       <td style="padding:8px 10px;">

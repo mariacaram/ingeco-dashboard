@@ -634,9 +634,9 @@ function leerGeneradoFernando() {
     // OTROS INGRESOS:     Monto=F(5), Fecha ejecución=P(15), sin filtro de estado
     // iMontoFallback: si Monto=0, usar esta columna (Monto Total = valor del contrato)
     const TAB_CONFIG = {
-      'OBRAS DE MUNICIPIO': { iMonto: 6,  iMontoFallback: 5,  iPeriodo: 17, iEstado: 4,    estadoFiltro: 'a cobrar' },
-      'VIALIDAD1':          { iMonto: 8,  iMontoFallback: 7,  iPeriodo: 20, iEstado: null,  estadoFiltro: null },
-      'OTROS INGRESOS':     { iMonto: 5,  iMontoFallback: null, iPeriodo: 15, iEstado: null, estadoFiltro: null },
+      'OBRAS DE MUNICIPIO': { iMonto: 6,  iMontoFallback: 5,    iPeriodo: 17, iEstado: 4,    estadoFiltro: 'a cobrar', iCod: null, iNom: null },
+      'VIALIDAD1':          { iMonto: 8,  iMontoFallback: 7,    iPeriodo: 20, iEstado: null,  estadoFiltro: null,       iCod: 19,   iNom: 0 },
+      'OTROS INGRESOS':     { iMonto: 5,  iMontoFallback: null, iPeriodo: 15, iEstado: null,  estadoFiltro: null,       iCod: 16,   iNom: 0 },
     };
 
     const aCobrarPorCodigo  = {};
@@ -700,13 +700,18 @@ function leerGeneradoFernando() {
         if (monto === 0 && cfg.iMontoFallback !== null) monto = parsearMonto(row[cfg.iMontoFallback]);
         if (monto < 0) continue;
 
-        // Código/nombre
-        const cod    = esMunicipio
-          ? (String(row[iCodigo] || '').trim() || 'SIN-CODIGO')
-          : tabKey;
-        const nombre = esMunicipio
-          ? (String(row[iNombre] || '').trim() || cod)
-          : tabNombre;
+        // Código/nombre — MUNICIPIO usa detección dinámica; VIALIDAD1/OTROS usan iCod/iNom fijos
+        let cod, nombre;
+        if (esMunicipio) {
+          cod    = String(row[iCodigo] || '').trim() || 'SIN-CODIGO';
+          nombre = String(row[iNombre] || '').trim() || cod;
+        } else if (cfg.iCod !== null) {
+          cod    = String(row[cfg.iCod] || '').trim() || tabKey;
+          nombre = String(row[cfg.iNom] || '').trim() || cod;
+        } else {
+          cod    = tabKey;
+          nombre = tabNombre;
+        }
 
         // Período → clave de mes
         const mesKey = _parseMesKey(row[cfg.iPeriodo], curYear);
@@ -721,7 +726,7 @@ function leerGeneradoFernando() {
 
         if (!nombrePorCodigo[cod] && nombre) nombrePorCodigo[cod] = nombre;
         if (!detallesPorCodigo[cod]) detallesPorCodigo[cod] = [];
-        detallesPorCodigo[cod].push({ nombre: nombre || cod, monto: Math.round(monto) });
+        detallesPorCodigo[cod].push({ nombre: nombre || cod, codigo: cod, monto: Math.round(monto) });
       }
     }
 
