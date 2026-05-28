@@ -27,14 +27,14 @@ const FILE_IDS = {
   fernandoObras:'1vGY8-saBKS4XAwd4RRqacNYRS7W0KV9brDBEo3_Jn0A',  // Obras activas (Fernando Solís)
   equiposFlota: '1PEcPzwrQ8kE2evmUlrFq9wPbgWOR92MPl3LEqcSYbIk',  // Equipos + PF mensual (Adrián)
   usageEquipos:   '1CPnhO1M78vwARe21ye_Xcr0hiLIrKtR3zzANsJgc5d4',  // Partes diarios por equipo (una pestaña por COD)
-  remitosAsfalto: '13z7EEuVIedOwl85d_f8MEoJGCEioZO7m9Cbn8MWxihI',  // REMITOS OFICIALES (Nico Dall'Agata)
+  remitosAsfalto: '1mzN0yygmB3tqRDQdlbdJg3o3m_D1euKx955Zk7I5YyY',  // REMITOS OFICIALES (Nico Dall'Agata)
   ajusteStock:    '1yZArsIKYMfq9UPUXyiASXtDNXyubTjFx3PPW2VjG-uA',  // Formulario Ingreso Asfalto Agustín
   precioAsfalto:  '1lqKTXtDLT2FxyXurxjU1uE4epDOKs5SP8AXu5wAUsJ4',  // Precio de mercado asfalto $/tn por mes
 };
 
 // Tipo de cambio USD → ARS oficial promedio mensual (Banco Nación Argentina)
 // Actualizar cada mes con el promedio del período
-const TC_USD_MENSUAL = { feb: 1430, mar: 1413, abr: 1397 };
+const TC_USD_MENSUAL = { feb: 1430, mar: 1413, abr: 1397, may: 1381 };
 
 // Cache en PropertiesService — evita leer Drive en cada request
 const PROPS = PropertiesService.getScriptProperties();
@@ -405,11 +405,7 @@ function leerOCInsumos() {
 
     Logger.log('OC Insumos — cols: fecha=' + COL_FECHA + ' monto=' + COL_MONTO + ' obra=' + COL_OBRA + ' prov=' + COL_PROV);
 
-    const acum = {
-      feb: { items: {}, total: 0, nOC: 0 },
-      mar: { items: {}, total: 0, nOC: 0 },
-      abr: { items: {}, total: 0, nOC: 0 }
-    };
+    const acum = {};
 
     for (let i = hdrIdx + 1; i < rows.length; i++) {
       const row = rows[i];
@@ -426,6 +422,7 @@ function leerOCInsumos() {
       const proveedorRaw = String(row[COL_PROV] || '').trim();
       const proveedor = proveedorRaw || 'Sin especificar';
 
+      if (!acum[mes]) acum[mes] = { items: {}, total: 0, nOC: 0 };
       if (!acum[mes].items[obra]) acum[mes].items[obra] = { monto: 0, nOC: 0, proveedores: {} };
       if (!acum[mes].items[obra].proveedores[proveedor]) acum[mes].items[obra].proveedores[proveedor] = { monto: 0, nOC: 0 };
       acum[mes].items[obra].proveedores[proveedor].monto += monto;
@@ -491,10 +488,8 @@ function parsearMes(fechaRaw) {
     if (m) mes = parseInt(m[2]);
   }
 
-  if (mes === 2) return 'feb';
-  if (mes === 3) return 'mar';
-  if (mes === 4) return 'abr';
-  return null;
+  const MAP = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  return (mes >= 1 && mes <= 12) ? MAP[mes - 1] : null;
 }
 
 // Parsea el contenido de "Período de realización" y devuelve un mesKey ('ene'..'dic')
@@ -909,10 +904,8 @@ function leerAlquilerEquipos() {
 
     // 2. Leer uso — una pestaña por equipo (nombre pestaña = COD_EQUIPO)
     const ssUso  = SpreadsheetApp.openById(FILE_IDS.usageEquipos);
-    const meses  = ['feb', 'mar', 'abr'];
     // acum[mes][cod] = { _total: horas, [obra]: horas }
     const acum = {};
-    meses.forEach(m => { acum[m] = {}; });
 
     for (const sheet of ssUso.getSheets()) {
       const cod = sheet.getName().trim();
@@ -933,8 +926,6 @@ function leerAlquilerEquipos() {
       const COL_HORAS_EQ  = 12; // HORARIOS EQUIPO / TOTAL
       const COL_HOROMETRO = 17; // HORÓMETRO / TOTAL
 
-      meses.forEach(m => { if (!acum[m][cod]) acum[m][cod] = { _total: 0 }; });
-
       for (let i = hdrIdx + 1; i < rows.length; i++) {
         const row = rows[i];
         const mes = parsearMes(row[COL_FECHA]);
@@ -942,6 +933,9 @@ function leerAlquilerEquipos() {
 
         const obraRaw = String(row[COL_OBRA] || '').trim();
         const obra    = (obraRaw && obraRaw !== '-') ? obraRaw : 'Sin asignar';
+
+        if (!acum[mes]) acum[mes] = {};
+        if (!acum[mes][cod]) acum[mes][cod] = { _total: 0 };
 
         let horas = parsearHoras(row[COL_HORAS_OP]);   // Horarios Operario: dato principal
         if (horas <= 0) horas = parsearHoras(row[COL_HOROMETRO]);  // Horómetro: fallback si olvidaron cargar
@@ -956,7 +950,7 @@ function leerAlquilerEquipos() {
 
     // 3. Calcular costos prorrateados por horas
     const resultado = {};
-    for (const mes of meses) {
+    for (const mes of Object.keys(acum)) {
       const tc = fetchTCMensual(mes);
       const porObra = {};
       let totalMes  = 0;
