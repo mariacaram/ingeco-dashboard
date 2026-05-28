@@ -497,6 +497,50 @@ function parsearMes(fechaRaw) {
   return null;
 }
 
+// Parsea el contenido de "Período de realización" y devuelve un mesKey ('ene'..'dic')
+// para el año curYear, o null si no es parseable / pertenece a otro año.
+function _parseMesKey(raw, curYear) {
+  const MAP = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  const NOMBRE = { enero:1, febrero:2, marzo:3, abril:4, mayo:5, junio:6,
+                   julio:7, agosto:8, septiembre:9, octubre:10, noviembre:11, diciembre:12 };
+  if (!raw && raw !== 0) return null;
+  if (raw instanceof Date) {
+    if (isNaN(raw.getTime())) return null;
+    if (raw.getFullYear() !== curYear) return null;
+    return MAP[raw.getMonth()];
+  }
+  const s = String(raw).trim().toLowerCase();
+  if (!s || s === '-') return null;
+
+  // DD/MM/YYYY o D/M/YY (formato argentino)
+  const mDate = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (mDate) {
+    var y = parseInt(mDate[3]); if (y < 100) y += 2000;
+    if (y !== curYear) return null;
+    var m = parseInt(mDate[2]);
+    return (m >= 1 && m <= 12) ? MAP[m - 1] : null;
+  }
+
+  // Extraer año si está presente; si no coincide con curYear, descartar
+  var year = curYear;
+  var yMatch = s.match(/\b(\d{4})\b/);
+  if (yMatch) { year = parseInt(yMatch[1]); }
+  if (year !== curYear) return null;
+
+  // Nombre completo: "enero 2026", "marzo"
+  for (var nombre in NOMBRE) {
+    if (s.indexOf(nombre) >= 0) return MAP[NOMBRE[nombre] - 1];
+  }
+  // Clave corta: "ene", "feb"...
+  for (var i = 0; i < MAP.length; i++) {
+    if (s.indexOf(MAP[i]) >= 0) return MAP[i];
+  }
+  // Número puro 1-12
+  var n = parseInt(s);
+  if (!isNaN(n) && n >= 1 && n <= 12) return MAP[n - 1];
+  return null;
+}
+
 function parsearMonto(raw) {
   if (raw === null || raw === undefined || raw === '') return 0;
   if (typeof raw === 'number') return raw;
@@ -580,26 +624,41 @@ function leerMaestroObras() {
 // ============================================================
 function leerGeneradoFernando() {
   try {
-    const ss     = SpreadsheetApp.openById(FILE_IDS.fernandoObras);
-    const sheets = ss.getSheets();
+    const ss      = SpreadsheetApp.openById(FILE_IDS.fernandoObras);
+    const sheets  = ss.getSheets();
+    const curYear = new Date().getFullYear();
 
-    // Pestañas a leer (el usuario confirmó que aún no tienen Período cargado)
-    const TABS_OBJETIVO   = ['OBRAS DE MUNICIPIO', 'VIALIDAD1', 'OTROS INGRESOS'];
-    const tabsSinPeriodo  = [...TABS_OBJETIVO]; // se notifica en el dashboard
+    // Columnas fijas por pestaña (índice 0 = col A).
+    // OBRAS DE MUNICIPIO: MontoTotal=F(5), Monto=G(6), Período=R(17), Estado$=E(4), filtrar "A Cobrar"
+    // VIALIDAD1:          MontoTotal=H(7), Monto=I(8), Período=U(20), sin filtro de estado
+    // OTROS INGRESOS:     Monto=F(5), Fecha ejecución=P(15), sin filtro de estado
+    // iMontoFallback: si Monto=0, usar esta columna (Monto Total = valor del contrato)
+    const TAB_CONFIG = {
+      'OBRAS DE MUNICIPIO': { iMonto: 6,  iMontoFallback: 5,  iPeriodo: 17, iEstado: 4,    estadoFiltro: 'a cobrar' },
+      'VIALIDAD1':          { iMonto: 8,  iMontoFallback: 7,  iPeriodo: 20, iEstado: null,  estadoFiltro: null },
+      'OTROS INGRESOS':     { iMonto: 5,  iMontoFallback: null, iPeriodo: 15, iEstado: null, estadoFiltro: null },
+    };
 
     const aCobrarPorCodigo  = {};
+    const aCobrarPorMes     = {}; // { mesKey: { cod: monto } }
+    const aCobrarSinMes     = {}; // cod: monto — sin período válido en año actual
     const nombrePorCodigo   = {};
     const detallesPorCodigo = {};
 
     for (const sheet of sheets) {
-      const tabName = sheet.getName().toUpperCase().trim();
-      const esObjetivo = TABS_OBJETIVO.some(t => tabName.includes(t));
-      if (!esObjetivo) continue;
+      const tabName = sheet.getName().trim().toUpperCase();
+
+      // Buscar la configuración que corresponde a esta pestaña
+      let cfg = null;
+      for (const key of Object.keys(TAB_CONFIG)) {
+        if (tabName.includes(key)) { cfg = TAB_CONFIG[key]; break; }
+      }
+      if (!cfg) continue;
 
       const rows = sheet.getDataRange().getValues();
       if (rows.length < 2) continue;
 
-      // Encontrar fila de encabezados (busca "código" o "monto")
+      // Detectar la fila de encabezados para saber dónde empieza la data
       let hdrIdx = 0;
       for (let i = 0; i < Math.min(6, rows.length); i++) {
         const rowStr = rows[i].map(c => String(c).toLowerCase()).join('|');
@@ -608,54 +667,75 @@ function leerGeneradoFernando() {
         }
       }
 
-      // Buscar columnas — búsqueda directa en lowercase, sin normalize
-      const headers = rows[hdrIdx].map(h => String(h).toLowerCase().trim());
-
-      const iCodigo = _findCol(headers, ['código', 'codigo', 'cod_obra', 'cod']);
-      const iEstado = _findCol(headers, ['estado $', 'estado$', 'estado']);
-      const iNombre = _findCol(headers, ['nombre obra', 'nombre']) ?? 0;
-      // Separar "Monto Total" (valor contrato) de "Monto" (certificado específico)
-      const iMontoTotal = headers.findIndex(h => h.includes('monto') && h.includes('total'));
-      const iMonto      = headers.findIndex(h => h === 'monto' || (h.includes('monto') && !h.includes('total')));
-
-      if (iCodigo === null || (iMonto < 0 && iMontoTotal < 0)) {
-        Logger.log('Fernando [' + sheet.getName() + ']: columnas no encontradas. Headers: ' + headers.join('|'));
-        continue;
+      // Para OBRAS DE MUNICIPIO buscamos código y nombre dinámicamente
+      let iCodigo = 0;
+      let iNombre = 1;
+      const esMunicipio = tabName.includes('OBRAS DE MUNICIPIO');
+      if (esMunicipio) {
+        const headers = rows[hdrIdx].map(h => String(h).toLowerCase().trim());
+        const ci = _findCol(headers, ['código', 'codigo', 'cod_obra', 'cod']);
+        if (ci !== null) iCodigo = ci;
+        const ni = _findCol(headers, ['nombre obra', 'nombre']);
+        if (ni !== null) iNombre = ni;
       }
 
-      Logger.log('Fernando [' + sheet.getName() + ']: iCodigo=' + iCodigo + ' iEstado=' + iEstado + ' iMonto=' + iMonto + ' iMontoTotal=' + iMontoTotal);
+      // Para VIALIDAD1 y Otros Ingresos usamos la pestaña como clave única
+      const tabKey    = sheet.getName().trim().toUpperCase().replace(/\s+/g, '-');
+      const tabNombre = sheet.getName().trim();
+
+      Logger.log('Fernando [' + sheet.getName() + ']: iMonto=' + cfg.iMonto +
+                 ' iPeriodo=' + cfg.iPeriodo + ' iEstado=' + cfg.iEstado);
 
       for (let i = hdrIdx + 1; i < rows.length; i++) {
         const row = rows[i];
-        let cod   = String(row[iCodigo] || '').trim();
-        if (!cod) cod = 'SIN-CODIGO';
 
-        // Solo incluir filas con Estado $ = "A Cobrar"
-        if (iEstado !== null) {
-          const estado = String(row[iEstado] || '').trim().toLowerCase();
-          if (estado !== 'a cobrar') continue;
+        // Filtro de estado (solo OBRAS DE MUNICIPIO)
+        if (cfg.iEstado !== null) {
+          const estado = String(row[cfg.iEstado] || '').trim().toLowerCase();
+          if (estado !== cfg.estadoFiltro) continue;
         }
 
-        // Usar "Monto" si tiene valor, sino "Monto Total"
-        let monto = iMonto >= 0 ? parsearMonto(row[iMonto]) : 0;
-        if (monto <= 0 && iMontoTotal >= 0) monto = parsearMonto(row[iMontoTotal]);
-        if (!monto || monto <= 0) continue;
+        // Monto fijo por columna; si es 0, usa Monto Total como estimado del contrato
+        let monto = parsearMonto(row[cfg.iMonto]);
+        if (monto === 0 && cfg.iMontoFallback !== null) monto = parsearMonto(row[cfg.iMontoFallback]);
+        if (monto < 0) continue;
 
+        // Código/nombre
+        const cod    = esMunicipio
+          ? (String(row[iCodigo] || '').trim() || 'SIN-CODIGO')
+          : tabKey;
+        const nombre = esMunicipio
+          ? (String(row[iNombre] || '').trim() || cod)
+          : tabNombre;
+
+        // Período → clave de mes
+        const mesKey = _parseMesKey(row[cfg.iPeriodo], curYear);
+
+        if (mesKey) {
+          if (!aCobrarPorMes[mesKey]) aCobrarPorMes[mesKey] = {};
+          aCobrarPorMes[mesKey][cod] = (aCobrarPorMes[mesKey][cod] || 0) + monto;
+        } else {
+          aCobrarSinMes[cod] = (aCobrarSinMes[cod] || 0) + monto;
+        }
         aCobrarPorCodigo[cod] = (aCobrarPorCodigo[cod] || 0) + monto;
 
-        // Guardar nombre de la primera fila vista para este código
-        const n = String(row[iNombre] || '').trim();
-        if (!nombrePorCodigo[cod] && n) nombrePorCodigo[cod] = n;
-
-        // Guardar ítem individual para el panel de detalle
+        if (!nombrePorCodigo[cod] && nombre) nombrePorCodigo[cod] = nombre;
         if (!detallesPorCodigo[cod]) detallesPorCodigo[cod] = [];
-        detallesPorCodigo[cod].push({ nombre: n || cod, monto: Math.round(monto) });
+        detallesPorCodigo[cod].push({ nombre: nombre || cod, monto: Math.round(monto) });
       }
     }
 
-    Logger.log('Fernando Solís — CODs con A Cobrar: ' + Object.keys(aCobrarPorCodigo).length);
-    return { aCobrar: aCobrarPorCodigo, nombreFernando: nombrePorCodigo,
-             detalles: detallesPorCodigo, tabsSinPeriodo: tabsSinPeriodo };
+    Logger.log('Fernando Solís — CODs: ' + Object.keys(aCobrarPorCodigo).length +
+               ' | por mes: ' + Object.keys(aCobrarPorMes).join(',') +
+               ' | sin mes: ' + Object.keys(aCobrarSinMes).length);
+    return {
+      aCobrar:        aCobrarPorCodigo,
+      aCobrarPorMes:  aCobrarPorMes,
+      aCobrarSinMes:  aCobrarSinMes,
+      nombreFernando: nombrePorCodigo,
+      detalles:       detallesPorCodigo,
+      tabsSinPeriodo: [],
+    };
 
   } catch (err) {
     Logger.log('leerGeneradoFernando error: ' + err.toString());
@@ -669,43 +749,68 @@ function leerGeneradoFernando() {
 function leerGeneradoPorObra() {
   try {
     const maestro = leerMaestroObras();
-    const { aCobrar, nombreFernando, detalles, tabsSinPeriodo } = leerGeneradoFernando();
+    const { aCobrar, aCobrarPorMes, aCobrarSinMes, nombreFernando, detalles, tabsSinPeriodo } = leerGeneradoFernando();
 
-    const obras = [];
-    // Iterar sobre TODOS los códigos de Fernando (no solo los del Maestro)
-    for (const [cod, monto] of Object.entries(aCobrar)) {
-      if (cod === 'SIN-CODIGO') continue;
-      const montoRed = Math.round(monto);
-      if (montoRed <= 0) continue;
-
-      const info = maestro[cod];
-      if (info && info.fuente === 'INTERNO') continue;
-
-      obras.push({
-        cod_obra: cod,
-        nombre:   info ? info.nombre : (nombreFernando[cod] || cod),
-        cliente:  info ? info.cliente : '—',
-        tipo:     info ? info.tipo    : '—',
-        aCobrar:  montoRed,
-        items:    detalles[cod] || [],
-      });
+    // Helper: construye lista de obras desde un mapa { cod: monto }
+    function _buildObras(montoPorCod) {
+      var list = [];
+      for (var cod in montoPorCod) {
+        if (cod === 'SIN-CODIGO') continue;
+        var montoRed = Math.round(montoPorCod[cod]);
+        if (montoRed < 0) continue;
+        var info = maestro[cod];
+        if (info && info.fuente === 'INTERNO') continue;
+        list.push({
+          cod_obra: cod,
+          nombre:   info ? info.nombre : (nombreFernando[cod] || cod),
+          cliente:  info ? info.cliente : '—',
+          tipo:     info ? info.tipo    : '—',
+          aCobrar:  montoRed,
+          items:    detalles[cod] || [],
+        });
+      }
+      list.sort(function(a, b) { return b.aCobrar - a.aCobrar; });
+      return list;
     }
 
-    obras.sort((a, b) => b.aCobrar - a.aCobrar);
+    // Lista plana (sin filtro de mes) — compatibilidad con caché viejo
+    const obras = _buildObras(aCobrar);
 
     // Filas sin código al final
     const montoSinCod = Math.round(aCobrar['SIN-CODIGO'] || 0);
     if (montoSinCod > 0) {
-      obras.push({
-        cod_obra: '—',
-        nombre:   'Obra sin asignación de código',
-        cliente:  '—',
-        tipo:     '—',
-        aCobrar:  montoSinCod,
-      });
+      obras.push({ cod_obra: '—', nombre: 'Obra sin asignación de código',
+                   cliente: '—', tipo: '—', aCobrar: montoSinCod });
     }
 
-    return { obras: obras, tabsSinPeriodo: tabsSinPeriodo };
+    // Obras sin período de realización — van a una categoría separada en el dashboard
+    const obrasSinPeriodo = _buildObras(aCobrarSinMes);
+    const sinCodSinPeriodo = Math.round(aCobrarSinMes['SIN-CODIGO'] || 0);
+    if (sinCodSinPeriodo > 0) {
+      obrasSinPeriodo.push({ cod_obra: '—', nombre: 'Obra sin asignación de código',
+                             cliente: '—', tipo: '—', aCobrar: sinCodSinPeriodo });
+    }
+
+    // Mapa por mes: solo obras con período explícito
+    const obrasPorMes = {};
+    const MESES_KEYS  = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+    for (var mi = 0; mi < MESES_KEYS.length; mi++) {
+      var mes = MESES_KEYS[mi];
+      var mesPeriodo = aCobrarPorMes[mes];
+      if (!mesPeriodo) continue;
+      var list = _buildObras(mesPeriodo);
+      // SIN-CODIGO del mes
+      var sinCodMes = Math.round(mesPeriodo['SIN-CODIGO'] || 0);
+      if (sinCodMes > 0) {
+        list.push({ cod_obra: '—', nombre: 'Obra sin asignación de código',
+                    cliente: '—', tipo: '—', aCobrar: sinCodMes });
+      }
+      if (list.length > 0) obrasPorMes[mes] = list;
+    }
+
+    Logger.log('obrasPorMes — meses: ' + Object.keys(obrasPorMes).join(',') +
+               ' | sinPeriodo: ' + obrasSinPeriodo.length);
+    return { obras: obras, obrasPorMes: obrasPorMes, obrasSinPeriodo: obrasSinPeriodo, tabsSinPeriodo: tabsSinPeriodo };
 
   } catch (err) {
     Logger.log('leerGeneradoPorObra error: ' + err.toString());
@@ -926,7 +1031,7 @@ function leerPrecioAsfalto() {
 
     const MES_NOMBRE = {
       enero:1, febrero:2, marzo:3, abril:4, mayo:5, junio:6,
-      julio:7, agosto:8, septiembre:8, octubre:10, noviembre:11, diciembre:12,
+      julio:7, agosto:8, septiembre:9, octubre:10, noviembre:11, diciembre:12,
       january:1, february:2, march:3, april:4, may:5, june:6,
       july:7, august:8, september:9, october:10, november:11, december:12,
     };
