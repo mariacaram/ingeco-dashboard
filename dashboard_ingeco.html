@@ -211,6 +211,37 @@
   .persona-item .pi-val.nd { color: var(--nd-text); font-style: italic; }
   .persona-avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; float: right; margin-left: 8px; }
 
+  /* ORGANIGRAMA */
+  .org-wrap { padding: 10px 0 30px; overflow-x: auto; }
+  .org-tree { display: flex; flex-direction: column; align-items: center; gap: 0; }
+  .org-level { display: flex; justify-content: center; gap: 12px; position: relative; }
+  .org-node {
+    background: var(--card); border: 1.5px solid var(--border); border-radius: 10px;
+    padding: 10px 14px; text-align: center; min-width: 130px; max-width: 165px;
+    position: relative; font-size: 12px;
+  }
+  .org-node.top    { border-color: var(--primary); border-width: 2.5px; background: #eef3fa; }
+  .org-node.coord  { border-color: var(--accent); border-width: 2px; }
+  .org-node.oper   { border-color: #94a3b8; }
+  .org-node.sub    { border-color: #cbd5e1; background: #f8fafc; font-size: 11px; min-width: 115px; }
+  .org-av { width:32px;height:32px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;margin:0 auto 6px; }
+  .org-node.coord .org-av { background: var(--accent); }
+  .org-node.sub   .org-av { background: #94a3b8; width:26px;height:26px;font-size:10px; }
+  .org-name { font-weight: 700; color: var(--primary); margin-bottom: 2px; line-height: 1.2; }
+  .org-role { color: var(--muted); font-size: 10px; margin-bottom: 6px; }
+  .org-tasks { text-align: left; border-top: 1px solid var(--border); margin-top: 6px; padding-top: 6px; }
+  .org-task { font-size: 10px; color: var(--text); padding: 1px 0; display: flex; gap: 4px; align-items: baseline; }
+  .org-task::before { content: '·'; color: var(--accent); font-weight: 700; }
+  .org-task a { color: var(--primary); text-decoration: underline dotted; font-size: 10px; }
+  /* Conectores verticales */
+  .org-vline { width: 2px; background: var(--border); height: 20px; margin: 0 auto; }
+  .org-hline { display: flex; justify-content: center; }
+  .org-hline-inner { border-top: 2px solid var(--border); }
+  /* Grupo con sub-nodos */
+  .org-group { display: flex; flex-direction: column; align-items: center; }
+  .org-children { display: flex; gap: 10px; align-items: flex-start; }
+  .org-child-wrap { display: flex; flex-direction: column; align-items: center; }
+
   /* PANEL LATERAL */
   .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 200; }
   .overlay.open { display: block; }
@@ -963,7 +994,131 @@
 <!-- TAB 6: ESTRUCTURA -->
 <!-- ================================================================ -->
 <div class="tab-panel" id="tab-estructura">
-  <div class="persona-grid" id="persona-grid"></div>
+  <div class="org-wrap">
+    <div class="org-tree">
+
+      <!-- NIVEL 0: Adrián -->
+      <div class="org-level">
+        <div class="org-node top">
+          <div class="org-av">AC</div>
+          <div class="org-name">Adrián Caram</div>
+          <div class="org-role">Socio Director · Usuario principal</div>
+        </div>
+      </div>
+      <div class="org-vline"></div>
+
+      <!-- NIVEL 1: Coordinadores -->
+      <div class="org-level">
+        <div class="org-node coord">
+          <div class="org-av">MC</div>
+          <div class="org-name">María</div>
+          <div class="org-role">Coordinadora</div>
+        </div>
+        <div class="org-node coord">
+          <div class="org-av">GO</div>
+          <div class="org-name">Gonzalo</div>
+          <div class="org-role">Coordinador</div>
+        </div>
+      </div>
+      <div class="org-vline"></div>
+
+      <!-- NIVEL 2: Operativos -->
+      <div class="org-level" style="align-items:flex-start;">
+
+        <!-- Fernando -->
+        <div class="org-node oper">
+          <div class="org-av">FS</div>
+          <div class="org-name">Fernando Solís</div>
+          <div class="org-role">Obras activas</div>
+          <div class="org-tasks">
+            <div class="org-task"><a href="https://docs.google.com/spreadsheets/d/1vGY8-saBKS4XAwd4RRqacNYRS7W0KV9brDBEo3_Jn0A/edit" target="_blank">Planilla Obras</a></div>
+            <div class="org-task">Actualiza períodos y montos</div>
+          </div>
+        </div>
+
+        <!-- Agustín -->
+        <div class="org-node oper">
+          <div class="org-av">AG</div>
+          <div class="org-name">Agustín</div>
+          <div class="org-role">Planta / Operaciones</div>
+          <div class="org-tasks">
+            <div class="org-task"><a href="https://docs.google.com/spreadsheets/d/1yZArsIKYMfq9UPUXyiASXtDNXyubTjFx3PPW2VjG-uA/edit" target="_blank">Form. ingreso asfalto</a></div>
+            <div class="org-task">Rectifica stock en tablero</div>
+            <div class="org-task"><a href="https://docs.google.com/spreadsheets/d/1PEcPzwrQ8kE2evmUlrFq9wPbgWOR92MPl3LEqcSYbIk/edit" target="_blank">Precios equipos</a></div>
+          </div>
+        </div>
+
+        <!-- Nico (con sub-nodos) -->
+        <div class="org-group">
+          <div class="org-node oper">
+            <div class="org-av">ND</div>
+            <div class="org-name">Nico</div>
+            <div class="org-role">Área Técnica / Mantenimiento</div>
+            <div class="org-tasks">
+              <div class="org-task"><a href="https://docs.google.com/spreadsheets/d/1e_emRVEUxTaNtLxeC0wXIWKzcKuoulZkFSS9O1e0XHo/edit" target="_blank">Partes diarios equipos</a></div>
+              <div class="org-task"><a href="https://docs.google.com/spreadsheets/d/1JpXjGTJwlvMuEI-rFTd4KeKvzd708-yuSLAhIRuCFC0/edit?gid=320539838" target="_blank">Compra repuestos</a></div>
+            </div>
+          </div>
+          <div class="org-vline"></div>
+          <div class="org-children">
+            <div class="org-child-wrap">
+              <div class="org-node sub">
+                <div class="org-av">RO</div>
+                <div class="org-name">Roberto</div>
+                <div class="org-role">Remitos producción</div>
+                <div class="org-tasks">
+                  <div class="org-task"><a href="https://docs.google.com/spreadsheets/d/1mzN0yygmB3tqRDQdlbdJg3o3m_D1euKx955Zk7I5YyY/edit" target="_blank">Remitos oficiales</a></div>
+                </div>
+              </div>
+            </div>
+            <div class="org-child-wrap">
+              <div class="org-node sub">
+                <div class="org-av">GK</div>
+                <div class="org-name">Guillermo</div>
+                <div class="org-role">OC Insumos Obras</div>
+                <div class="org-tasks">
+                  <div class="org-task"><a href="https://docs.google.com/spreadsheets/d/1_lhq9c1MddkrK1Tf0kexRtgqw5aPhmZWiQkAIRjpfxs/edit" target="_blank">OC Insumos</a></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mauro -->
+        <div class="org-node oper">
+          <div class="org-av">MO</div>
+          <div class="org-name">Mauro Orellana</div>
+          <div class="org-role">RRHH / Liquidación</div>
+          <div class="org-tasks">
+            <div class="org-task">Liquida sueldos TANGO</div>
+            <div class="org-task">MO por centro de costo</div>
+          </div>
+        </div>
+
+        <!-- Esteban -->
+        <div class="org-node oper">
+          <div class="org-av">ES</div>
+          <div class="org-name">Esteban</div>
+          <div class="org-role">Cobros</div>
+          <div class="org-tasks">
+            <div class="org-task">Flujo real de ingresos</div>
+            <div class="org-task">Registro de cobros</div>
+          </div>
+        </div>
+
+        <!-- Romina -->
+        <div class="org-node oper">
+          <div class="org-av">RM</div>
+          <div class="org-name">Romina</div>
+          <div class="org-role">Administración</div>
+          <div class="org-tasks">
+            <div class="org-task">Gastos administrativos</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ================================================================ -->

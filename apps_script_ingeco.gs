@@ -26,8 +26,9 @@ const FILE_IDS = {
   maestroObras: '1VbG7DPqaOSlYkvQxbxag-4P2sOoRJQwWGccbx9OMyBM',  // Maestro de Obras con COD_OBRA
   fernandoObras:'1vGY8-saBKS4XAwd4RRqacNYRS7W0KV9brDBEo3_Jn0A',  // Obras activas (Fernando Solís)
   equiposFlota: '1PEcPzwrQ8kE2evmUlrFq9wPbgWOR92MPl3LEqcSYbIk',  // Equipos + PF mensual (Adrián)
-  usageEquipos:   '1CPnhO1M78vwARe21ye_Xcr0hiLIrKtR3zzANsJgc5d4',  // Partes diarios por equipo (una pestaña por COD)
-  remitosAsfalto: '1mzN0yygmB3tqRDQdlbdJg3o3m_D1euKx955Zk7I5YyY',  // REMITOS OFICIALES (Nico Dall'Agata)
+  usageEquipos:     '1e_emRVEUxTaNtLxeC0wXIWKzcKuoulZkFSS9O1e0XHo',  // Partes diarios — hoja única (Nico)
+  repuestosEquipos: '1JpXjGTJwlvMuEI-rFTd4KeKvzd708-yuSLAhIRuCFC0',  // Compra de repuestos — hoja ENTREGAS (Nico)
+  remitosAsfalto:   '1mzN0yygmB3tqRDQdlbdJg3o3m_D1euKx955Zk7I5YyY',  // REMITOS OFICIALES (Roberto)
   ajusteStock:    '1yZArsIKYMfq9UPUXyiASXtDNXyubTjFx3PPW2VjG-uA',  // Formulario Ingreso Asfalto Agustín
   precioAsfalto:  '1lqKTXtDLT2FxyXurxjU1uE4epDOKs5SP8AXu5wAUsJ4',  // Precio de mercado asfalto $/tn por mes
 };
@@ -169,6 +170,8 @@ function buildData() {
   catch(e) { Logger.log('alquilerEquipos error: ' + e); result.alquilerEquipos = null; }
   try { result.remitosAsfalto   = leerRemitosAsfalto(); }
   catch(e) { Logger.log('remitosAsfalto error: ' + e); result.remitosAsfalto = null; }
+  try { result.repuestosEquipos = leerRepuestosEquipos(); }
+  catch(e) { Logger.log('repuestosEquipos error: ' + e); result.repuestosEquipos = null; }
   try {
     result.stockAsfalto = leerStockAsfalto(result.remitosAsfalto);
     // _detalle tiene objetos Date internos — no se envía al dashboard
@@ -902,50 +905,52 @@ function leerAlquilerEquipos() {
     }
     Logger.log('Equipos con PF: ' + Object.keys(precios).length);
 
-    // 2. Leer uso — una pestaña por equipo (nombre pestaña = COD_EQUIPO)
+    // 2. Leer partes diarios — hoja única "PARTES DIARIOS"
+    // Col A(0)=Fecha, B(1)=Equipo, C(2)=Código equipo, F(5)=Obra, I(8)=Total horas, Q(16)=Código obra
     const ssUso  = SpreadsheetApp.openById(FILE_IDS.usageEquipos);
+    const sheetPD = ssUso.getSheetByName('PARTES DIARIOS') || ssUso.getSheets()[0];
+    const rowsPD  = sheetPD.getDataRange().getValues();
+
+    const COL_FECHA_PD    = 0;  // A: Fecha
+    const COL_COD_EQ      = 2;  // C: Código de equipo
+    const COL_OBRA_PD     = 5;  // F: Nombre de obra
+    const COL_HORAS_PD    = 8;  // I: Total de horas
+    const COL_COD_OBRA_PD = 16; // Q: Código de obra (preferido para agrupar)
+
+    let hdrPD = 0;
+    for (let i = 0; i < Math.min(5, rowsPD.length); i++) {
+      const rowStr = rowsPD[i].map(c => String(c).toLowerCase()).join('|');
+      if (rowStr.includes('fecha') || rowStr.includes('equipo') || rowStr.includes('hora')) {
+        hdrPD = i; break;
+      }
+    }
+    Logger.log('Partes diarios — hoja: ' + sheetPD.getName() + ' hdr=' + hdrPD + ' filas=' + rowsPD.length);
+
     // acum[mes][cod] = { _total: horas, [obra]: horas }
     const acum = {};
 
-    for (const sheet of ssUso.getSheets()) {
-      const cod = sheet.getName().trim();
-      if (!precios[cod]) continue;
+    for (let i = hdrPD + 1; i < rowsPD.length; i++) {
+      const row = rowsPD[i];
+      const mes = parsearMes(row[COL_FECHA_PD]);
+      if (!mes) continue;
 
-      const rows = sheet.getDataRange().getValues();
-      // Encontrar fila con FECHA en col 0
-      let hdrIdx = -1;
-      for (let i = 0; i < Math.min(15, rows.length); i++) {
-        if (String(rows[i][0]).toUpperCase().trim() === 'FECHA') { hdrIdx = i; break; }
-      }
-      if (hdrIdx < 0) continue;
+      const codEq = String(row[COL_COD_EQ] || '').trim();
+      if (!codEq || !precios[codEq]) continue;
 
-      // Columnas fijas según estructura conocida de los partes diarios
-      const COL_FECHA     = 0;
-      const COL_OBRA      = 2;
-      const COL_HORAS_OP  = 7;  // HORARIOS OPERARIO / TOTAL (dato principal)
-      const COL_HORAS_EQ  = 12; // HORARIOS EQUIPO / TOTAL
-      const COL_HOROMETRO = 17; // HORÓMETRO / TOTAL
+      const codObra = String(row[COL_COD_OBRA_PD] || '').trim();
+      const nomObra = String(row[COL_OBRA_PD]     || '').trim();
+      const obra    = (codObra && codObra !== '-') ? codObra
+                    : (nomObra  && nomObra  !== '-') ? nomObra : 'Sin asignar';
 
-      for (let i = hdrIdx + 1; i < rows.length; i++) {
-        const row = rows[i];
-        const mes = parsearMes(row[COL_FECHA]);
-        if (!mes) continue;
+      const horas = typeof row[COL_HORAS_PD] === 'number' ? row[COL_HORAS_PD]
+                  : parsearHoras(row[COL_HORAS_PD]);
+      if (horas <= 0) continue;
 
-        const obraRaw = String(row[COL_OBRA] || '').trim();
-        const obra    = (obraRaw && obraRaw !== '-') ? obraRaw : 'Sin asignar';
-
-        if (!acum[mes]) acum[mes] = {};
-        if (!acum[mes][cod]) acum[mes][cod] = { _total: 0 };
-
-        let horas = parsearHoras(row[COL_HORAS_OP]);   // Horarios Operario: dato principal
-        if (horas <= 0) horas = parsearHoras(row[COL_HOROMETRO]);  // Horómetro: fallback si olvidaron cargar
-        if (horas <= 0) horas = parsearHoras(row[COL_HORAS_EQ]);   // Horarios Equipo: último recurso
-        if (horas <= 0) continue;
-
-        if (!acum[mes][cod][obra]) acum[mes][cod][obra] = 0;
-        acum[mes][cod][obra]  += horas;
-        acum[mes][cod]._total += horas;
-      }
+      if (!acum[mes]) acum[mes] = {};
+      if (!acum[mes][codEq]) acum[mes][codEq] = { _total: 0 };
+      if (!acum[mes][codEq][obra]) acum[mes][codEq][obra] = 0;
+      acum[mes][codEq][obra]  += horas;
+      acum[mes][codEq]._total += horas;
     }
 
     // 3. Calcular costos prorrateados por horas
@@ -1108,8 +1113,55 @@ function leerPrecioAsfalto() {
 }
 
 // ============================================================
+// REPUESTOS DE EQUIPOS — costo real de compras por mes
+// Fuente: Google Sheet de Nico — hoja "ENTREGAS"
+// Col C(2)=Fecha, E(4)=Código equipo, J(9)=Costo
+// ============================================================
+function leerRepuestosEquipos() {
+  try {
+    const ss    = SpreadsheetApp.openById(FILE_IDS.repuestosEquipos);
+    const sheet = ss.getSheetByName('ENTREGAS') || ss.getSheets()[0];
+    const rows  = sheet.getDataRange().getValues();
+
+    const COL_FECHA  = 2;  // C
+    const COL_COD_EQ = 4;  // E
+    const COL_COSTO  = 9;  // J
+
+    let hdrIdx = 0;
+    for (let i = 0; i < Math.min(5, rows.length); i++) {
+      const rowStr = rows[i].map(c => String(c).toLowerCase()).join('|');
+      if (rowStr.includes('fecha') || rowStr.includes('costo') || rowStr.includes('código')) {
+        hdrIdx = i; break;
+      }
+    }
+    Logger.log('Repuestos — hoja: ' + sheet.getName() + ' hdr=' + hdrIdx);
+
+    const resultado = {};
+    for (let i = hdrIdx + 1; i < rows.length; i++) {
+      const row  = rows[i];
+      const mes  = parsearMes(row[COL_FECHA]);
+      if (!mes) continue;
+      const codEq = String(row[COL_COD_EQ] || '').trim();
+      const costo = parsearMonto(row[COL_COSTO]);
+      if (!costo || costo <= 0) continue;
+
+      if (!resultado[mes]) resultado[mes] = { total: 0, items: [] };
+      resultado[mes].total += costo;
+      resultado[mes].items.push({ codEq, costo: Math.round(costo) });
+    }
+    for (const mes of Object.keys(resultado)) resultado[mes].total = Math.round(resultado[mes].total);
+
+    Logger.log('Repuestos equipos — meses: ' + Object.keys(resultado).join(','));
+    return resultado;
+  } catch (err) {
+    Logger.log('leerRepuestosEquipos error: ' + err.toString());
+    return null;
+  }
+}
+
+// ============================================================
 // REMITOS OFICIALES — Tn Caliente y Frío producidas por mes
-// Fuente: Google Sheet de Nico Dall'Agata
+// Fuente: Google Sheet de Roberto
 // Columnas clave: CANT. (cantidad en TN), U.D. (debe ser "TN"),
 //   DESCRIPCION (ASFALTO CALIENTE / ASFALTO FRIO), Mes, Año
 // ============================================================
