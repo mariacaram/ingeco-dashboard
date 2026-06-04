@@ -2498,6 +2498,7 @@ function renderFlujo() {
 
 function renderPersonas() {
   const grid = document.getElementById('persona-grid');
+  if (!grid) return; // organigrama estático — no hay grilla
   grid.innerHTML = PERSONAS.map(p => `
     <div class="persona-card">
       <div class="persona-avatar">${p.avatar}</div>
