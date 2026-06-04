@@ -211,6 +211,37 @@
   .persona-item .pi-val.nd { color: var(--nd-text); font-style: italic; }
   .persona-avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; float: right; margin-left: 8px; }
 
+  /* ORGANIGRAMA */
+  .org-wrap { padding: 10px 0 30px; overflow-x: auto; }
+  .org-tree { display: flex; flex-direction: column; align-items: center; gap: 0; }
+  .org-level { display: flex; justify-content: center; gap: 12px; position: relative; }
+  .org-node {
+    background: var(--card); border: 1.5px solid var(--border); border-radius: 10px;
+    padding: 10px 14px; text-align: center; min-width: 130px; max-width: 165px;
+    position: relative; font-size: 12px;
+  }
+  .org-node.top    { border-color: var(--primary); border-width: 2.5px; background: #eef3fa; }
+  .org-node.coord  { border-color: var(--accent); border-width: 2px; }
+  .org-node.oper   { border-color: #94a3b8; }
+  .org-node.sub    { border-color: #cbd5e1; background: #f8fafc; font-size: 11px; min-width: 115px; }
+  .org-av { width:32px;height:32px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;margin:0 auto 6px; }
+  .org-node.coord .org-av { background: var(--accent); }
+  .org-node.sub   .org-av { background: #94a3b8; width:26px;height:26px;font-size:10px; }
+  .org-name { font-weight: 700; color: var(--primary); margin-bottom: 2px; line-height: 1.2; }
+  .org-role { color: var(--muted); font-size: 10px; margin-bottom: 6px; }
+  .org-tasks { text-align: left; border-top: 1px solid var(--border); margin-top: 6px; padding-top: 6px; }
+  .org-task { font-size: 10px; color: var(--text); padding: 1px 0; display: flex; gap: 4px; align-items: baseline; }
+  .org-task::before { content: '·'; color: var(--accent); font-weight: 700; }
+  .org-task a { color: var(--primary); text-decoration: underline dotted; font-size: 10px; }
+  /* Conectores verticales */
+  .org-vline { width: 2px; background: var(--border); height: 20px; margin: 0 auto; }
+  .org-hline { display: flex; justify-content: center; }
+  .org-hline-inner { border-top: 2px solid var(--border); }
+  /* Grupo con sub-nodos */
+  .org-group { display: flex; flex-direction: column; align-items: center; }
+  .org-children { display: flex; gap: 10px; align-items: flex-start; }
+  .org-child-wrap { display: flex; flex-direction: column; align-items: center; }
+
   /* PANEL LATERAL */
   .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 200; }
   .overlay.open { display: block; }
@@ -346,9 +377,7 @@
   <div style="display:flex; gap:20px; align-items:center;">
     <div class="month-selector">
       <label>Período:</label>
-      <button class="month-btn" onclick="setMes('feb')">Febrero 2026</button>
-      <button class="month-btn active" onclick="setMes('mar')">Marzo 2026</button>
-      <button class="month-btn" onclick="setMes('abr')">Abril 2026</button>
+      <div id="month-btns" style="display:flex;gap:6px;"></div>
     </div>
     <div class="refresh-area">
       <button class="btn-refresh" id="btn-refresh" onclick="refreshData()">🔄 Actualizar datos</button>
@@ -756,11 +785,7 @@
       <div class="table-wrap">
         <table>
           <thead><tr><th>Mes</th><th class="num">OC Insumos (Guillermo)</th><th class="num">N° órdenes</th><th class="num">Tn Caliente</th><th class="num">Tn Frío</th></tr></thead>
-          <tbody id="tbody-planta-produccion">
-            <tr><td>Febrero 2026</td><td class="num neg-val">$18.600.000</td><td class="num">3 OC</td><td class="nd num" id="tn-feb-caliente">—</td><td class="nd num" id="tn-feb-frio">—</td></tr>
-            <tr><td>Marzo 2026</td><td class="num neg-val">$20.100.000</td><td class="num">4 OC</td><td class="nd num" id="tn-mar-caliente">—</td><td class="nd num" id="tn-mar-frio">—</td></tr>
-            <tr><td>Abril 2026 (parcial)</td><td class="num neg-val">$17.900.000</td><td class="num">2 OC</td><td class="nd num" id="tn-abr-caliente">—</td><td class="nd num" id="tn-abr-frio">—</td></tr>
-          </tbody>
+          <tbody id="tbody-planta-produccion"></tbody>
         </table>
       </div>
       <div class="nota-fuente"><strong>Insumos:</strong> <a href="https://docs.google.com/spreadsheets/d/1_lhq9c1MddkrK1Tf0kexRtgqw5aPhmZWiQkAIRjpfxs/edit?gid=42005977#gid=42005977" target="_blank">OC Insumos para Obras (Guillermo Konicek)</a> — Leído: 13/05/2026 — filtro OC con descripción "Planta Asfalto/Warnes" — <strong>Tn:</strong> REMITOS OFICIALES (Nico Dall'Agata) — columna PRECIO vacía, tn sin precio; solicitar a Nico que complete el Google Sheet para habilitar Costo/tn</div>
@@ -812,7 +837,7 @@
       <div class="kpi-label">Repuestos Abr 2026 (visible)</div>
       <div class="kpi-value" id="kpi-repuestos-total">cargando...</div>
       <div class="kpi-sub">27 entregas al 08/04 — parcial</div>
-      <div class="fuente">ENTREGAS DE REPUESTOS ABRIL 2026 (Google Sheet — Nico Dall'Agata) — Leído: 12/05/2026 — 27 registros al 08/04</div>
+      <div class="fuente"><a href="https://docs.google.com/spreadsheets/d/1mzN0yygmB3tqRDQdlbdJg3o3m_D1euKx955Zk7I5YyY/edit?gid=412271293#gid=412271293" target="_blank">ENTREGAS DE REPUESTOS ABRIL 2026</a> — Roberto — Leído: 12/05/2026 — 27 registros al 08/04</div>
     </div>
     <div class="kpi-card neg">
       <div class="kpi-label">Mayor gasto — Zaranda</div>
@@ -849,7 +874,7 @@
   <div class="section">
     <div class="section-title">Entregas de Repuestos — Abril 2026 <span class="badge real">Datos reales — Drive</span></div>
     <div class="alert info" style="margin-bottom:8px;">
-      Fuente: ENTREGAS DE REPUESTOS ABRIL 2026 (Google Sheet — Nicolás Dall'Agata). 27 entregas registradas al 8/4/2026. El sheet continúa con más entradas que no fueron capturadas por el límite de API.
+      Fuente: <a href="https://docs.google.com/spreadsheets/d/1mzN0yygmB3tqRDQdlbdJg3o3m_D1euKx955Zk7I5YyY/edit?gid=412271293#gid=412271293" target="_blank">ENTREGAS DE REPUESTOS ABRIL 2026 (Google Sheet — Roberto)</a>. 27 entregas registradas al 8/4/2026. El sheet continúa con más entradas que no fueron capturadas por el límite de API.
     </div>
     <div class="table-wrap">
       <table>
@@ -872,7 +897,7 @@
         </tfoot>
       </table>
     </div>
-    <div class="nota-fuente"><strong>Fuente:</strong> ENTREGAS DE REPUESTOS ABRIL 2026 (Google Sheet) — Responsable: Nico Dall'Agata — Leído: 12/05/2026 — Columnas usadas: N° Entrega, Fecha, Equipo, Código, Tipo, Costo — <strong>Nota:</strong> 27 registros visibles al 08/04; el sheet continúa con más entradas no capturadas por límite de API</div>
+    <div class="nota-fuente"><strong>Fuente:</strong> <a href="https://docs.google.com/spreadsheets/d/1mzN0yygmB3tqRDQdlbdJg3o3m_D1euKx955Zk7I5YyY/edit?gid=412271293#gid=412271293" target="_blank">ENTREGAS DE REPUESTOS ABRIL 2026 (Google Sheet)</a> — Responsable: Roberto — Leído: 12/05/2026 — Columnas usadas: N° Entrega, Fecha, Equipo, Código, Tipo, Costo — <strong>Nota:</strong> 27 registros visibles al 08/04; el sheet continúa con más entradas no capturadas por límite de API</div>
   </div>
 
   <div class="section">
@@ -969,7 +994,131 @@
 <!-- TAB 6: ESTRUCTURA -->
 <!-- ================================================================ -->
 <div class="tab-panel" id="tab-estructura">
-  <div class="persona-grid" id="persona-grid"></div>
+  <div class="org-wrap">
+    <div class="org-tree">
+
+      <!-- NIVEL 0: Adrián -->
+      <div class="org-level">
+        <div class="org-node top">
+          <div class="org-av">AC</div>
+          <div class="org-name">Adrián Caram</div>
+          <div class="org-role">Socio Director · Usuario principal</div>
+        </div>
+      </div>
+      <div class="org-vline"></div>
+
+      <!-- NIVEL 1: Coordinadores -->
+      <div class="org-level">
+        <div class="org-node coord">
+          <div class="org-av">MC</div>
+          <div class="org-name">María</div>
+          <div class="org-role">Coordinadora</div>
+        </div>
+        <div class="org-node coord">
+          <div class="org-av">GO</div>
+          <div class="org-name">Gonzalo</div>
+          <div class="org-role">Coordinador</div>
+        </div>
+      </div>
+      <div class="org-vline"></div>
+
+      <!-- NIVEL 2: Operativos -->
+      <div class="org-level" style="align-items:flex-start;">
+
+        <!-- Fernando -->
+        <div class="org-node oper">
+          <div class="org-av">FS</div>
+          <div class="org-name">Fernando Solís</div>
+          <div class="org-role">Obras activas</div>
+          <div class="org-tasks">
+            <div class="org-task"><a href="https://docs.google.com/spreadsheets/d/1vGY8-saBKS4XAwd4RRqacNYRS7W0KV9brDBEo3_Jn0A/edit" target="_blank">Planilla Obras</a></div>
+            <div class="org-task">Actualiza períodos y montos</div>
+          </div>
+        </div>
+
+        <!-- Agustín -->
+        <div class="org-node oper">
+          <div class="org-av">AG</div>
+          <div class="org-name">Agustín</div>
+          <div class="org-role">Planta / Operaciones</div>
+          <div class="org-tasks">
+            <div class="org-task"><a href="https://docs.google.com/spreadsheets/d/1yZArsIKYMfq9UPUXyiASXtDNXyubTjFx3PPW2VjG-uA/edit" target="_blank">Form. ingreso asfalto</a></div>
+            <div class="org-task">Rectifica stock en tablero</div>
+            <div class="org-task"><a href="https://docs.google.com/spreadsheets/d/1PEcPzwrQ8kE2evmUlrFq9wPbgWOR92MPl3LEqcSYbIk/edit" target="_blank">Precios equipos</a></div>
+          </div>
+        </div>
+
+        <!-- Nico (con sub-nodos) -->
+        <div class="org-group">
+          <div class="org-node oper">
+            <div class="org-av">ND</div>
+            <div class="org-name">Nico</div>
+            <div class="org-role">Área Técnica / Mantenimiento</div>
+            <div class="org-tasks">
+              <div class="org-task"><a href="https://docs.google.com/spreadsheets/d/1e_emRVEUxTaNtLxeC0wXIWKzcKuoulZkFSS9O1e0XHo/edit" target="_blank">Partes diarios equipos</a></div>
+              <div class="org-task"><a href="https://docs.google.com/spreadsheets/d/1JpXjGTJwlvMuEI-rFTd4KeKvzd708-yuSLAhIRuCFC0/edit?gid=320539838" target="_blank">Compra repuestos</a></div>
+            </div>
+          </div>
+          <div class="org-vline"></div>
+          <div class="org-children">
+            <div class="org-child-wrap">
+              <div class="org-node sub">
+                <div class="org-av">RO</div>
+                <div class="org-name">Roberto</div>
+                <div class="org-role">Remitos producción</div>
+                <div class="org-tasks">
+                  <div class="org-task"><a href="https://docs.google.com/spreadsheets/d/1mzN0yygmB3tqRDQdlbdJg3o3m_D1euKx955Zk7I5YyY/edit" target="_blank">Remitos oficiales</a></div>
+                </div>
+              </div>
+            </div>
+            <div class="org-child-wrap">
+              <div class="org-node sub">
+                <div class="org-av">GK</div>
+                <div class="org-name">Guillermo</div>
+                <div class="org-role">OC Insumos Obras</div>
+                <div class="org-tasks">
+                  <div class="org-task"><a href="https://docs.google.com/spreadsheets/d/1_lhq9c1MddkrK1Tf0kexRtgqw5aPhmZWiQkAIRjpfxs/edit" target="_blank">OC Insumos</a></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mauro -->
+        <div class="org-node oper">
+          <div class="org-av">MO</div>
+          <div class="org-name">Mauro Orellana</div>
+          <div class="org-role">RRHH / Liquidación</div>
+          <div class="org-tasks">
+            <div class="org-task">Liquida sueldos TANGO</div>
+            <div class="org-task">MO por centro de costo</div>
+          </div>
+        </div>
+
+        <!-- Esteban -->
+        <div class="org-node oper">
+          <div class="org-av">ES</div>
+          <div class="org-name">Esteban</div>
+          <div class="org-role">Cobros</div>
+          <div class="org-tasks">
+            <div class="org-task">Flujo real de ingresos</div>
+            <div class="org-task">Registro de cobros</div>
+          </div>
+        </div>
+
+        <!-- Romina -->
+        <div class="org-node oper">
+          <div class="org-av">RM</div>
+          <div class="org-name">Romina</div>
+          <div class="org-role">Administración</div>
+          <div class="org-tasks">
+            <div class="org-task">Gastos administrativos</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ================================================================ -->
@@ -1134,8 +1283,31 @@
 // DATOS EMBEBIDOS
 // ================================================================
 
-const MES = { feb: 'Febrero 2026', mar: 'Marzo 2026', abr: 'Abril 2026' };
-let mesActual = 'mar';
+const MES = { ene:'Enero 2026', feb:'Febrero 2026', mar:'Marzo 2026', abr:'Abril 2026',
+              may:'Mayo 2026', jun:'Junio 2026', jul:'Julio 2026', ago:'Agosto 2026',
+              sep:'Septiembre 2026', oct:'Octubre 2026', nov:'Noviembre 2026', dic:'Diciembre 2026' };
+const MES_ORDER = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+
+function _renderMonthButtons() {
+  // Siempre mostrar todos los meses desde ene hasta el mes actual del año en curso
+  const mesHoy = MES_ORDER[new Date().getMonth()];
+  const limiteIdx = MES_ORDER.indexOf(mesHoy);
+  // Agregar meses con datos (pueden incluir meses pasados o futuros del backend)
+  const conDatos = new Set();
+  MES_ORDER.forEach(m => {
+    if (MO_CTRO_COSTO[m] || OC_INSUMOS[m] || ALQUILER_EQUIPOS[m] || REMITOS_ASFALTO[m]) conDatos.add(m);
+    if (GENERADO_POR_OBRA && GENERADO_POR_OBRA.obrasPorMes && GENERADO_POR_OBRA.obrasPorMes[m]) conDatos.add(m);
+  });
+  // Unión: meses hasta hoy + meses con datos
+  const meses = MES_ORDER.filter((m, i) => i <= limiteIdx || conDatos.has(m));
+  if (!meses.includes(mesActual)) mesActual = meses[meses.length - 1];
+  const container = document.getElementById('month-btns');
+  if (!container) return;
+  container.innerHTML = meses.map(m =>
+    `<button class="month-btn${m === mesActual ? ' active' : ''}" data-mes="${m}" onclick="setMes('${m}')">${MES[m]}</button>`
+  ).join('');
+}
+let mesActual = MES_ORDER[new Date().getMonth()];
 
 // Canal 82008 — dato real del archivo Cobros
 const CANAL_82008 = {
@@ -1432,7 +1604,7 @@ const FUENTES = [
   { archivo: 'Cobros Ingeco Feb-Mar-Abr 2026.xlsx', responsable: 'Esteban', ultimaActualizacion: '07/05/2026', estado: 'real', dato: 'Cobros reales Feb/Mar/Abr — 37 registros', accion: '✅ Accesible — datos cargados' },
   { archivo: '1° Quinc. Abril 2026 - LIQ TANGO.xlsx', responsable: 'Mauro Orellana', ultimaActualizacion: '29/04/2026', estado: 'real', dato: 'MO por centro de costo — taller y obras', accion: '✅ Accesible — datos cargados' },
   { archivo: 'ÓRDENES DE COMPRA DE INSUMOS PARA OBRAS (GUILLERMO KONICEK)', responsable: 'Guillermo Konicek', ultimaActualizacion: '13/05/2026', estado: 'real', dato: 'OC insumos Feb $549M / Mar $515M / Abr $183M (parcial) — 294 órdenes 2026', accion: '✅ Accesible — carpeta Guillermo (Drive) — datos cargados' },
-  { archivo: 'REMITOS OFICIALES (Google Sheet)', responsable: 'Nicolás Dall\'Agata', ultimaActualizacion: '12/05/2026', estado: 'parcial', dato: 'Tn caliente/frío (sin precios cargados)', accion: 'Completar columna PRECIO en sheet' },
+  { archivo: 'REMITOS OFICIALES (Google Sheet)', responsable: 'Roberto', ultimaActualizacion: '12/05/2026', estado: 'parcial', dato: 'Tn caliente/frío (sin precios cargados)', accion: 'Completar columna PRECIO en sheet' },
   { archivo: 'Maestro de obras NUEVO.xlsx', responsable: 'Adrián / Equipo', ultimaActualizacion: '07/05/2026', estado: 'real', dato: '60+ obras con código canónico y cliente', accion: '✅ Accesible — cargado' },
   { archivo: 'ENTREGAS DE REPUESTOS ABRIL 2026', responsable: 'Nicolás Dall\'Agata', ultimaActualizacion: '12/05/2026', estado: 'real', dato: 'Costos reales reparaciones taller abr 2026', accion: '✅ Accesible — datos cargados' },
   { archivo: 'ÓC Repuestos para Equipos (Alberto Lescano)', responsable: 'Alberto Lescano', ultimaActualizacion: '29/04/2026', estado: 'parcial', dato: 'OC planta asfalto y equipos', accion: '✅ Accesible — datos cargados' }
@@ -2326,6 +2498,7 @@ function renderFlujo() {
 
 function renderPersonas() {
   const grid = document.getElementById('persona-grid');
+  if (!grid) return; // organigrama estático — no hay grilla
   grid.innerHTML = PERSONAS.map(p => `
     <div class="persona-card">
       <div class="persona-avatar">${p.avatar}</div>
@@ -2978,13 +3151,28 @@ function renderPlanta() {
     }
   }
 
-  // Tabla histórica (feb/mar/abr)
-  for (const mes of ['feb', 'mar', 'abr']) {
-    const r = REMITOS_ASFALTO[mes];
-    const elC = document.getElementById('tn-' + mes + '-caliente');
-    const elF = document.getElementById('tn-' + mes + '-frio');
-    if (elC) { elC.textContent = r ? fmtTn(r.caliente) + ' tn' : '—'; elC.className = r ? 'num' : 'nd num'; }
-    if (elF) { elF.textContent = r ? fmtTn(r.frio)     + ' tn' : '—'; elF.className = r ? 'num' : 'nd num'; }
+  // Tabla histórica — generada dinámicamente para todos los meses con remitos
+  const tbodyPlanta = document.getElementById('tbody-planta-produccion');
+  if (tbodyPlanta) {
+    const mesesRemitos = MES_ORDER.filter(m => REMITOS_ASFALTO[m]);
+    if (mesesRemitos.length === 0) {
+      tbodyPlanta.innerHTML = '<tr><td colspan="5" class="nd" style="text-align:center;padding:12px;">Sin datos de remitos — actualizá datos</td></tr>';
+    } else {
+      const fmtOC = v => v ? '$' + fmt(v) : '—';
+      tbodyPlanta.innerHTML = mesesRemitos.map(mes => {
+        const r = REMITOS_ASFALTO[mes];
+        const ocMes = OC_INSUMOS[mes];
+        const ocPlanta = ocMes ? ocMes.items.find(it => it.obra && it.obra.toLowerCase().includes('planta')) : null;
+        const ocVal = ocPlanta ? ocPlanta.monto : (ocMes ? null : null);
+        return `<tr>
+          <td>${MES[mes]}</td>
+          <td class="num neg-val">${ocVal ? fmtOC(ocVal) : '—'}</td>
+          <td class="num">${ocMes ? ocMes.nOC + ' OC' : '—'}</td>
+          <td class="${r && r.caliente > 0 ? 'num' : 'nd num'}">${r && r.caliente > 0 ? fmtTn(r.caliente) + ' tn' : '—'}</td>
+          <td class="${r && r.frio > 0 ? 'num' : 'nd num'}">${r && r.frio > 0 ? fmtTn(r.frio) + ' tn' : '—'}</td>
+        </tr>`;
+      }).join('');
+    }
   }
 
   renderStockDisplay();
@@ -3251,6 +3439,7 @@ function renderMOClasif() {
 }
 
 function renderAll() {
+  _renderMonthButtons();
   renderMargen();
   renderEgresosChart();
   renderCobrosReal();
@@ -3335,7 +3524,7 @@ async function refreshData() {
         Object.assign(MO_CTRO_COSTO, data.moCtroCosto);
       }
       if (data.ocInsumos) {
-        Object.keys(data.ocInsumos).forEach(m => { if (OC_INSUMOS[m]) Object.assign(OC_INSUMOS[m], data.ocInsumos[m]); });
+        Object.keys(data.ocInsumos).forEach(m => { if (OC_INSUMOS[m]) Object.assign(OC_INSUMOS[m], data.ocInsumos[m]); else OC_INSUMOS[m] = data.ocInsumos[m]; });
       }
       if (data.generadoPorObra) {
         GENERADO_POR_OBRA = data.generadoPorObra;
@@ -3388,9 +3577,8 @@ function openTab(id) {
 
 function setMes(mes) {
   mesActual = mes;
-  document.querySelectorAll('.month-btn').forEach((b, i) => {
-    b.classList.toggle('active',
-      (i === 0 && mes === 'feb') || (i === 1 && mes === 'mar') || (i === 2 && mes === 'abr'));
+  document.querySelectorAll('.month-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.mes === mes);
   });
   renderMargen();
   renderEgresosChart();
@@ -3463,7 +3651,7 @@ if (APPS_SCRIPT_URL) {
           Object.assign(MO_CTRO_COSTO, data.moCtroCosto);
         }
         if (data.ocInsumos) {
-          Object.keys(data.ocInsumos).forEach(m => { if (OC_INSUMOS[m]) Object.assign(OC_INSUMOS[m], data.ocInsumos[m]); });
+          Object.keys(data.ocInsumos).forEach(m => { if (OC_INSUMOS[m]) Object.assign(OC_INSUMOS[m], data.ocInsumos[m]); else OC_INSUMOS[m] = data.ocInsumos[m]; });
         }
         if (data.generadoPorObra) {
           GENERADO_POR_OBRA = data.generadoPorObra;
