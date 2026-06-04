@@ -1152,7 +1152,7 @@ function _renderMonthButtons() {
     `<button class="month-btn${m === mesActual ? ' active' : ''}" data-mes="${m}" onclick="setMes('${m}')">${MES[m]}</button>`
   ).join('');
 }
-let mesActual = 'may';
+let mesActual = MES_ORDER[new Date().getMonth()];
 
 // Canal 82008 — dato real del archivo Cobros
 const CANAL_82008 = {
