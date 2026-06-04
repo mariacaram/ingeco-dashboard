@@ -504,63 +504,7 @@
         </tbody>
       </table>
     </div>
-    <div class="nota-fuente"><strong>A Cobrar:</strong> <a href="https://docs.google.com/spreadsheets/d/1vGY8-saBKS4XAwd4RRqacNYRS7W0KV9brDBEo3_Jn0A/edit" target="_blank">Obras activas (Fernando Solís)</a> — filas con Estado $ = "A Cobrar" · <strong>Maestro:</strong> <a href="https://docs.google.com/spreadsheets/d/1VbG7DPqaOSlYkvQxbxag-4P2sOoRJQwWGccbx9OMyBM/edit" target="_blank">Maestro de Obras — COD_OBRA</a></div>
-  </div>
-
-  <div class="section">
-    <div class="section-title">OC de Insumos — Detalle por Obra · <span id="mes-label-oc"></span> <span class="badge real">Datos reales — Guillermo Konicek</span></div>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Obra / Sector</th>
-            <th class="num">N° OC</th>
-            <th class="num">Monto total</th>
-          </tr>
-        </thead>
-        <tbody id="tbody-oc-insumos">
-          <tr><td colspan="3" class="nd" style="text-align:center;padding:16px;">Seleccioná un mes</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <div class="nota-fuente"><strong>Fuente:</strong> <a href="https://docs.google.com/spreadsheets/d/1_lhq9c1MddkrK1Tf0kexRtgqw5aPhmZWiQkAIRjpfxs/edit?gid=42005977#gid=42005977" target="_blank">ÓRDENES DE COMPRA DE INSUMOS (Guillermo Konicek)</a> — Presioná una obra para ver el detalle por proveedor</div>
-  </div>
-
-  <div class="section">
-    <div class="section-title">Mano de Obra por Obra · <span id="mes-label-mo-detalle"></span> <span class="badge real">TANGO — Mauro Orellana</span></div>
-    <div class="table-wrap">
-      <table id="tabla-mo-detalle">
-        <thead>
-          <tr>
-            <th>Obra / Sector</th>
-            <th class="num">MO Total Mes</th>
-          </tr>
-        </thead>
-        <tbody id="tbody-mo-detalle">
-          <tr><td colspan="2" class="nd" style="text-align:center;padding:20px;">Presioná "Actualizar datos" para cargar desde Drive</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <div class="nota-fuente"><strong>Fuente:</strong> <a href="https://drive.google.com/drive/u/0/folders/1hQZoJovbFDHNsJhNiGMEueH1bLfXuuCP" target="_blank">Carpeta TANGO (Mauro Orellana)</a> — columnas OBRA + TOTAL QUINCENA C/REDONDEO PARA PAGO EN EFECTIVO — suma de ambas quincenas del mes</div>
-  </div>
-
-  <div class="section">
-    <div class="section-title">Alquiler Interno de Equipos · <span id="mes-label-alquiler"></span> <span class="badge real">Partes diarios — Adrián Caram</span></div>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Obra / Destino</th>
-            <th class="num">Horas</th>
-            <th class="num">Costo alquiler</th>
-          </tr>
-        </thead>
-        <tbody id="tbody-alquiler-equipos">
-          <tr><td colspan="3" class="nd" style="text-align:center;padding:16px;">Seleccioná un mes</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <div class="nota-fuente"><strong>Fuente:</strong> <a href="https://docs.google.com/spreadsheets/d/1CPnhO1M78vwARe21ye_Xcr0hiLIrKtR3zzANsJgc5d4/edit?gid=51278017#gid=51278017" target="_blank">Partes diarios por equipo (Adrián)</a> · <a href="https://docs.google.com/spreadsheets/d/1PEcPzwrQ8kE2evmUlrFq9wPbgWOR92MPl3LEqcSYbIk/edit" target="_blank">Flota y PF (Adrián)</a> — Costo = PF mensual en USD × TC dólar oficial promedio (BNA) × horas obra / horas totales equipo — Presioná una obra para ver detalle de equipos</div>
+    <div class="nota-fuente"><strong>A Cobrar:</strong> <a href="https://docs.google.com/spreadsheets/d/1vGY8-saBKS4XAwd4RRqacNYRS7W0KV9brDBEo3_Jn0A/edit" target="_blank">Fernando Solís</a> · <strong>Insumos:</strong> <a href="https://docs.google.com/spreadsheets/d/1_lhq9c1MddkrK1Tf0kexRtgqw5aPhmZWiQkAIRjpfxs/edit" target="_blank">Guillermo Konicek</a> · <strong>MO:</strong> TANGO (Mauro) · <strong>TN:</strong> Remitos (Roberto) · <strong>Alquiler:</strong> Partes diarios (Nico) — <em>Hacé click en cualquier monto para ver el detalle</em></div>
   </div>
 
 </div>
@@ -1859,13 +1803,17 @@ function renderResumenObra() {
     const moCell = moObra != null
       ? `<span class="neg-val" title="MO total × ${fmtTn(tnObra)}tn / ${fmtTn(tnCalTotal)}tn total">${fmt(moObra)}</span>`
       : '<span class="nd" title="Sin dato MO o sin tn">—</span>';
+    const codEsc2 = (o.cod_obra || '').replace(/'/g, "\\'");
+    const nomEsc  = (o.nombre  || '').replace(/'/g, "\\'");
+    const cellStyle = 'cursor:pointer;transition:background 0.15s;';
+    const hoverTip  = 'title="Click para ver detalle"';
     return `<tr>
-      <td><code style="font-size:11px;background:#f1f5f9;padding:2px 5px;border-radius:3px;">${o.cod_obra}</code></td>
-      <td class="num">${aCobrar > 0 ? `<strong class="pos-val">${fmt(aCobrar)}</strong>` : '<span class="nd">—</span>'}</td>
-      <td class="num">${insumos  > 0 ? `<span class="neg-val">${fmt(insumos)}</span>`  : '<span class="nd">—</span>'}</td>
-      <td class="num">${moCell}</td>
-      <td class="num">${tnCell}</td>
-      <td class="num">${alquiler > 0 ? `<span class="neg-val">${fmt(alquiler)}</span>` : '<span class="nd">—</span>'}</td>
+      <td><code style="font-size:11px;background:#f1f5f9;padding:2px 5px;border-radius:3px;">${o.cod_obra}</code><br><small style="color:var(--muted);font-size:10px;">${o.nombre}</small></td>
+      <td class="num" style="${cellStyle}" ${hoverTip} onclick="openDetalleCelda('acobrar','${codEsc2}','${nomEsc}')">${aCobrar > 0 ? `<strong class="pos-val" style="text-decoration:underline dotted;">${fmt(aCobrar)}</strong>` : '<span class="nd">—</span>'}</td>
+      <td class="num" style="${cellStyle}" ${hoverTip} onclick="openDetalleCelda('insumos','${codEsc2}','${nomEsc}')">${insumos  > 0 ? `<span class="neg-val" style="text-decoration:underline dotted;">${fmt(insumos)}</span>`  : '<span class="nd">—</span>'}</td>
+      <td class="num" style="${cellStyle}" ${hoverTip} onclick="openDetalleCelda('mo','${codEsc2}','${nomEsc}')">${moCell}</td>
+      <td class="num" style="${cellStyle}" ${hoverTip} onclick="openDetalleCelda('tn','${codEsc2}','${nomEsc}')">${tnCell}</td>
+      <td class="num" style="${cellStyle}" ${hoverTip} onclick="openDetalleCelda('alquiler','${codEsc2}','${nomEsc}')">${alquiler > 0 ? `<span class="neg-val" style="text-decoration:underline dotted;">${fmt(alquiler)}</span>` : '<span class="nd">—</span>'}</td>
       <td class="num"><strong class="${mgColor}">${fmt(margen)}</strong></td>
     </tr>`;
   };
@@ -2578,6 +2526,160 @@ function openObra(nombre) {
 function closePanel() {
   document.getElementById('sidePanel').classList.remove('open');
   document.getElementById('overlay').classList.remove('open');
+}
+
+// ── Panel de detalle por celda de la tabla Margen por Obra ───────────────
+function openDetalleCelda(tipo, codObra, nombreObra) {
+  const panel   = document.getElementById('sidePanel');
+  const overlay = document.getElementById('overlay');
+  const content = document.getElementById('panelContent');
+  if (!panel) return;
+
+  const mes = MES[mesActual] || mesActual;
+  let titulo = '', html = '';
+
+  if (tipo === 'acobrar') {
+    // Certificados a cobrar — viene de items de Fernando Solís
+    titulo = 'A Cobrar — ' + (nombreObra || codObra);
+    const obra = (_obrasActuales().concat(_obrasSinPeriodo())).find(o => o.cod_obra === codObra);
+    const items = obra ? (obra.items || []) : [];
+    if (items.length === 0) {
+      html = '<p class="nd" style="padding:16px;">Sin certificados cargados</p>';
+    } else {
+      html = `<div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Certificados · Planilla Fernando Solís · ${mes}</div>
+        <table style="width:100%;border-collapse:collapse;">
+          <thead><tr style="background:#f1f5f9;"><th style="text-align:left;padding:7px 10px;font-size:11px;">Certificado</th><th style="text-align:left;padding:7px 10px;font-size:11px;">Código</th><th style="text-align:right;padding:7px 10px;font-size:11px;">Monto</th></tr></thead>
+          <tbody>${items.map(it => `<tr style="border-top:1px solid var(--border);">
+            <td style="padding:7px 10px;font-size:12px;">${it.nombre}</td>
+            <td style="padding:7px 10px;font-size:10px;color:var(--muted);"><code>${it.codigo||'—'}</code></td>
+            <td style="padding:7px 10px;font-size:12px;text-align:right;" class="pos-val"><strong>${fmt(it.monto)}</strong></td>
+          </tr>`).join('')}
+          <tr style="background:#f0fdf4;border-top:2px solid #86efac;font-weight:700;">
+            <td colspan="2" style="padding:8px 10px;font-size:12px;">TOTAL</td>
+            <td style="padding:8px 10px;text-align:right;" class="pos-val">${fmt(items.reduce((s,i)=>s+i.monto,0))}</td>
+          </tr></tbody>
+        </table>`;
+    }
+
+  } else if (tipo === 'insumos') {
+    titulo = 'Insumos OC — ' + (nombreObra || codObra);
+    const ocMes = OC_INSUMOS[mesActual];
+    const nk = (nombreObra || '').toLowerCase().trim();
+    const ck = (codObra || '').toLowerCase().trim();
+    const item = ocMes ? ocMes.items.find(i => i.obra.toLowerCase() === nk || i.obra.toLowerCase() === ck) : null;
+    if (!item) {
+      html = '<p class="nd" style="padding:16px;">Sin órdenes de compra registradas para esta obra en ' + mes + '</p>';
+    } else {
+      const provs = item.proveedores || [];
+      html = `<div style="font-size:12px;color:var(--muted);margin-bottom:10px;">${item.nOC} OC · ${mes} · Fuente: Guillermo Konicek</div>
+        <table style="width:100%;border-collapse:collapse;">
+          <thead><tr style="background:#f1f5f9;"><th style="text-align:left;padding:7px 10px;font-size:11px;">Proveedor</th><th style="text-align:right;padding:7px 10px;font-size:11px;">N° OC</th><th style="text-align:right;padding:7px 10px;font-size:11px;">Monto</th></tr></thead>
+          <tbody>${provs.map(p => `<tr style="border-top:1px solid var(--border);">
+            <td style="padding:7px 10px;font-size:12px;">${p.proveedor}</td>
+            <td style="padding:7px 10px;font-size:12px;text-align:right;color:var(--muted);">${p.nOC}</td>
+            <td style="padding:7px 10px;font-size:12px;text-align:right;" class="neg-val">${fmt(p.monto)}</td>
+          </tr>`).join('')}
+          <tr style="background:#fef2f2;border-top:2px solid #fca5a5;font-weight:700;">
+            <td colspan="2" style="padding:8px 10px;font-size:12px;">TOTAL</td>
+            <td style="padding:8px 10px;text-align:right;" class="neg-val">${fmt(item.monto)}</td>
+          </tr></tbody>
+        </table>`;
+    }
+
+  } else if (tipo === 'mo') {
+    titulo = 'Mano de Obra — ' + (nombreObra || codObra);
+    const moArr = getMOObra(mesActual);
+    const moTotal = moArr.reduce((s,r)=>s+r.monto,0);
+    const remitosMes = REMITOS_ASFALTO[mesActual];
+    const nk = (nombreObra||'').toLowerCase().trim();
+    const ck = (codObra||'').toLowerCase().trim();
+    let tnObra = 0, tnTotal = 0;
+    if (remitosMes && remitosMes.porObra) {
+      Object.entries(remitosMes.porObra).forEach(([obra,v]) => { tnTotal += (v.caliente||0); });
+      const entry = Object.entries(remitosMes.porObra).find(([k]) => k.toLowerCase()===nk||k.toLowerCase()===ck);
+      if (entry) tnObra = entry[1].caliente || 0;
+    }
+    const moObra = (moTotal > 0 && tnTotal > 0 && tnObra > 0) ? Math.round(moTotal*(tnObra/tnTotal)) : null;
+    html = `<div style="font-size:12px;color:var(--muted);margin-bottom:12px;">MO prorrateada por Tn caliente · ${mes} · Fuente: TANGO (Mauro)</div>
+      <div style="display:grid;gap:8px;">
+        <div style="background:#f8fafc;border-radius:8px;padding:12px;">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">MO total obras del mes</div>
+          <div style="font-size:18px;font-weight:700;" class="neg-val">${moTotal>0?fmt(moTotal):'sin dato'}</div>
+        </div>
+        <div style="background:#f8fafc;border-radius:8px;padding:12px;">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">Tn caliente de esta obra / Total mes</div>
+          <div style="font-size:16px;font-weight:700;">${fmtTn(tnObra)} tn / ${fmtTn(tnTotal)} tn</div>
+        </div>
+        <div style="background:#fef2f2;border-radius:8px;padding:12px;border:1px solid #fca5a5;">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">MO asignada a esta obra</div>
+          <div style="font-size:20px;font-weight:700;" class="neg-val">${moObra!=null?fmt(moObra):'—'}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:4px;">${fmt(moTotal)} × ${fmtTn(tnObra)}tn / ${fmtTn(tnTotal)}tn total</div>
+        </div>
+      </div>`;
+
+  } else if (tipo === 'tn') {
+    titulo = 'Tn Asfalto — ' + (nombreObra || codObra);
+    const remitosMes = REMITOS_ASFALTO[mesActual];
+    const nk = (nombreObra||'').toLowerCase().trim();
+    const ck = (codObra||'').toLowerCase().trim();
+    let tnCal = 0, tnFrio = 0;
+    if (remitosMes && remitosMes.porObra) {
+      const entry = Object.entries(remitosMes.porObra).find(([k]) => k.toLowerCase()===nk||k.toLowerCase()===ck);
+      if (entry) { tnCal = entry[1].caliente||0; tnFrio = entry[1].frio||0; }
+    }
+    const precio = PRECIO_ASFALTO[mesActual] || null;
+    const costoTotal = precio ? Math.round(tnCal*(precio.caliente||0)+tnFrio*(precio.frio||0)) : null;
+    html = `<div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Remitos de producción · ${mes} · Fuente: Roberto</div>
+      <div style="display:grid;gap:8px;">
+        <div style="background:#f8fafc;border-radius:8px;padding:12px;">
+          <div style="font-size:11px;color:var(--muted);">Asfalto caliente</div>
+          <div style="font-size:20px;font-weight:700;">${fmtTn(tnCal)} tn</div>
+          ${precio&&precio.caliente?`<div style="font-size:11px;color:var(--muted);">${fmtTn(tnCal)} tn × $${fmt(precio.caliente)}/tn</div>`:''}
+        </div>
+        ${tnFrio>0?`<div style="background:#f8fafc;border-radius:8px;padding:12px;">
+          <div style="font-size:11px;color:var(--muted);">Asfalto frío</div>
+          <div style="font-size:20px;font-weight:700;">${fmtTn(tnFrio)} tn</div>
+          ${precio&&precio.frio?`<div style="font-size:11px;color:var(--muted);">${fmtTn(tnFrio)} tn × $${fmt(precio.frio)}/tn</div>`:''}
+        </div>`:''}
+        ${costoTotal!=null?`<div style="background:#fef2f2;border-radius:8px;padding:12px;border:1px solid #fca5a5;">
+          <div style="font-size:11px;color:var(--muted);">Costo total asfalto</div>
+          <div style="font-size:20px;font-weight:700;" class="neg-val">${fmt(costoTotal)}</div>
+        </div>`:''}
+        ${tnCal===0&&tnFrio===0?'<p class="nd" style="padding:16px;">Sin remitos registrados para esta obra en '+mes+'</p>':''}
+      </div>`;
+
+  } else if (tipo === 'alquiler') {
+    titulo = 'Alquiler Equipos — ' + (nombreObra || codObra);
+    const alqMes = ALQUILER_EQUIPOS[mesActual];
+    const nk = (nombreObra||'').toLowerCase().trim();
+    const ck = (codObra||'').toLowerCase().trim();
+    const entry = alqMes ? alqMes.porObra.find(o => o.obra.toLowerCase()===nk||o.obra.toLowerCase()===ck) : null;
+    if (!entry) {
+      html = '<p class="nd" style="padding:16px;">Sin horas de equipos registradas para esta obra en ' + mes + '</p>';
+    } else {
+      html = `<div style="font-size:12px;color:var(--muted);margin-bottom:10px;">${fmtTn(entry.horasTot)} hs totales · TC $${alqMes.tcUsd}/USD · ${mes} · Fuente: Partes diarios (Nico)</div>
+        <table style="width:100%;border-collapse:collapse;">
+          <thead><tr style="background:#f1f5f9;"><th style="text-align:left;padding:7px 10px;font-size:11px;">Equipo</th><th style="text-align:left;padding:7px 10px;font-size:11px;">Marca/Modelo</th><th style="text-align:right;padding:7px 10px;font-size:11px;">Horas</th><th style="text-align:right;padding:7px 10px;font-size:11px;">Costo</th></tr></thead>
+          <tbody>${entry.equipos.map(eq => `<tr style="border-top:1px solid var(--border);">
+            <td style="padding:7px 10px;font-size:12px;"><code style="font-size:10px;background:#f1f5f9;padding:1px 4px;border-radius:2px;">${eq.codigo}</code></td>
+            <td style="padding:7px 10px;font-size:11px;color:var(--muted);">${eq.marca} ${eq.modelo}</td>
+            <td style="padding:7px 10px;font-size:12px;text-align:right;">${Math.round(eq.horas*10)/10} hs</td>
+            <td style="padding:7px 10px;font-size:12px;text-align:right;" class="neg-val">${fmt(eq.costoArs)}</td>
+          </tr>`).join('')}
+          <tr style="background:#fef2f2;border-top:2px solid #fca5a5;font-weight:700;">
+            <td colspan="3" style="padding:8px 10px;font-size:12px;">TOTAL</td>
+            <td style="padding:8px 10px;text-align:right;" class="neg-val">${fmt(entry.costoArs)}</td>
+          </tr></tbody>
+        </table>`;
+    }
+  }
+
+  content.innerHTML = `
+    <div class="panel-title">${titulo}</div>
+    <div class="panel-sub">${mes}</div>
+    <div style="margin-top:14px;">${html}</div>`;
+  panel.classList.add('open');
+  overlay.classList.add('open');
 }
 
 function openTotalACobrarPanel() {
