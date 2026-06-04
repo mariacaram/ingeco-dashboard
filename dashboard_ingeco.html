@@ -1134,21 +1134,25 @@ const MES = { ene:'Enero 2026', feb:'Febrero 2026', mar:'Marzo 2026', abr:'Abril
 const MES_ORDER = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
 
 function _renderMonthButtons() {
-  const available = new Set();
+  // Siempre mostrar todos los meses desde ene hasta el mes actual del año en curso
+  const mesHoy = MES_ORDER[new Date().getMonth()];
+  const limiteIdx = MES_ORDER.indexOf(mesHoy);
+  // Agregar meses con datos (pueden incluir meses pasados o futuros del backend)
+  const conDatos = new Set();
   MES_ORDER.forEach(m => {
-    if (MO_CTRO_COSTO[m] || OC_INSUMOS[m] || ALQUILER_EQUIPOS[m] || REMITOS_ASFALTO[m]) available.add(m);
-    if (GENERADO_POR_OBRA && GENERADO_POR_OBRA.obrasPorMes && GENERADO_POR_OBRA.obrasPorMes[m]) available.add(m);
+    if (MO_CTRO_COSTO[m] || OC_INSUMOS[m] || ALQUILER_EQUIPOS[m] || REMITOS_ASFALTO[m]) conDatos.add(m);
+    if (GENERADO_POR_OBRA && GENERADO_POR_OBRA.obrasPorMes && GENERADO_POR_OBRA.obrasPorMes[m]) conDatos.add(m);
   });
-  const meses = MES_ORDER.filter(m => available.has(m));
-  if (meses.length === 0) return;
-  if (!available.has(mesActual)) mesActual = meses[meses.length - 1];
+  // Unión: meses hasta hoy + meses con datos
+  const meses = MES_ORDER.filter((m, i) => i <= limiteIdx || conDatos.has(m));
+  if (!meses.includes(mesActual)) mesActual = meses[meses.length - 1];
   const container = document.getElementById('month-btns');
   if (!container) return;
   container.innerHTML = meses.map(m =>
     `<button class="month-btn${m === mesActual ? ' active' : ''}" data-mes="${m}" onclick="setMes('${m}')">${MES[m]}</button>`
   ).join('');
 }
-let mesActual = 'mar';
+let mesActual = 'may';
 
 // Canal 82008 — dato real del archivo Cobros
 const CANAL_82008 = {
