@@ -871,15 +871,22 @@ function fetchTCMensual(mesKey) {
 
 function leerAlquilerEquipos() {
   try {
-    // 1. Leer precios — solo equipos con PF definido (maquinaria pesada)
+    // 1. Leer precios — buscar en todas las hojas la que tenga CÓDIGO + PF
     const ssPrecios = SpreadsheetApp.openById(FILE_IDS.equiposFlota);
-    const rowsPrecios = ssPrecios.getSheets()[0].getDataRange().getValues();
-
-    let hdrPIdx = 0;
-    for (let i = 0; i < Math.min(10, rowsPrecios.length); i++) {
-      // Buscar la celda que sea EXACTAMENTE 'CÓDIGO' (no substring de "CÓDIGOS DE EQUIPOS")
-      const cells = rowsPrecios[i].map(c => String(c).toUpperCase().trim());
-      if (cells.some(c => c === 'CÓDIGO' || c === 'CODIGO')) { hdrPIdx = i; break; }
+    let rowsPrecios = null, hdrPIdx = 0;
+    for (const sheetP of ssPrecios.getSheets()) {
+      const rows = sheetP.getDataRange().getValues();
+      for (let i = 0; i < Math.min(10, rows.length); i++) {
+        const cells = rows[i].map(c => String(c).toUpperCase().trim());
+        const tieneCod = cells.some(c => c === 'CÓDIGO' || c === 'CODIGO');
+        const tienePF  = cells.some(c => c === 'PF');
+        if (tieneCod && tienePF) { rowsPrecios = rows; hdrPIdx = i; break; }
+      }
+      if (rowsPrecios) break;
+    }
+    if (!rowsPrecios) {
+      Logger.log('leerAlquilerEquipos: no se encontró hoja con CÓDIGO + PF en equiposFlota');
+      return null;
     }
     const hP = rowsPrecios[hdrPIdx].map(h => String(h).toLowerCase().trim());
     const iCod    = _findCol(hP, ['código', 'codigo']);
