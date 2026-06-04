@@ -2671,7 +2671,7 @@ function openTotalACobrarPanel() {
 
   const buildFila = o => {
     const monto = o.aCobrar ?? o.generado ?? 0;
-    const items = o.items && o.items.length > 0 ? o.items : [];
+    const items = o.items && o.items.length > 0 ? [...o.items].sort((a,b) => b.monto - a.monto) : [];
     const detalles = items.map(it => `
       <tr style="border-top:1px solid var(--border);background:#fafafa;">
         <td style="padding:4px 10px 4px 24px;font-size:11px;color:var(--text);">${it.nombre}</td>
