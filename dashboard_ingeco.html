@@ -1559,7 +1559,7 @@ function nd(text) {
 // ================================================================
 
 function renderMargen() {
-  const tbody = document.getElementById('tbody-margen');
+  const tbody = document.getElementById('tbody-margen'); // puede ser null si la tabla fue eliminada
   const mesLabel = document.getElementById('mes-label-margen');
   if (mesLabel) mesLabel.textContent = MES[mesActual];
 
@@ -1692,9 +1692,9 @@ function renderMargen() {
         Sin período asignado · ${_sinP.length} obra${_sinP.length !== 1 ? 's' : ''}
       </td></tr>` + _sinP.map(buildRow).join('');
     }
-    tbody.innerHTML = html;
+    if (tbody) tbody.innerHTML = html;
   } else {
-    tbody.innerHTML = '<tr><td colspan="5" class="nd" style="text-align:center;padding:20px;">Presioná "Actualizar datos" para cargar desde Drive</td></tr>';
+    if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="nd" style="text-align:center;padding:20px;">Presioná "Actualizar datos" para cargar desde Drive</td></tr>';
   }
 
   renderResumenObra();
