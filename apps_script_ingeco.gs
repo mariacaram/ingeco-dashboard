@@ -876,19 +876,22 @@ function leerAlquilerEquipos() {
     let rowsPrecios = null, hdrPIdx = 0;
     for (const sheetP of ssPrecios.getSheets()) {
       const rows = sheetP.getDataRange().getValues();
+      Logger.log('equiposFlota — revisando hoja: ' + sheetP.getName());
       for (let i = 0; i < Math.min(10, rows.length); i++) {
         const cells = rows[i].map(c => String(c).toUpperCase().trim());
-        const tieneCod = cells.some(c => c === 'CÓDIGO' || c === 'CODIGO');
-        const tienePF  = cells.some(c => c === 'PF');
+        const tieneCod = cells.some(c => c === 'CÓDIGO' || c === 'CODIGO' || c.includes('CÓDIGO') || c.includes('CODIGO'));
+        const tienePF  = cells.some(c => c === 'PF' || c.startsWith('PF ') || c.startsWith('PF(') || c === 'P.F.');
+        Logger.log('  fila ' + i + ': tieneCod=' + tieneCod + ' tienePF=' + tienePF + ' | ' + cells.slice(0,8).join(' | '));
         if (tieneCod && tienePF) { rowsPrecios = rows; hdrPIdx = i; break; }
       }
-      if (rowsPrecios) break;
+      if (rowsPrecios) { Logger.log('  → hoja seleccionada: ' + sheetP.getName()); break; }
     }
     if (!rowsPrecios) {
       Logger.log('leerAlquilerEquipos: no se encontró hoja con CÓDIGO + PF en equiposFlota');
       return null;
     }
     const hP = rowsPrecios[hdrPIdx].map(h => String(h).toLowerCase().trim());
+    Logger.log('equiposFlota headers: ' + hP.join(' | '));
     const iCod    = _findCol(hP, ['código', 'codigo']);
     const iPF     = _findCol(hP, ['pf']);
     const iClasif = _findCol(hP, ['clasificación', 'clasificacion']);
@@ -915,7 +918,14 @@ function leerAlquilerEquipos() {
     // 2. Leer partes diarios — hoja única "PARTES DIARIOS"
     // Col A(0)=Fecha, B(1)=Equipo, C(2)=Código equipo, F(5)=Obra, I(8)=Total horas, Q(16)=Código obra
     const ssUso  = SpreadsheetApp.openById(FILE_IDS.usageEquipos);
-    const sheetPD = ssUso.getSheetByName('PARTES DIARIOS') || ssUso.getSheets()[0];
+    // Buscar la hoja de partes diarios por nombre (flexible) o por contenido
+    let sheetPD = null;
+    for (const s of ssUso.getSheets()) {
+      const n = s.getName().toUpperCase().replace(/\s+/g,'');
+      if (n.includes('PARTESDIARIOS') || n.includes('PARTES')) { sheetPD = s; break; }
+    }
+    if (!sheetPD) sheetPD = ssUso.getSheets()[0];
+    Logger.log('Partes diarios — usando hoja: ' + sheetPD.getName());
     const rowsPD  = sheetPD.getDataRange().getValues();
 
     const COL_FECHA_PD    = 0;  // A: Fecha
@@ -1356,6 +1366,50 @@ function diagnostico() {
 // DIAGNÓSTICO ESPECÍFICO DE EQUIPOS
 // Ejecutar desde el editor → Ver → Registros
 // ============================================================
+// ============================================================
+// DIAGNÓSTICO ESPECÍFICO DE ALQUILER — para detectar por qué no encuentra datos
+// Ejecutar desde el editor → Ver → Registros
+// ============================================================
+function diagnosticoAlquiler() {
+  Logger.log('=== DIAGNÓSTICO ALQUILER ===');
+
+  // 1. Archivo de TARIFAS
+  try {
+    const ss = SpreadsheetApp.openById(FILE_IDS.equiposFlota);
+    Logger.log('Tarifas — hojas: ' + ss.getSheets().map(s => s.getName()).join(', '));
+    for (const sheet of ss.getSheets()) {
+      const rows = sheet.getDataRange().getValues();
+      Logger.log('Hoja "' + sheet.getName() + '" — filas: ' + rows.length);
+      Logger.log('  Primeras 5 filas (cols 0-7):');
+      for (let i = 0; i < Math.min(5, rows.length); i++) {
+        Logger.log('    ' + i + ': ' + rows[i].slice(0,8).map(c => JSON.stringify(c)).join(' | '));
+      }
+    }
+  } catch(e) { Logger.log('ERROR tarifas: ' + e); }
+
+  // 2. Archivo de PARTES DIARIOS
+  try {
+    const ss = SpreadsheetApp.openById(FILE_IDS.usageEquipos);
+    Logger.log('\nPartes diarios — hojas: ' + ss.getSheets().map(s => s.getName()).join(', '));
+    for (const sheet of ss.getSheets()) {
+      const rows = sheet.getDataRange().getValues();
+      Logger.log('Hoja "' + sheet.getName() + '" — filas: ' + rows.length);
+      Logger.log('  Primeras 5 filas (cols A-I):');
+      for (let i = 0; i < Math.min(5, rows.length); i++) {
+        Logger.log('    ' + i + ': ' + rows[i].slice(0,9).map(c => JSON.stringify(c)).join(' | '));
+      }
+      // Buscar filas de marzo
+      const marzo = rows.filter((r, i) => i > 0 && r[0] instanceof Date && r[0].getMonth() === 2);
+      Logger.log('  Filas de marzo: ' + marzo.length);
+      if (marzo.length > 0) {
+        Logger.log('  Muestra de marzo: ' + marzo.slice(0,3).map(r => 'cod=' + JSON.stringify(r[2]) + ' horas=' + JSON.stringify(r[8])).join(' | '));
+      }
+    }
+  } catch(e) { Logger.log('ERROR partes diarios: ' + e); }
+
+  Logger.log('=== FIN DIAGNÓSTICO ALQUILER ===');
+}
+
 function diagnosticoEquipos() {
   Logger.log('=== DIAGNÓSTICO EQUIPOS ===');
 
