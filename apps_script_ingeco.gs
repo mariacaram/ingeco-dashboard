@@ -1432,22 +1432,29 @@ function diagnosticoObras() {
     // Contar filas por estado y parsear períodos
     const resumen = {};
     let nProcesadas = 0, nFiltradas = 0;
+    const estadosFiltrados = {};
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i];
       if (cfg.iEstado !== null) {
         const estado = String(row[cfg.iEstado] || '').trim().toLowerCase();
-        if (!cfg.estadoFiltro.includes(estado)) { nFiltradas++; continue; }
+        if (!cfg.estadoFiltro.includes(estado)) {
+          nFiltradas++;
+          estadosFiltrados[estado || '(vacío)'] = (estadosFiltrados[estado || '(vacío)'] || 0) + 1;
+          // Mostrar si tiene período
+          const rawP = row[cfg.iPeriodo];
+          const mk = _parseMesKey(rawP, curYear);
+          if (mk) Logger.log('  ⚠ FILTRADA con período ' + mk + ': estado="' + estado + '" | periodo=' + JSON.stringify(rawP instanceof Date ? rawP.toISOString() : rawP));
+          continue;
+        }
       }
       nProcesadas++;
       const rawPeriodo = row[cfg.iPeriodo];
       let periodoStr = rawPeriodo instanceof Date ? rawPeriodo.toISOString() : JSON.stringify(rawPeriodo);
       const mesKey = _parseMesKey(rawPeriodo, curYear);
       resumen[mesKey || 'SIN-MES'] = (resumen[mesKey || 'SIN-MES'] || 0) + 1;
-      if (nProcesadas <= 5) {
-        Logger.log('  Fila ' + i + ': estado=OK | periodo col ' + cfg.iPeriodo + '=' + periodoStr + ' → mesKey=' + mesKey + ' | monto=' + row[cfg.iMonto]);
-      }
     }
     Logger.log('  Procesadas: ' + nProcesadas + ' | Filtradas por estado: ' + nFiltradas);
+    Logger.log('  Estados filtrados: ' + JSON.stringify(estadosFiltrados));
     Logger.log('  Distribución por mes: ' + JSON.stringify(resumen));
   }
 
