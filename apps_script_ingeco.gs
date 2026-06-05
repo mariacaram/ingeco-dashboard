@@ -1393,6 +1393,68 @@ function configurarTriggerNocturno() {
 }
 
 // ============================================================
+// DIAGNÓSTICO ESPECÍFICO: OBRAS (nuevo archivo)
+// Ejecutar desde el editor → Ver → Registros
+// ============================================================
+function diagnosticoObras() {
+  Logger.log('=== DIAGNÓSTICO OBRAS ===');
+  const curYear = new Date().getFullYear();
+  Logger.log('Año actual: ' + curYear);
+
+  const ss = SpreadsheetApp.openById(FILE_IDS.fernandoObras);
+  Logger.log('Archivo: ' + ss.getName());
+  Logger.log('Pestañas: ' + ss.getSheets().map(s => s.getName()).join(', '));
+
+  const TAB_CONFIG = {
+    'OBRAS DE MUNICIPIO': { iMonto: 6, iMontoFallback: 5, iPeriodo: 17, iEstado: 4, estadoFiltro: ['a cobrar', 'cobrada'] },
+    'VIALIDAD1':          { iMonto: 8, iMontoFallback: 7,  iPeriodo: 20, iEstado: null, estadoFiltro: null },
+    'OTROS INGRESOS':     { iMonto: 5, iMontoFallback: null, iPeriodo: 15, iEstado: null, estadoFiltro: null },
+  };
+
+  for (const sheet of ss.getSheets()) {
+    const tabName = sheet.getName().trim().toUpperCase();
+    let cfg = null;
+    for (const key of Object.keys(TAB_CONFIG)) {
+      if (tabName.includes(key)) { cfg = TAB_CONFIG[key]; break; }
+    }
+    if (!cfg) continue;
+
+    const rows = sheet.getDataRange().getValues();
+    Logger.log('\n--- Pestaña: ' + sheet.getName() + ' (' + rows.length + ' filas) ---');
+
+    // Mostrar primeras 3 filas para ver estructura
+    for (let i = 0; i < Math.min(3, rows.length); i++) {
+      Logger.log('  Fila ' + i + ': ' + rows[i].slice(0, 20).map(function(c, ci) {
+        return ci + '=' + JSON.stringify(c instanceof Date ? c.toISOString() : c);
+      }).join(' | '));
+    }
+
+    // Contar filas por estado y parsear períodos
+    const resumen = {};
+    let nProcesadas = 0, nFiltradas = 0;
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      if (cfg.iEstado !== null) {
+        const estado = String(row[cfg.iEstado] || '').trim().toLowerCase();
+        if (!cfg.estadoFiltro.includes(estado)) { nFiltradas++; continue; }
+      }
+      nProcesadas++;
+      const rawPeriodo = row[cfg.iPeriodo];
+      let periodoStr = rawPeriodo instanceof Date ? rawPeriodo.toISOString() : JSON.stringify(rawPeriodo);
+      const mesKey = _parseMesKey(rawPeriodo, curYear);
+      resumen[mesKey || 'SIN-MES'] = (resumen[mesKey || 'SIN-MES'] || 0) + 1;
+      if (nProcesadas <= 5) {
+        Logger.log('  Fila ' + i + ': estado=OK | periodo col ' + cfg.iPeriodo + '=' + periodoStr + ' → mesKey=' + mesKey + ' | monto=' + row[cfg.iMonto]);
+      }
+    }
+    Logger.log('  Procesadas: ' + nProcesadas + ' | Filtradas por estado: ' + nFiltradas);
+    Logger.log('  Distribución por mes: ' + JSON.stringify(resumen));
+  }
+
+  Logger.log('\n=== FIN DIAGNÓSTICO OBRAS ===');
+}
+
+// ============================================================
 // FUNCIÓN DE DIAGNÓSTICO
 // Ejecutar desde el editor para ver qué datos devuelve el script
 // antes de desplegar. Ver el resultado en Ver → Registros.
