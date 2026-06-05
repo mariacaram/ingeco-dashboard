@@ -873,47 +873,67 @@ function leerAlquilerEquipos() {
   try {
     // 1. Leer precios — buscar en todas las hojas la que tenga CÓDIGO + PF
     const ssPrecios = SpreadsheetApp.openById(FILE_IDS.equiposFlota);
+    // Detectar hoja con CÓDIGO + PRECIO — no depende del label "PF" (puede estar en celda combinada
+    // que getValues() no retorna). PF se calcula como PRECIO × COEFICIENTE directamente.
     let rowsPrecios = null, hdrPIdx = 0;
     for (const sheetP of ssPrecios.getSheets()) {
       const rows = sheetP.getDataRange().getValues();
       Logger.log('equiposFlota — revisando hoja: ' + sheetP.getName());
-      for (let i = 0; i < Math.min(10, rows.length); i++) {
+      for (let i = 0; i < Math.min(12, rows.length); i++) {
         const cells = rows[i].map(c => String(c).toUpperCase().trim());
-        const tieneCod = cells.some(c => c === 'CÓDIGO' || c === 'CODIGO' || c.includes('CÓDIGO') || c.includes('CODIGO'));
-        const tienePF  = cells.some(c => c === 'PF' || c.startsWith('PF ') || c.startsWith('PF(') || c === 'P.F.');
-        Logger.log('  fila ' + i + ': tieneCod=' + tieneCod + ' tienePF=' + tienePF + ' | ' + cells.slice(0,8).join(' | '));
-        if (tieneCod && tienePF) { rowsPrecios = rows; hdrPIdx = i; break; }
+        const tieneCod    = cells.some(c => c === 'CÓDIGO' || c === 'CODIGO' || c.includes('CÓDIGO') || c.includes('CODIGO'));
+        const tienePrecio = cells.some(c => c === 'PRECIO');
+        Logger.log('  fila ' + i + ': tieneCod=' + tieneCod + ' tienePrecio=' + tienePrecio + ' | ' + cells.slice(0,10).join(' | '));
+        if (tieneCod && tienePrecio) { rowsPrecios = rows; hdrPIdx = i; break; }
       }
       if (rowsPrecios) { Logger.log('  → hoja seleccionada: ' + sheetP.getName()); break; }
     }
     if (!rowsPrecios) {
-      Logger.log('leerAlquilerEquipos: no se encontró hoja con CÓDIGO + PF en equiposFlota');
+      Logger.log('leerAlquilerEquipos: no se encontró hoja con CÓDIGO + PRECIO en equiposFlota');
       return null;
     }
     const hP = rowsPrecios[hdrPIdx].map(h => String(h).toLowerCase().trim());
-    Logger.log('equiposFlota headers: ' + hP.join(' | '));
+    Logger.log('equiposFlota headers (fila ' + hdrPIdx + '): ' + hP.join(' | '));
     const iCod    = _findCol(hP, ['código', 'codigo']);
-    const iPF     = _findCol(hP, ['pf']);
+    const iPrecio = _findCol(hP, ['precio']);
+    const iCoef   = _findCol(hP, ['coeficiente', 'coef']);
+    // PF preferido: columna "pf" si existe; sino se calcula de precio × coeficiente
+    const iPF     = _findCol(hP, ['pf', 'p.f.']);
     const iClasif = _findCol(hP, ['clasificación', 'clasificacion']);
     const iMarca  = _findCol(hP, ['marca']);
     const iModelo = _findCol(hP, ['modelo']);
-    if (iCod === null || iPF === null) return null;
+    Logger.log('Cols: iCod=' + iCod + ' iPrecio=' + iPrecio + ' iCoef=' + iCoef + ' iPF=' + iPF + ' iClasif=' + iClasif);
+    if (iCod === null || iPrecio === null) return null;
 
     const precios = {};
     for (let i = hdrPIdx + 1; i < rowsPrecios.length; i++) {
       const row = rowsPrecios[i];
       const cod = String(row[iCod] || '').trim();
-      const pf  = typeof row[iPF] === 'number' ? row[iPF]
-                : parseFloat(String(row[iPF]).replace(',', '.')) || 0;
-      if (!cod || pf <= 0) continue;
+      if (!cod) continue;
+
+      // Leer PF directo si la columna existe, sino precio × coeficiente
+      let pf = 0;
+      if (iPF !== null) {
+        pf = typeof row[iPF] === 'number' ? row[iPF]
+           : parseFloat(String(row[iPF]).replace(',', '.')) || 0;
+      }
+      if (pf <= 0 && iPrecio !== null && iCoef !== null) {
+        const precio = typeof row[iPrecio] === 'number' ? row[iPrecio]
+                     : parseFloat(String(row[iPrecio]).replace(',', '.')) || 0;
+        const coef   = typeof row[iCoef]   === 'number' ? row[iCoef]
+                     : parseFloat(String(row[iCoef]).replace(',', '.')) || 0;
+        pf = Math.round(precio * coef * 10) / 10;
+      }
+      if (pf <= 0) continue;
+
       precios[cod] = {
-        pf_usd:       pf,
+        pf_usd:        pf,
         clasificacion: String(row[iClasif] || '').trim(),
         marca:         String(row[iMarca]  || '').trim(),
         modelo:        String(row[iModelo] || '').trim()
       };
     }
-    Logger.log('Equipos con PF: ' + Object.keys(precios).length);
+    Logger.log('Equipos con PF: ' + Object.keys(precios).length + ' — primeros: ' + Object.keys(precios).slice(0,5).join(', '));
 
     // 2. Leer partes diarios — hoja única "PARTES DIARIOS"
     // Col A(0)=Fecha, B(1)=Equipo, C(2)=Código equipo, F(5)=Obra, I(8)=Total horas, Q(16)=Código obra

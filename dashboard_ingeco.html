@@ -1907,7 +1907,7 @@ function renderAlquilerEquipos() {
   if (!datos || !datos.porObra || datos.porObra.length === 0) {
     tbody.innerHTML = '<tr><td colspan="3" class="nd" style="text-align:center;padding:16px;">Sin datos para el mes seleccionado — actualizá desde Drive</td></tr>';
     if (kpiEl)  kpiEl.textContent  = 'sin dato';
-    if (kpiSub) kpiSub.textContent = 'Solo disponible desde Abril 2026';
+    if (kpiSub) kpiSub.textContent = 'Sin datos para el mes seleccionado — actualizá desde Drive';
     return;
   }
 
@@ -3707,9 +3707,11 @@ async function refreshData() {
       if (data.generadoPorObra) {
         GENERADO_POR_OBRA = data.generadoPorObra;
       }
+      console.log('[ALQUILER] data.alquilerEquipos =', JSON.stringify(data.alquilerEquipos || null).substring(0, 600));
       if (data.alquilerEquipos) {
         Object.assign(ALQUILER_EQUIPOS, data.alquilerEquipos);
       }
+      console.log('[ALQUILER] ALQUILER_EQUIPOS[mar] =', JSON.stringify(ALQUILER_EQUIPOS['mar'] || null).substring(0, 400));
       if (data.remitosAsfalto && typeof data.remitosAsfalto === 'object') {
         Object.assign(REMITOS_ASFALTO, data.remitosAsfalto);
       }
