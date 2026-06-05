@@ -965,7 +965,7 @@ function leerAlquilerEquipos() {
     const COL_COD_EQ      = 2;  // C: Código de equipo
     const COL_OBRA_PD     = 5;  // F: Nombre de obra
     const COL_HORAS_PD    = 8;  // I: Total de horas
-    const COL_COD_OBRA_PD = 16; // Q: Código de obra (preferido para agrupar)
+    const COL_COD_OBRA_PD = 17; // R: Código de obra (preferido para agrupar — confirmado por usuario)
 
     let hdrPD = 0;
     for (let i = 0; i < Math.min(5, rowsPD.length); i++) {
