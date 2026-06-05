@@ -1934,12 +1934,6 @@ function renderAlquilerEquipos() {
     return;
   }
 
-  // Actualizar KPI de Taller
-  const tallerKpi    = document.getElementById('kpi-taller-alquiler');
-  const tallerKpiSub = document.getElementById('kpi-taller-alquiler-sub');
-  if (tallerKpi)    tallerKpi.textContent    = fmt(datos.totalArs);
-  if (tallerKpiSub) tallerKpiSub.textContent = MES[mesActual] || mesActual;
-
   const filas = datos.porObra.map(it => {
     const obraEsc = it.obra.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     return `<tr style="cursor:pointer;" onclick="openAlquilerPanel('${obraEsc}')" title="Ver detalle de equipos">
