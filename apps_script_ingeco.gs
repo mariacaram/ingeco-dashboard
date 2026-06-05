@@ -35,7 +35,7 @@ const FILE_IDS = {
 
 // Tipo de cambio USD → ARS oficial promedio mensual (Banco Nación Argentina)
 // Actualizar cada mes con el promedio del período
-const TC_USD_MENSUAL = { feb: 1430, mar: 1413, abr: 1397, may: 1381, jun: 1170 };
+const TC_USD_MENSUAL = { feb: 1430, mar: 1413, abr: 1397, may: 1381, jun: 1427 };
 
 // Cache en PropertiesService — evita leer Drive en cada request
 const PROPS = PropertiesService.getScriptProperties();
