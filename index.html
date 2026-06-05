@@ -1904,15 +1904,26 @@ function renderAlquilerEquipos() {
   const kpiSub = document.getElementById('kpi-alquiler-sub');
 
   const datos = ALQUILER_EQUIPOS[mesActual];
-  if (!datos || !datos.porObra || datos.porObra.length === 0) {
+
+  // Sin ningún dato
+  if (!datos || (!datos.totalArs && (!datos.porObra || datos.porObra.length === 0))) {
     tbody.innerHTML = '<tr><td colspan="3" class="nd" style="text-align:center;padding:16px;">Sin datos para el mes seleccionado — actualizá desde Drive</td></tr>';
-    if (kpiEl)  kpiEl.textContent  = 'sin dato';
-    if (kpiSub) kpiSub.textContent = 'Solo disponible desde Abril 2026';
+    if (kpiEl)  { kpiEl.textContent = 'sin dato'; kpiEl.className = 'kpi-value nd'; }
+    if (kpiSub) kpiSub.textContent = 'Sin datos para el mes seleccionado — actualizá desde Drive';
     return;
   }
 
-  if (kpiEl)  kpiEl.textContent  = fmt(datos.totalArs);
-  if (kpiSub) kpiSub.textContent = 'TC USD oficial: $' + datos.tcUsd.toLocaleString('es-AR') + '/USD (BNA promedio ' + (MES[mesActual] || mesActual) + ')';
+  // Mostrar KPI siempre que haya totalArs (aunque falte el detalle por obra)
+  if (kpiEl)  { kpiEl.textContent = fmt(datos.totalArs); kpiEl.className = 'kpi-value neg-val'; }
+  if (kpiSub) kpiSub.textContent = datos.tcUsd
+    ? 'TC USD oficial: $' + datos.tcUsd.toLocaleString('es-AR') + '/USD (BNA promedio ' + (MES[mesActual] || mesActual) + ')'
+    : MES[mesActual] || mesActual;
+
+  // Sin detalle por obra (datos de caché viejo) — mostrar total sin tabla
+  if (!datos.porObra || datos.porObra.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="3" class="nd" style="text-align:center;padding:16px;">Detalle por obra no disponible — actualizá desde Drive para ver el desglose</td></tr>';
+    return;
+  }
 
   // Actualizar KPI de Taller
   const tallerKpi    = document.getElementById('kpi-taller-alquiler');
@@ -3707,9 +3718,11 @@ async function refreshData() {
       if (data.generadoPorObra) {
         GENERADO_POR_OBRA = data.generadoPorObra;
       }
+      console.log('[ALQUILER] data.alquilerEquipos =', JSON.stringify(data.alquilerEquipos || null).substring(0, 600));
       if (data.alquilerEquipos) {
         Object.assign(ALQUILER_EQUIPOS, data.alquilerEquipos);
       }
+      console.log('[ALQUILER] ALQUILER_EQUIPOS[mar] =', JSON.stringify(ALQUILER_EQUIPOS['mar'] || null).substring(0, 400));
       if (data.remitosAsfalto && typeof data.remitosAsfalto === 'object') {
         Object.assign(REMITOS_ASFALTO, data.remitosAsfalto);
       }
