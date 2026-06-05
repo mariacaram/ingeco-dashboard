@@ -873,67 +873,80 @@ function leerAlquilerEquipos() {
   try {
     // 1. Leer precios — buscar en todas las hojas la que tenga CÓDIGO + PF
     const ssPrecios = SpreadsheetApp.openById(FILE_IDS.equiposFlota);
-    // Detectar hoja con CÓDIGO + PRECIO — no depende del label "PF" (puede estar en celda combinada
-    // que getValues() no retorna). PF se calcula como PRECIO × COEFICIENTE directamente.
-    let rowsPrecios = null, hdrPIdx = 0;
-    for (const sheetP of ssPrecios.getSheets()) {
-      const rows = sheetP.getDataRange().getValues();
-      Logger.log('equiposFlota — revisando hoja: ' + sheetP.getName());
-      for (let i = 0; i < Math.min(12, rows.length); i++) {
-        const cells = rows[i].map(c => String(c).toUpperCase().trim());
-        const tieneCod    = cells.some(c => c === 'CÓDIGO' || c === 'CODIGO' || c.includes('CÓDIGO') || c.includes('CODIGO'));
-        const tienePrecio = cells.some(c => c === 'PRECIO');
-        Logger.log('  fila ' + i + ': tieneCod=' + tieneCod + ' tienePrecio=' + tienePrecio + ' | ' + cells.slice(0,10).join(' | '));
-        if (tieneCod && tienePrecio) { rowsPrecios = rows; hdrPIdx = i; break; }
-      }
-      if (rowsPrecios) { Logger.log('  → hoja seleccionada: ' + sheetP.getName()); break; }
-    }
-    if (!rowsPrecios) {
-      Logger.log('leerAlquilerEquipos: no se encontró hoja con CÓDIGO + PRECIO en equiposFlota');
-      return null;
-    }
-    const hP = rowsPrecios[hdrPIdx].map(h => String(h).toLowerCase().trim());
-    Logger.log('equiposFlota headers (fila ' + hdrPIdx + '): ' + hP.join(' | '));
-    const iCod    = _findCol(hP, ['código', 'codigo']);
-    const iPrecio = _findCol(hP, ['precio']);
-    const iCoef   = _findCol(hP, ['coeficiente', 'coef']);
-    // PF preferido: columna "pf" si existe; sino se calcula de precio × coeficiente
-    const iPF     = _findCol(hP, ['pf', 'p.f.']);
-    const iClasif = _findCol(hP, ['clasificación', 'clasificacion']);
-    const iMarca  = _findCol(hP, ['marca']);
-    const iModelo = _findCol(hP, ['modelo']);
-    Logger.log('Cols: iCod=' + iCod + ' iPrecio=' + iPrecio + ' iCoef=' + iCoef + ' iPF=' + iPF + ' iClasif=' + iClasif);
-    if (iCod === null || iPrecio === null) return null;
+    // ── Detección de precios por PATRÓN de código de equipo (ej: CF-05, RDL-02) ──
+    // No busca texto de headers (puede estar en celdas combinadas que getValues() no retorna).
+    // Escanea todas las celdas buscando el primer valor que match /^[A-Z]{2,4}-\d{2,3}$/ y
+    // auto-detecta las columnas de PRECIO y COEFICIENTE buscando headers en filas previas.
+    const COD_EQUIPO_RE = /^[A-Z]{2,4}-\d{2,3}$/;
 
     const precios = {};
-    for (let i = hdrPIdx + 1; i < rowsPrecios.length; i++) {
-      const row = rowsPrecios[i];
-      const cod = String(row[iCod] || '').trim();
-      if (!cod) continue;
 
-      // Leer PF directo si la columna existe, sino precio × coeficiente
-      let pf = 0;
-      if (iPF !== null) {
-        pf = typeof row[iPF] === 'number' ? row[iPF]
-           : parseFloat(String(row[iPF]).replace(',', '.')) || 0;
-      }
-      if (pf <= 0 && iPrecio !== null && iCoef !== null) {
-        const precio = typeof row[iPrecio] === 'number' ? row[iPrecio]
-                     : parseFloat(String(row[iPrecio]).replace(',', '.')) || 0;
-        const coef   = typeof row[iCoef]   === 'number' ? row[iCoef]
-                     : parseFloat(String(row[iCoef]).replace(',', '.')) || 0;
-        pf = Math.round(precio * coef * 10) / 10;
-      }
-      if (pf <= 0) continue;
+    for (const sheetP of ssPrecios.getSheets()) {
+      const rows = sheetP.getDataRange().getValues();
+      Logger.log('equiposFlota — revisando hoja: ' + sheetP.getName() + ' (' + rows.length + ' filas)');
 
-      precios[cod] = {
-        pf_usd:        pf,
-        clasificacion: String(row[iClasif] || '').trim(),
-        marca:         String(row[iMarca]  || '').trim(),
-        modelo:        String(row[iModelo] || '').trim()
-      };
+      // Paso 1: encontrar la primera fila de datos con código de equipo
+      let iCod = -1, iDataStart = -1;
+      for (let r = 0; r < rows.length; r++) {
+        for (let c = 0; c < rows[r].length; c++) {
+          const v = String(rows[r][c] || '').trim().toUpperCase();
+          if (COD_EQUIPO_RE.test(v)) { iCod = c; iDataStart = r; break; }
+        }
+        if (iCod >= 0) break;
+      }
+      if (iCod < 0) { Logger.log('  → sin códigos de equipo, saltando'); continue; }
+      Logger.log('  → códigos encontrados en fila=' + iDataStart + ' col=' + iCod);
+
+      // Paso 2: detectar columnas de precio y coeficiente buscando en filas de header previas
+      let iPrecio = -1, iCoef = -1, iClasif = -1, iMarca = -1, iModelo = -1, iPF = -1;
+      for (let r = Math.max(0, iDataStart - 4); r <= iDataStart; r++) {
+        const cells = rows[r].map(c => String(c).toLowerCase().trim());
+        cells.forEach(function(v, ci) {
+          if (iPrecio < 0 && v === 'precio')                                        iPrecio = ci;
+          if (iCoef   < 0 && (v === 'coeficiente' || v.startsWith('coef')))         iCoef   = ci;
+          if (iClasif < 0 && (v.includes('clasif')))                                iClasif = ci;
+          if (iMarca  < 0 && v === 'marca')                                          iMarca  = ci;
+          if (iModelo < 0 && v === 'modelo')                                         iModelo = ci;
+          if (iPF     < 0 && (v === 'pf' || v === 'p.f.' || v.startsWith('pf ')))  iPF     = ci;
+        });
+      }
+      Logger.log('  → cols: iCod=' + iCod + ' iPrecio=' + iPrecio + ' iCoef=' + iCoef + ' iPF=' + iPF + ' iClasif=' + iClasif);
+
+      if (iPrecio < 0 && iPF < 0) { Logger.log('  → sin columna PRECIO ni PF, saltando'); continue; }
+
+      // Paso 3: leer todas las filas de datos
+      let nLeidos = 0;
+      for (let r = iDataStart; r < rows.length; r++) {
+        const row = rows[r];
+        const cod = String(row[iCod] || '').trim().toUpperCase();
+        if (!COD_EQUIPO_RE.test(cod)) continue;
+
+        // PF: columna PF directa, o calculada como precio × coeficiente
+        let pf = 0;
+        if (iPF >= 0) {
+          pf = typeof row[iPF] === 'number' ? row[iPF]
+             : parseFloat(String(row[iPF]).replace(',', '.')) || 0;
+        }
+        if (pf <= 0 && iPrecio >= 0 && iCoef >= 0) {
+          const precio = typeof row[iPrecio] === 'number' ? row[iPrecio] : parseFloat(String(row[iPrecio]).replace(',', '.')) || 0;
+          const coef   = typeof row[iCoef]   === 'number' ? row[iCoef]   : parseFloat(String(row[iCoef]).replace(',', '.'))   || 0;
+          pf = Math.round(precio * coef * 10) / 10;
+        }
+        if (pf <= 0) continue;
+
+        precios[cod] = {
+          pf_usd:        pf,
+          clasificacion: iClasif >= 0 ? String(row[iClasif] || '').trim() : '',
+          marca:         iMarca  >= 0 ? String(row[iMarca]  || '').trim() : '',
+          modelo:        iModelo >= 0 ? String(row[iModelo] || '').trim() : ''
+        };
+        nLeidos++;
+      }
+      Logger.log('  → ' + nLeidos + ' equipos leídos de esta hoja');
     }
-    Logger.log('Equipos con PF: ' + Object.keys(precios).length + ' — primeros: ' + Object.keys(precios).slice(0,5).join(', '));
+
+    Logger.log('Precios total: ' + Object.keys(precios).length + ' equipos — ' + Object.keys(precios).slice(0,8).join(', '));
+    if (Object.keys(precios).length === 0) return null;
 
     // 2. Leer partes diarios — hoja única "PARTES DIARIOS"
     // Col A(0)=Fecha, B(1)=Equipo, C(2)=Código equipo, F(5)=Obra, I(8)=Total horas, Q(16)=Código obra
@@ -1426,6 +1439,21 @@ function diagnosticoAlquiler() {
       }
     }
   } catch(e) { Logger.log('ERROR partes diarios: ' + e); }
+
+  // 3. Probar leerAlquilerEquipos completo
+  Logger.log('\n--- RESULTADO leerAlquilerEquipos ---');
+  try {
+    const alq = leerAlquilerEquipos();
+    if (!alq) { Logger.log('RESULTADO: null — la función no pudo leer los datos'); }
+    else {
+      const meses = Object.keys(alq);
+      Logger.log('Meses con datos: ' + meses.join(', '));
+      meses.forEach(function(m) {
+        const d = alq[m];
+        Logger.log('  ' + m + ': totalArs=' + d.totalArs + ' tcUsd=' + d.tcUsd + ' obras=' + (d.porObra ? d.porObra.length : 0));
+      });
+    }
+  } catch(e) { Logger.log('ERROR en leerAlquilerEquipos: ' + e); }
 
   Logger.log('=== FIN DIAGNÓSTICO ALQUILER ===');
 }
