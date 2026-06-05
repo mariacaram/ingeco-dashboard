@@ -28,7 +28,7 @@ const FILE_IDS = {
   equiposFlota: '1PEcPzwrQ8kE2evmUlrFq9wPbgWOR92MPl3LEqcSYbIk',  // Equipos + PF mensual (Adrián)
   usageEquipos:     '1e_emRVEUxTaNtLxeC0wXIWKzcKuoulZkFSS9O1e0XHo',  // Partes diarios — hoja única (Nico)
   repuestosEquipos: '1JpXjGTJwlvMuEI-rFTd4KeKvzd708-yuSLAhIRuCFC0',  // Compra de repuestos — hoja ENTREGAS (Nico)
-  remitosAsfalto:   '1mzN0yygmB3tqRDQdlbdJg3o3m_D1euKx955Zk7I5YyY',  // REMITOS OFICIALES (Roberto)
+  remitosAsfalto:   '13z7EEuVIedOwl85d_f8MEoJGCEioZO7m9Cbn8MWxihI',  // REMITOS OFICIALES (Roberto)
   ajusteStock:    '1yZArsIKYMfq9UPUXyiASXtDNXyubTjFx3PPW2VjG-uA',  // Formulario Ingreso Asfalto Agustín
   precioAsfalto:  '1lqKTXtDLT2FxyXurxjU1uE4epDOKs5SP8AXu5wAUsJ4',  // Precio de mercado asfalto $/tn por mes
 };
@@ -1232,28 +1232,36 @@ function leerRemitosAsfalto() {
       let hdrIdx = -1, iCant = -1, iUD = -1, iDesc = -1, iMes = -1, iAnio = -1, iFecha = -1, iObra = -1;
       for (let i = 0; i < Math.min(20, rows.length); i++) {
         const cells = rows[i].map(c => String(c).toUpperCase().trim());
-        const iC = cells.findIndex(c => c === 'CANT.' || c === 'CANT' || c === 'CANTIDAD');
-        const iU = cells.findIndex(c => c === 'U.D.' || c === 'U.M.' || c === 'UD' || c === 'UNIDAD');
-        if (iC >= 0 && iU >= 0) {
-          hdrIdx = i; iCant = iC; iUD = iU;
-          iDesc  = cells.findIndex(c => c === 'DESCRIPCION' || c === 'DESCRIPCIÓN');
-          iMes   = cells.findIndex(c => c === 'MES');
-          iAnio  = cells.findIndex(c => c === 'AÑO' || c === 'ANO' || c === 'AÑO');
+        // Acepta CANT.+U.D. (formato clásico) O DESCRIPCION+MES (formato nuevo Roberto)
+        const iC = cells.findIndex(c => c === 'CANT.' || c === 'CANT' || c === 'CANTIDAD' || c === 'TOTAL');
+        const iU = cells.findIndex(c => c === 'U.D.' || c === 'U.M.' || c === 'UD' || c === 'UNIDAD' || c === 'I');
+        const iDt = cells.findIndex(c => c === 'DESCRIPCION' || c === 'DESCRIPCIÓN');
+        const iMt = cells.findIndex(c => c === 'MES');
+        if ((iC >= 0 && iU >= 0) || (iDt >= 0 && iMt >= 0)) {
+          hdrIdx = i;
+          iCant  = iC >= 0 ? iC : (iDt >= 0 ? iDt - 2 : -1); // CANT suele estar 2 cols antes de DESCRIPCION
+          iUD    = iU >= 0 ? iU : (iDt >= 0 ? iDt - 1 : -1); // U.D. suele estar 1 col antes
+          iDesc  = iDt >= 0 ? iDt : cells.findIndex(c => c === 'DESCRIPCION' || c === 'DESCRIPCIÓN');
+          iMes   = iMt >= 0 ? iMt : cells.findIndex(c => c === 'MES');
+          iAnio  = cells.findIndex(c => c === 'AÑO' || c === 'ANO');
           iFecha = cells.findIndex(c => c === 'FECHA');
           iObra  = cells.findIndex(c => c === 'OBRA');
           break;
         }
       }
       if (hdrIdx < 0) continue;
-      Logger.log('Remitos [' + sheet.getName() + ']: hdr=' + hdrIdx + ' iCant=' + iCant + ' iUD=' + iUD + ' iDesc=' + iDesc + ' iMes=' + iMes + ' iAnio=' + iAnio + ' iFecha=' + iFecha);
+      Logger.log('Remitos [' + sheet.getName() + ']: hdr=' + hdrIdx + ' iCant=' + iCant + ' iUD=' + iUD + ' iDesc=' + iDesc + ' iMes=' + iMes + ' iAnio=' + iAnio + ' iObra=' + iObra);
 
       for (let i = hdrIdx + 1; i < rows.length; i++) {
         const row = rows[i];
 
-        const ud = String(row[iUD] || '').toUpperCase().trim();
-        if (ud !== 'TN') continue;
+        // Validar unidad: si la columna existe debe ser TN; si no existe, filtrar por descripción
+        if (iUD >= 0) {
+          const ud = String(row[iUD] || '').toUpperCase().trim();
+          if (ud !== 'TN') continue;
+        }
 
-        const desc = String(row[iDesc] || '').toUpperCase().trim();
+        const desc = String(iDesc >= 0 ? row[iDesc] || '' : '').toUpperCase().trim();
         if (!desc.includes('ASFALTO')) continue;
 
         const cant = typeof row[iCant] === 'number' ? row[iCant]
