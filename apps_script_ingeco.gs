@@ -1360,6 +1360,22 @@ function jsonResponse(obj) {
 // Ejecutar esta función UNA SOLA VEZ desde el editor de Scripts
 // (Menú: Ejecutar → configurarTriggerNocturno)
 // ============================================================
+// ============================================================
+// AUTORIZAR FETCH EXTERNO (UrlFetchApp)
+// Ejecutar UNA SOLA VEZ desde el editor para otorgar el permiso
+// de llamadas a internet (requerido para auto-fetch TC del BCRA)
+// ============================================================
+function autorizarFetchExterno() {
+  try {
+    const resp = UrlFetchApp.fetch('https://api.estadisticasbcra.site/usd_of', { muteHttpExceptions: true });
+    const data = JSON.parse(resp.getContentText());
+    const hoy  = data[data.length - 1];
+    Logger.log('✅ Permiso concedido. Último TC oficial BCRA: $' + hoy.v + ' (' + hoy.d + ')');
+  } catch(e) {
+    Logger.log('Error: ' + e);
+  }
+}
+
 function configurarTriggerNocturno() {
   // Eliminar triggers previos para esta función
   ScriptApp.getProjectTriggers()
