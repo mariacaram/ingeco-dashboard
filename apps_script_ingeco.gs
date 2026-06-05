@@ -839,34 +839,39 @@ function leerGeneradoPorObra() {
 
 // Devuelve el TC mensual desde la tabla hardcodeada o, si no está,
 // lo obtiene automáticamente del promedio diario de estadisticasbcra.site
+// Obtiene el TC USD oficial promedio del mes desde la API del BCRA.
+// Siempre intenta la API primero; usa TC_USD_MENSUAL como fallback si falla.
 function fetchTCMensual(mesKey) {
-  if (TC_USD_MENSUAL[mesKey] != null) return TC_USD_MENSUAL[mesKey];
-
   const MES_NUM = { ene:'01', feb:'02', mar:'03', abr:'04', may:'05', jun:'06',
                     jul:'07', ago:'08', sep:'09', oct:'10', nov:'11', dic:'12' };
   const mesNum = MES_NUM[mesKey];
-  if (!mesNum) return 1400;
+  if (!mesNum) return TC_USD_MENSUAL[mesKey] || 1400;
 
-  const year = String(new Date().getFullYear());
+  const year   = String(new Date().getFullYear());
   const prefix = year + '-' + mesNum + '-';
 
   try {
-    const url = 'https://api.estadisticasbcra.site/usd_of';
+    const url  = 'https://api.estadisticasbcra.site/usd_of';
     const resp = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
-    if (resp.getResponseCode() !== 200) return 1400;
-
-    const data = JSON.parse(resp.getContentText());
-    const dias = data.filter(function(item) { return item.d && item.d.startsWith(prefix); });
-    if (dias.length === 0) return 1400;
-
-    const avg = Math.round(dias.reduce(function(s, i) { return s + i.v; }, 0) / dias.length);
-    Logger.log('TC auto-fetch ' + mesKey + ' ' + year + ': ' + avg + ' (n=' + dias.length + ')');
-    TC_USD_MENSUAL[mesKey] = avg; // cache para re-uso dentro de la misma ejecución
-    return avg;
+    if (resp.getResponseCode() === 200) {
+      const data = JSON.parse(resp.getContentText());
+      const dias = data.filter(function(item) { return item.d && item.d.startsWith(prefix); });
+      if (dias.length > 0) {
+        const avg = Math.round(dias.reduce(function(s, i) { return s + i.v; }, 0) / dias.length);
+        Logger.log('TC API ' + mesKey + ' ' + year + ': $' + avg + ' (promedio ' + dias.length + ' días hábiles)');
+        TC_USD_MENSUAL[mesKey] = avg; // actualiza tabla para re-uso en la misma ejecución
+        return avg;
+      }
+      Logger.log('TC API: sin datos para ' + mesKey + ' ' + year + ' — usando fallback');
+    } else {
+      Logger.log('TC API: error HTTP ' + resp.getResponseCode() + ' — usando fallback');
+    }
   } catch(e) {
-    Logger.log('fetchTCMensual(' + mesKey + ') error: ' + e);
-    return 1400;
+    Logger.log('TC API error (' + mesKey + '): ' + e + ' — usando fallback hardcodeado');
   }
+
+  // Fallback: valor hardcodeado si la API falla o no tiene el mes aún
+  return TC_USD_MENSUAL[mesKey] || 1400;
 }
 
 function leerAlquilerEquipos() {
