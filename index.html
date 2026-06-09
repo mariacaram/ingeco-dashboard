@@ -4096,9 +4096,9 @@ function renderRRHH() {
   const mesLbl = document.getElementById('rrhh-mes-label');
   if (mesLbl) mesLbl.textContent = MES[mesActual] || mesActual;
 
-  // Fuente de datos individual: MO_TALLER_1Q_ABR (disponible siempre)
-  // En el futuro, aquí se puede conectar un array completo con todos los empleados
-  const datos = MO_TALLER_1Q_ABR;
+  // MO_TALLER_1Q_ABR corresponde ÚNICAMENTE a abril 2026.
+  // Para otros meses no hay datos individuales cargados aún.
+  const datos = mesActual === 'abr' ? MO_TALLER_1Q_ABR : [];
 
   // Totales generales
   const totalBanco    = datos.reduce((s, p) => s + (p.neto      || 0), 0);
@@ -4113,7 +4113,7 @@ function renderRRHH() {
   setKpi('rrhh-kpi-efectivo', totalEfectivo > 0 ? fmt(totalEfectivo) : 'sin dato');
   setKpi('rrhh-kpi-personas', totalPersonas > 0 ? totalPersonas + ' personas' : 'sin dato');
   setKpi('rrhh-kpi-total-sub',    totalGeneral  > 0 ? 'Banco ' + fmt(totalBanco) + ' + Efectivo ' + fmt(totalEfectivo) : 'Actualizá datos para cargar');
-  setKpi('rrhh-kpi-personas-sub', totalPersonas > 0 ? '1° Quinc. — dato parcial (Taller)' : 'Requiere liquidación TANGO');
+  setKpi('rrhh-kpi-personas-sub', totalPersonas > 0 ? '1° Quinc. Abril — dato parcial (Taller)' : 'Sin archivo TANGO para ' + (MES[mesActual] || mesActual));
 
   // Agrupar por categoría
   const porCategoria = {};
@@ -4135,7 +4135,7 @@ function renderRRHH() {
   if (!container) return;
 
   if (datos.length === 0) {
-    container.innerHTML = '<div class="alert info">⏳ Sin datos individuales disponibles. Actualizá los datos desde Drive para cargar la liquidación completa.</div>';
+    container.innerHTML = '<div class="alert info">⏳ No hay archivo de liquidación TANGO cargado para <strong>' + (MES[mesActual] || mesActual) + '</strong>. Los datos disponibles corresponden a Abril 2026. Cuando Mauro suba el archivo del mes correspondiente y se actualicen los datos, la tabla se completará automáticamente.</div>';
     return;
   }
 
