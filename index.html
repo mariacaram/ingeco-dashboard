@@ -2053,21 +2053,51 @@ function renderCobrosTimeline(d) {
     return isNaN(dt.getTime()) ? null : dt;
   }
 
-  // Construir mapa fecha → { total, items: [{cod, importe, categoria, cliente}] }
+  // Calcular el lunes de la semana de una fecha
+  function getWeekStart(dt) {
+    const d = new Date(dt);
+    const day = d.getDay(); // 0=dom,1=lun,...
+    const diff = (day === 0) ? -6 : 1 - day; // ajustar al lunes
+    d.setDate(d.getDate() + diff);
+    d.setHours(0,0,0,0);
+    return d;
+  }
+
+  // Label de semana: "Sem 9–15 jun"
+  function semLabel(lunesDate) {
+    const MESES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+    const dom = new Date(lunesDate);
+    dom.setDate(dom.getDate() + 6);
+    const d1 = lunesDate.getDate(), d2 = dom.getDate();
+    const m1 = MESES[lunesDate.getMonth()], m2 = MESES[dom.getMonth()];
+    return m1 === m2
+      ? `Sem ${d1}–${d2} ${m1}`
+      : `Sem ${d1} ${m1}–${d2} ${m2}`;
+  }
+
+  // Construir mapa semana → { total, items, fechaObj (lunes), label }
   const mapaFecha = {};
   fuentes.forEach(({ lista, label }) => {
     lista.forEach(it => {
       const fechaStr = it.fechaProb || '';
-      const key = fechaStr || 'Sin fecha';
-      if (!mapaFecha[key]) mapaFecha[key] = { total: 0, items: [], fechaObj: parseF(fechaStr) };
+      const dt = parseF(fechaStr);
+      let key, fechaObj, lbl;
+      if (dt) {
+        fechaObj = getWeekStart(dt);
+        key = fechaObj.toISOString().slice(0,10); // YYYY-MM-DD del lunes
+        lbl = semLabel(fechaObj);
+      } else {
+        key = 'sin-fecha'; fechaObj = null; lbl = 'Sin fecha';
+      }
+      if (!mapaFecha[key]) mapaFecha[key] = { total: 0, items: [], fechaObj, label: lbl };
       mapaFecha[key].total += it.importe;
-      mapaFecha[key].items.push({ cod: it.cod || it.obra, importe: it.importe, categoria: label, cliente: it.cliente });
+      mapaFecha[key].items.push({ cod: it.cod || it.obra, importe: it.importe, categoria: label, cliente: it.cliente, fechaProb: fechaStr });
     });
   });
 
   if (Object.keys(mapaFecha).length === 0) { section.style.display = 'none'; return; }
 
-  // Ordenar fechas: primero con fecha real, luego "Sin fecha"
+  // Ordenar semanas cronológicamente, "Sin fecha" al final
   const keys = Object.keys(mapaFecha).sort((a, b) => {
     const da = mapaFecha[a].fechaObj, db = mapaFecha[b].fechaObj;
     if (!da && !db) return 0;
@@ -2079,6 +2109,8 @@ function renderCobrosTimeline(d) {
   // Preparar datos para barras apiladas por categoría
   const CATS = ['Cobrado','Facturado','No cobrado','Sin fecha'];
   const COLORS = { 'Cobrado':'#22c55e','Facturado':'#f59e0b','No cobrado':'#ef4444','Sin fecha':'#94a3b8' };
+
+  const semLabels = keys.map(k => mapaFecha[k].label);
 
   const datasets = CATS.map(cat => ({
     label: cat,
@@ -2096,7 +2128,7 @@ function renderCobrosTimeline(d) {
 
   _cobrosTimelineChart = new Chart(canvas, {
     type: 'bar',
-    data: { labels: keys, datasets },
+    data: { labels: semLabels, datasets },
     options: {
       responsive: true,
       maintainAspectRatio: false,
@@ -2110,18 +2142,18 @@ function renderCobrosTimeline(d) {
             title: function(items) { return items[0].label; },
             label: function(item) {
               if (!item.raw) return null;
-              const k = item.label;
+              const k = keys[item.dataIndex];
               const cat = item.dataset.label;
               const grp = mapaFecha[k];
               const detalles = grp.items.filter(i => i.categoria === cat);
               const lines = [`${cat}: $${item.raw.toLocaleString('es-AR')}`];
-              detalles.forEach(i => lines.push(`  • ${i.cod}${i.cliente ? ' ('+i.cliente+')' : ''}: $${i.importe.toLocaleString('es-AR')}`));
+              detalles.forEach(i => lines.push(`  • ${i.cod}${i.cliente ? ' ('+i.cliente+')' : ''}${i.fechaProb ? ' — '+i.fechaProb : ''}: $${i.importe.toLocaleString('es-AR')}`));
               return lines;
             },
             afterBody: function(items) {
-              const k = items[0].label;
+              const k = keys[items[0].dataIndex];
               const tot = mapaFecha[k].total;
-              return [``, `Total ${k}: $${tot.toLocaleString('es-AR')}`];
+              return [``, `Total semana: $${tot.toLocaleString('es-AR')}`];
             }
           },
           backgroundColor: 'rgba(15,23,42,0.92)',
@@ -2156,8 +2188,7 @@ function renderCobrosTimeline(d) {
         const idx = elements[0].index;
         const k = keys[idx];
         const grp = mapaFecha[k];
-        // Mostrar panel con detalle de ese día
-        _openTimelinePanel(k, grp);
+        _openTimelinePanel(grp.label, grp);
       }
     }
   });
@@ -2181,6 +2212,7 @@ function _openTimelinePanel(fechaLabel, grp) {
           <th style="padding:8px 10px;">Código</th>
           <th style="padding:8px 10px;">Cliente</th>
           <th style="padding:8px 10px;text-align:right;">Importe</th>
+          <th style="padding:8px 10px;">Fecha probable</th>
           <th style="padding:8px 10px;">Estado</th>
         </tr>
       </thead>
@@ -2190,6 +2222,7 @@ function _openTimelinePanel(fechaLabel, grp) {
             <td style="padding:8px 10px;font-weight:600;">${it.cod}</td>
             <td style="padding:8px 10px;color:var(--muted);">${it.cliente || '—'}</td>
             <td style="padding:8px 10px;text-align:right;font-weight:600;">$${it.importe.toLocaleString('es-AR')}</td>
+            <td style="padding:8px 10px;color:var(--muted);">${it.fechaProb || '—'}</td>
             <td style="padding:8px 10px;"><span style="background:${COLORS[it.categoria]}22;color:${COLORS[it.categoria]};border-radius:4px;padding:2px 8px;font-size:11px;font-weight:600;">${it.categoria}</span></td>
           </tr>`).join('')}
       </tbody>
