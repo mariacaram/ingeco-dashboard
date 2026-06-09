@@ -491,23 +491,23 @@
 
   <!-- KPI Cards: 3 categorías -->
   <div class="kpi-grid">
-    <div class="kpi-card pos">
+    <div class="kpi-card pos" style="cursor:pointer;" onclick="openCobrosPanel('cobrado')" title="Ver detalle de cobros">
       <div class="kpi-label">✅ Cobrado · <span class="cobros-mes-lbl">—</span></div>
       <div class="kpi-value nd" id="kpi-cobrado-total">sin dato</div>
       <div class="kpi-sub" id="kpi-cobrado-sub">—</div>
-      <div class="fuente"><a href="https://docs.google.com/spreadsheets/d/1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY/edit" target="_blank">Planilla Cobros (Esteban)</a> — col G con fecha</div>
+      <div class="fuente"><a href="https://docs.google.com/spreadsheets/d/1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY/edit" target="_blank" onclick="event.stopPropagation()">Planilla Cobros (Esteban)</a> — col G con fecha</div>
     </div>
-    <div class="kpi-card accent">
+    <div class="kpi-card accent" style="cursor:pointer;" onclick="openCobrosPanel('facturado')" title="Ver detalle de facturado">
       <div class="kpi-label">🧾 Facturado · <span class="cobros-mes-lbl">—</span></div>
       <div class="kpi-value nd" id="kpi-facturado-total">sin dato</div>
       <div class="kpi-sub" id="kpi-facturado-sub">—</div>
-      <div class="fuente"><a href="https://docs.google.com/spreadsheets/d/1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY/edit" target="_blank">Planilla Cobros (Esteban)</a> — col G con "F"</div>
+      <div class="fuente"><a href="https://docs.google.com/spreadsheets/d/1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY/edit" target="_blank" onclick="event.stopPropagation()">Planilla Cobros (Esteban)</a> — col G con "F"</div>
     </div>
-    <div class="kpi-card neg">
+    <div class="kpi-card neg" style="cursor:pointer;" onclick="openCobrosPanel('sinFecha')" title="Ver detalle sin fecha">
       <div class="kpi-label">⏳ Sin fecha · <span class="cobros-mes-lbl">—</span></div>
       <div class="kpi-value nd" id="kpi-sinfecha-total">sin dato</div>
       <div class="kpi-sub" id="kpi-sinfecha-sub">—</div>
-      <div class="fuente"><a href="https://docs.google.com/spreadsheets/d/1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY/edit" target="_blank">Planilla Cobros (Esteban)</a> — col G vacía</div>
+      <div class="fuente"><a href="https://docs.google.com/spreadsheets/d/1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY/edit" target="_blank" onclick="event.stopPropagation()">Planilla Cobros (Esteban)</a> — col G vacía</div>
     </div>
   </div>
 
@@ -3034,6 +3034,71 @@ function openTnPanel() {
   content.innerHTML = `
     <div class="panel-title">TN Producidas — Planta de Asfalto</div>
     <div class="panel-sub">${mesLabel} · Remitos Oficiales — Roberto</div>
+    <div style="margin-top:14px;">${html}</div>`;
+  panel.classList.add('open');
+  overlay.classList.add('open');
+}
+
+function openCobrosPanel(categoria) {
+  const panel   = document.getElementById('sidePanel');
+  const overlay = document.getElementById('overlay');
+  const content = document.getElementById('panelContent');
+  if (!panel) return;
+
+  const MES_LABEL = { ene:'Enero',feb:'Febrero',mar:'Marzo',abr:'Abril',may:'Mayo',
+                      jun:'Junio',jul:'Julio',ago:'Agosto',sep:'Septiembre',
+                      oct:'Octubre',nov:'Noviembre',dic:'Diciembre' };
+  const mesLabel = (MES_LABEL[mesActual] || mesActual) + ' 2026';
+
+  const CFG = {
+    cobrado:   { titulo: '✅ Cobrados',            colorBorde: '#22c55e', campo: 'cobrados',   total: 'totalCobrado',   colFecha: 'Fecha real cobro' },
+    facturado: { titulo: '🧾 Facturados (no cobrados)', colorBorde: '#f59e0b', campo: 'facturados', total: 'totalFacturado', colFecha: 'Fecha probable' },
+    sinFecha:  { titulo: '⏳ Sin fecha probable',  colorBorde: '#94a3b8', campo: 'sinFecha',   total: 'totalSinFecha',  colFecha: 'Fecha probable' },
+  };
+  const cfg = CFG[categoria];
+  if (!cfg) return;
+
+  const d = COBROS_ESTEBAN[mesActual];
+
+  let html = '';
+  if (!d || !d[cfg.campo] || d[cfg.campo].length === 0) {
+    html = `<p style="color:var(--muted);padding:16px 0;">Sin registros en esta categoría para ${mesLabel}.</p>`;
+  } else {
+    const items = d[cfg.campo];
+    const total = d[cfg.total];
+    const usaFechaReal = categoria === 'cobrado';
+
+    const thead = `<thead><tr style="background:#f8fafc;border-bottom:2px solid var(--border);">
+      <th style="text-align:left;padding:8px 10px;font-size:11px;color:var(--muted);font-weight:600;">CÓDIGO / OBRA</th>
+      <th style="text-align:left;padding:8px 10px;font-size:11px;color:var(--muted);font-weight:600;">CLIENTE</th>
+      <th style="text-align:left;padding:8px 10px;font-size:11px;color:var(--muted);font-weight:600;">CONCEPTO</th>
+      <th style="text-align:right;padding:8px 10px;font-size:11px;color:var(--muted);font-weight:600;">IMPORTE</th>
+      <th style="text-align:left;padding:8px 10px;font-size:11px;color:var(--muted);font-weight:600;">${cfg.colFecha}</th>
+    </tr></thead>`;
+
+    const filas = items.map(it => `
+      <tr style="border-top:1px solid var(--border);">
+        <td style="padding:8px 10px;font-size:12px;font-weight:600;color:var(--primary);">${it.cod || it.obra}<br>
+          <span style="font-size:10px;font-weight:400;color:var(--muted);">${it.cod ? it.obra : ''}</span></td>
+        <td style="padding:8px 10px;font-size:11px;color:var(--muted);">${it.cliente}</td>
+        <td style="padding:8px 10px;font-size:11px;color:var(--muted);">${it.concepto}${it.periodo ? '<br><span style="font-size:10px;">'+it.periodo+'</span>' : ''}</td>
+        <td style="text-align:right;padding:8px 10px;font-size:12px;white-space:nowrap;" class="pos-val">${fmt(it.importe)}</td>
+        <td style="padding:8px 10px;font-size:11px;">${(usaFechaReal ? it.fechaReal : it.fechaProb) || '—'}</td>
+      </tr>`).join('');
+
+    html = `<table style="width:100%;border-collapse:collapse;">${thead}<tbody>
+      ${filas}
+      <tr style="background:#f8fafc;border-top:3px solid ${cfg.colorBorde};font-weight:700;">
+        <td colspan="3" style="padding:9px 10px;font-size:12px;">TOTAL · ${items.length} ítem${items.length !== 1 ? 's' : ''}</td>
+        <td style="text-align:right;padding:9px 10px;font-size:14px;" class="pos-val">${fmt(total)}</td>
+        <td></td>
+      </tr>
+    </tbody></table>`;
+  }
+
+  content.innerHTML = `
+    <div class="panel-title">${cfg.titulo}</div>
+    <div class="panel-sub">${mesLabel} · Planilla Cobros — Esteban</div>
     <div style="margin-top:14px;">${html}</div>`;
   panel.classList.add('open');
   overlay.classList.add('open');
