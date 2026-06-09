@@ -488,42 +488,69 @@
 <!-- TAB 2: COBROS Y PIPELINE -->
 <!-- ================================================================ -->
 <div class="tab-panel" id="tab-cobros">
+
+  <!-- KPI Cards: 3 categorías -->
   <div class="kpi-grid">
     <div class="kpi-card pos">
-      <div class="kpi-label">Percibido · <span id="cobros-mes-label">—</span></div>
-      <div class="kpi-value nd" id="kpi-cobros-total">sin dato</div>
-      <div class="kpi-sub" id="kpi-cobros-sub">—</div>
-      <div class="fuente"><a href="https://docs.google.com/spreadsheets/d/1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY/edit" target="_blank">Planilla Cobros (Esteban)</a></div>
+      <div class="kpi-label">✅ Cobrado · <span class="cobros-mes-lbl">—</span></div>
+      <div class="kpi-value nd" id="kpi-cobrado-total">sin dato</div>
+      <div class="kpi-sub" id="kpi-cobrado-sub">—</div>
+      <div class="fuente"><a href="https://docs.google.com/spreadsheets/d/1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY/edit" target="_blank">Planilla Cobros (Esteban)</a> — col G con fecha</div>
     </div>
     <div class="kpi-card accent">
-      <div class="kpi-label">Pipeline · <span id="pipeline-mes-label">—</span></div>
-      <div class="kpi-value nd" id="kpi-pipeline-total">sin dato</div>
-      <div class="kpi-sub" id="kpi-pipeline-sub">—</div>
-      <div class="fuente"><a href="https://docs.google.com/spreadsheets/d/1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY/edit" target="_blank">Planilla Cobros (Esteban)</a> — filas sin fecha real de cobro</div>
+      <div class="kpi-label">🧾 Facturado · <span class="cobros-mes-lbl">—</span></div>
+      <div class="kpi-value nd" id="kpi-facturado-total">sin dato</div>
+      <div class="kpi-sub" id="kpi-facturado-sub">—</div>
+      <div class="fuente"><a href="https://docs.google.com/spreadsheets/d/1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY/edit" target="_blank">Planilla Cobros (Esteban)</a> — col G con "F"</div>
+    </div>
+    <div class="kpi-card neg">
+      <div class="kpi-label">⏳ Sin fecha · <span class="cobros-mes-lbl">—</span></div>
+      <div class="kpi-value nd" id="kpi-sinfecha-total">sin dato</div>
+      <div class="kpi-sub" id="kpi-sinfecha-sub">—</div>
+      <div class="fuente"><a href="https://docs.google.com/spreadsheets/d/1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY/edit" target="_blank">Planilla Cobros (Esteban)</a> — col G vacía</div>
     </div>
   </div>
 
+  <!-- Gráfico distribución -->
+  <div class="section" style="padding:16px 20px;">
+    <div class="section-title">Distribución · <span class="cobros-mes-lbl">—</span></div>
+    <div id="cobros-chart-wrap" style="display:none;">
+      <div style="display:flex;gap:12px;align-items:stretch;flex-wrap:wrap;">
+        <div style="flex:1;min-width:220px;">
+          <canvas id="cobros-donut" width="220" height="220"></canvas>
+        </div>
+        <div style="flex:2;min-width:240px;display:flex;flex-direction:column;justify-content:center;gap:8px;" id="cobros-leyenda"></div>
+      </div>
+    </div>
+    <div id="cobros-chart-empty" style="color:var(--muted);font-size:13px;padding:8px 0;">Sin datos para el mes seleccionado</div>
+  </div>
+
+  <!-- Tabla principal: cobrados + facturados + sin fecha -->
   <div class="section">
-    <div class="section-title">Cobros reales · <span id="cobros-tabla-mes">—</span> <span class="badge real">Datos reales — Google Sheets</span></div>
+    <div class="section-title">Detalle · <span class="cobros-mes-lbl">—</span> <span class="badge real">Google Sheets — Esteban</span></div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Código</th><th>Cliente</th><th>Concepto</th><th>Período</th><th class="num">Importe</th><th>Fecha real cobro</th><th>Obra</th></tr></thead>
+        <thead><tr><th>Estado</th><th>Código</th><th>Cliente</th><th>Concepto</th><th>Período</th><th class="num">Importe</th><th>Fecha probable</th><th>Fecha real cobro</th></tr></thead>
         <tbody id="tbody-cobros-real"></tbody>
       </table>
     </div>
-    <div class="nota-fuente"><strong>Fuente:</strong> <a href="https://docs.google.com/spreadsheets/d/1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY/edit" target="_blank">Planilla Cobros (Esteban)</a> — pestaña del mes en curso — filas con FECHA REAL DE COBRO completada</div>
+    <div class="nota-fuente"><strong>Fuente:</strong> <a href="https://docs.google.com/spreadsheets/d/1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY/edit" target="_blank">Planilla Cobros (Esteban)</a> — filas hasta TOTAL en col Concepto</div>
   </div>
 
-  <div class="section">
-    <div class="section-title">Pipeline — Pendiente de cobro · <span id="pipeline-tabla-mes">—</span></div>
+  <!-- Tabla obras menos probables (después de TOTAL) -->
+  <div class="section" id="section-menos-probable" style="display:none;">
+    <div class="section-title">Obras menos probables · <span class="cobros-mes-lbl">—</span> <span class="badge parcial">después del TOTAL</span></div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Código</th><th>Cliente</th><th>Concepto</th><th>Período</th><th class="num">Importe</th><th>Fecha probable</th><th>Obra</th></tr></thead>
-        <tbody id="tbody-pipeline"></tbody>
+        <thead><tr><th>Código</th><th>Cliente</th><th>Concepto</th><th>Período</th><th class="num">Importe</th><th>Fecha probable</th></tr></thead>
+        <tbody id="tbody-menos-probable"></tbody>
       </table>
     </div>
-    <div class="nota-fuente"><strong>Fuente:</strong> <a href="https://docs.google.com/spreadsheets/d/1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY/edit" target="_blank">Planilla Cobros (Esteban)</a> — filas SIN FECHA REAL DE COBRO (pendientes de cobro)</div>
+    <div class="nota-fuente">Obras listadas por Esteban después del TOTAL — menor probabilidad de cobro en el mes</div>
   </div>
+
+  <!-- Tabla pipeline (legacy, oculta) -->
+  <tbody id="tbody-pipeline" style="display:none;"></tbody>
 </div>
 
 <!-- ================================================================ -->
@@ -1820,96 +1847,171 @@ function renderCobrosReal() {
                       oct:'Octubre',nov:'Noviembre',dic:'Diciembre' };
   const mesLabel = (MES_LABEL[mesActual] || mesActual) + ' 2026';
 
-  // Actualizar KPI cards
-  const kpiTotal  = document.getElementById('kpi-cobros-total');
-  const kpiSub    = document.getElementById('kpi-cobros-sub');
-  const mesEl     = document.getElementById('cobros-mes-label');
-  const tabMesEl  = document.getElementById('cobros-tabla-mes');
-  const plMesEl   = document.getElementById('pipeline-mes-label');
-  const plTabEl   = document.getElementById('pipeline-tabla-mes');
-  const kpiPL     = document.getElementById('kpi-pipeline-total');
-  const kpiPLSub  = document.getElementById('kpi-pipeline-sub');
-
-  if (mesEl)    mesEl.textContent  = mesLabel;
-  if (tabMesEl) tabMesEl.textContent = mesLabel;
-  if (plMesEl)  plMesEl.textContent  = mesLabel;
-  if (plTabEl)  plTabEl.textContent  = mesLabel;
+  // Actualizar todos los spans con el mes
+  document.querySelectorAll('.cobros-mes-lbl').forEach(el => { el.textContent = mesLabel; });
 
   const d = COBROS_ESTEBAN[mesActual];
 
+  // ── KPI cards ──────────────────────────────────────────────────
+  const _kpi = (id, val, cls, sub, subId) => {
+    const el = document.getElementById(id);
+    const se = document.getElementById(subId);
+    if (el) { el.textContent = val !== null ? fmt(val) : 'sin dato'; el.className = 'kpi-value ' + (val !== null ? cls : 'nd'); }
+    if (se) se.textContent = sub;
+  };
+
   if (d) {
-    if (kpiTotal) { kpiTotal.textContent = fmt(d.totalCobros); kpiTotal.className = 'kpi-value pos-val'; }
-    if (kpiSub)   kpiSub.textContent = d.nCobros + ' cobro' + (d.nCobros !== 1 ? 's' : '') + ' — datos reales';
-    if (kpiPL)    { kpiPL.textContent = fmt(d.totalPipeline); kpiPL.className = 'kpi-value'; }
-    if (kpiPLSub) kpiPLSub.textContent = d.nPipeline + ' ítem' + (d.nPipeline !== 1 ? 's' : '') + ' pendientes';
+    _kpi('kpi-cobrado-total',   d.totalCobrado,   'pos-val', d.nCobrado   + ' cobro'  + (d.nCobrado   !== 1 ? 's' : ''), 'kpi-cobrado-sub');
+    _kpi('kpi-facturado-total', d.totalFacturado, '',        d.nFacturado + ' factura' + (d.nFacturado !== 1 ? 's' : ''), 'kpi-facturado-sub');
+    _kpi('kpi-sinfecha-total',  d.totalSinFecha,  'neg-val', d.nSinFecha  + ' ítem'   + (d.nSinFecha  !== 1 ? 's' : '') + ' sin fecha', 'kpi-sinfecha-sub');
   } else {
-    if (kpiTotal) { kpiTotal.textContent = 'sin dato'; kpiTotal.className = 'kpi-value nd'; }
-    if (kpiSub)   kpiSub.textContent = 'sin datos para este mes';
-    if (kpiPL)    { kpiPL.textContent = 'sin dato'; kpiPL.className = 'kpi-value nd'; }
-    if (kpiPLSub) kpiPLSub.textContent = '—';
+    ['kpi-cobrado-total','kpi-facturado-total','kpi-sinfecha-total'].forEach(id => {
+      const el = document.getElementById(id); if (el) { el.textContent = 'sin dato'; el.className = 'kpi-value nd'; }
+    });
+    ['kpi-cobrado-sub','kpi-facturado-sub','kpi-sinfecha-sub'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.textContent = '—';
+    });
   }
 
-  // Tabla de cobros (filas con fecha real)
+  // ── Gráfico donut ───────────────────────────────────────────────
+  const chartWrap  = document.getElementById('cobros-chart-wrap');
+  const chartEmpty = document.getElementById('cobros-chart-empty');
+  const canvas     = document.getElementById('cobros-donut');
+  const leyenda    = document.getElementById('cobros-leyenda');
+
+  if (d && (d.totalCobrado + d.totalFacturado + d.totalSinFecha) > 0) {
+    if (chartWrap)  chartWrap.style.display  = '';
+    if (chartEmpty) chartEmpty.style.display = 'none';
+
+    const segmentos = [
+      { label: '✅ Cobrado',      valor: d.totalCobrado,   color: '#22c55e', n: d.nCobrado },
+      { label: '🧾 Facturado',    valor: d.totalFacturado, color: '#f59e0b', n: d.nFacturado },
+      { label: '⏳ Sin fecha',    valor: d.totalSinFecha,  color: '#94a3b8', n: d.nSinFecha },
+    ].filter(s => s.valor > 0);
+
+    const total = segmentos.reduce((s, x) => s + x.valor, 0);
+
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      const cx = 110, cy = 110, r = 90, ri = 55;
+      ctx.clearRect(0, 0, 220, 220);
+      let angle = -Math.PI / 2;
+      segmentos.forEach(seg => {
+        const slice = (seg.valor / total) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.arc(cx, cy, r, angle, angle + slice);
+        ctx.closePath();
+        ctx.fillStyle = seg.color;
+        ctx.fill();
+        angle += slice;
+      });
+      // Hueco interior
+      ctx.beginPath();
+      ctx.arc(cx, cy, ri, 0, Math.PI * 2);
+      ctx.fillStyle = '#fff';
+      ctx.fill();
+      // Total en el centro
+      ctx.fillStyle = '#1e293b';
+      ctx.font = 'bold 13px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(fmtM(total), cx, cy - 8);
+      ctx.font = '11px sans-serif';
+      ctx.fillStyle = '#64748b';
+      ctx.fillText('total', cx, cy + 10);
+    }
+
+    if (leyenda) {
+      leyenda.innerHTML = segmentos.map(seg => `
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#f8fafc;border-radius:8px;border-left:4px solid ${seg.color};">
+          <div style="flex:1;">
+            <div style="font-weight:600;font-size:13px;">${seg.label}</div>
+            <div style="font-size:11px;color:var(--muted);">${seg.n} ítem${seg.n !== 1 ? 's' : ''}</div>
+          </div>
+          <div style="font-size:16px;font-weight:700;color:${seg.color};">${fmt(seg.valor)}</div>
+          <div style="font-size:11px;color:var(--muted);min-width:36px;text-align:right;">${Math.round(seg.valor/total*100)}%</div>
+        </div>`).join('');
+    }
+  } else {
+    if (chartWrap)  chartWrap.style.display  = 'none';
+    if (chartEmpty) chartEmpty.style.display = '';
+  }
+
+  // ── Tabla principal (cobrados + facturados + sinFecha) ──────────
   const tbody = document.getElementById('tbody-cobros-real');
   if (!tbody) return;
 
-  if (!d || !d.cobros || d.cobros.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:16px;">Sin cobros registrados para ${mesLabel}</td></tr>`;
-    return;
-  }
+  const BADGE = {
+    cobrado:   '<span class="status-badge pos"  style="font-size:10px;">Cobrado</span>',
+    facturado: '<span class="status-badge parcial" style="font-size:10px;">Facturado</span>',
+    sinFecha:  '<span class="status-badge pendiente" style="font-size:10px;">Sin fecha</span>',
+  };
 
-  const rows = d.cobros.map(it => `<tr>
-    <td style="font-size:12px;">${it.cod || it.obra}</td>
-    <td style="font-size:11px;color:var(--muted);">${it.cliente}</td>
-    <td style="font-size:11px;color:var(--muted);">${it.concepto}</td>
-    <td style="font-size:11px;">${it.periodo}</td>
-    <td class="num pos-val">${fmt(it.importe)}</td>
-    <td style="font-size:11px;">${it.fechaReal}</td>
-    <td style="font-size:11px;color:var(--muted);">${it.obra}</td>
-  </tr>`);
-
-  rows.push(`<tr style="background:#f8fafc;font-weight:700;">
-    <td colspan="4" style="padding:8px 12px;">TOTAL PERCIBIDO ${mesLabel}</td>
-    <td class="num pos-val" style="padding:8px 12px;">${fmt(d.totalCobros)}</td>
-    <td colspan="2"></td>
-  </tr>`);
-
-  tbody.innerHTML = rows.join('');
-}
-
-function renderPipeline() {
-  const tbody = document.getElementById('tbody-pipeline');
-  if (!tbody) return;
-
-  const MES_LABEL = { ene:'Enero',feb:'Febrero',mar:'Marzo',abr:'Abril',may:'Mayo',
-                      jun:'Junio',jul:'Julio',ago:'Agosto',sep:'Septiembre',
-                      oct:'Octubre',nov:'Noviembre',dic:'Diciembre' };
-  const mesLabel = (MES_LABEL[mesActual] || mesActual) + ' 2026';
-
-  const d = COBROS_ESTEBAN[mesActual];
-
-  if (!d || !d.pipeline || d.pipeline.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:16px;">Sin ítems en pipeline para ${mesLabel}</td></tr>`;
-    return;
-  }
-
-  const rows = d.pipeline.map(it => `<tr>
+  const _fila = it => `<tr>
+    <td>${BADGE[it.categoria] || ''}</td>
     <td style="font-size:12px;">${it.cod || it.obra}</td>
     <td style="font-size:11px;color:var(--muted);">${it.cliente}</td>
     <td style="font-size:11px;color:var(--muted);">${it.concepto}</td>
     <td style="font-size:11px;">${it.periodo}</td>
     <td class="num pos-val">${fmt(it.importe)}</td>
     <td style="font-size:11px;">${it.fechaProb || '—'}</td>
-    <td style="font-size:11px;color:var(--muted);">${it.obra}</td>
-  </tr>`);
+    <td style="font-size:11px;">${it.fechaReal || '—'}</td>
+  </tr>`;
 
-  rows.push(`<tr style="background:#f8fafc;font-weight:700;">
-    <td colspan="4" style="padding:8px 12px;">TOTAL PIPELINE ${mesLabel}</td>
-    <td class="num pos-val" style="padding:8px 12px;">${fmt(d.totalPipeline)}</td>
-    <td colspan="2"></td>
-  </tr>`);
+  if (!d) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:16px;">Sin datos para ${mesLabel}</td></tr>`;
+  } else {
+    const allItems = [...(d.cobrados||[]), ...(d.facturados||[]), ...(d.sinFecha||[])];
+    if (allItems.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:16px;">Sin registros para ${mesLabel}</td></tr>`;
+    } else {
+      const totalMain = d.totalCobrado + d.totalFacturado + d.totalSinFecha;
+      tbody.innerHTML = allItems.map(_fila).join('') + `
+        <tr style="background:#f8fafc;font-weight:700;">
+          <td colspan="5" style="padding:8px 12px;">TOTAL ${mesLabel}</td>
+          <td class="num pos-val" style="padding:8px 12px;">${fmt(totalMain)}</td>
+          <td colspan="2"></td>
+        </tr>`;
+    }
+  }
 
-  tbody.innerHTML = rows.join('');
+  // ── Tabla obras menos probables ─────────────────────────────────
+  const secMP  = document.getElementById('section-menos-probable');
+  const tbodyMP = document.getElementById('tbody-menos-probable');
+  if (d && d.menosProbable && d.menosProbable.length > 0) {
+    if (secMP) secMP.style.display = '';
+    if (tbodyMP) {
+      const totalMP = d.totalMenosProbable;
+      tbodyMP.innerHTML = d.menosProbable.map(it => `<tr>
+        <td style="font-size:12px;">${it.cod || it.obra}</td>
+        <td style="font-size:11px;color:var(--muted);">${it.cliente}</td>
+        <td style="font-size:11px;color:var(--muted);">${it.concepto}</td>
+        <td style="font-size:11px;">${it.periodo}</td>
+        <td class="num pos-val">${fmt(it.importe)}</td>
+        <td style="font-size:11px;">${it.fechaProb || '—'}</td>
+      </tr>`).join('') + `
+        <tr style="background:#f8fafc;font-weight:700;">
+          <td colspan="4" style="padding:8px 12px;">TOTAL menos probable</td>
+          <td class="num" style="padding:8px 12px;">${fmt(totalMP)}</td>
+          <td></td>
+        </tr>`;
+    }
+  } else {
+    if (secMP) secMP.style.display = 'none';
+  }
+}
+
+// Helper para mostrar millones/miles en el centro del donut
+function fmtM(n) {
+  if (!n) return '$0';
+  if (n >= 1e9) return '$' + (n/1e9).toFixed(1) + 'B';
+  if (n >= 1e6) return '$' + Math.round(n/1e6) + 'M';
+  return fmt(n);
+}
+
+function renderPipeline() {
+  // Pipeline ahora está integrado en renderCobrosReal — no-op para compatibilidad
 }
 
 function renderCostoFinanciero() {

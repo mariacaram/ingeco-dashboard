@@ -1365,8 +1365,14 @@ function leerRemitosAsfalto() {
 // COBROS REALES — Planilla de Esteban (una pestaña por mes)
 // Columnas: OBRA | CLIENTE | CONCEPTO | PERIODO | IMPORTE |
 //           FECHA PROBABLE DE COBRO | FECHA REAL DE COBRO | COD
-// Cobros   = filas CON FECHA REAL DE COBRO (ingreso efectivo)
-// Pipeline = filas SIN FECHA REAL DE COBRO (pendientes)
+//
+// Categorías por col G (FECHA REAL DE COBRO):
+//   - Fecha      → "cobrado"    (ingreso efectivo)
+//   - "F"        → "facturado"  (facturado, pendiente de cobro)
+//   - vacío      → "sinFecha"   (sin fecha probable de cobro)
+//
+// Se leen filas hasta encontrar "TOTAL" en col C (CONCEPTO).
+// Las filas DESPUÉS del TOTAL van a "menosProbable" (tabla separada).
 // ============================================================
 function leerCobrosEsteban() {
   try {
@@ -1380,7 +1386,6 @@ function leerCobrosEsteban() {
 
     for (const sheet of ss.getSheets()) {
       const tabRaw = sheet.getName().trim().toLowerCase();
-      // Aceptar nombre exacto ("mayo") o con año ("mayo 2026")
       let mesKey = null;
       for (const nombre of Object.keys(MES_TAB)) {
         if (tabRaw === nombre || tabRaw.startsWith(nombre + ' ') || tabRaw.startsWith(nombre + '-')) {
@@ -1392,16 +1397,15 @@ function leerCobrosEsteban() {
       const rows = sheet.getDataRange().getValues();
       if (rows.length < 2) continue;
 
-      // Detectar fila de encabezados (buscar OBRA o IMPORTE)
+      // Detectar fila de encabezados
       let hdrIdx = 0;
-      for (let i = 0; i < Math.min(5, rows.length); i++) {
+      for (let i = 0; i < Math.min(8, rows.length); i++) {
         const rowStr = rows[i].map(c => String(c).toUpperCase().trim()).join('|');
-        if (rowStr.includes('OBRA') || rowStr.includes('IMPORTE')) { hdrIdx = i; break; }
+        if (rowStr.includes('OBRA') && rowStr.includes('IMPORTE')) { hdrIdx = i; break; }
       }
       const headers = rows[hdrIdx].map(h => String(h).toUpperCase().trim());
       Logger.log('CobrosEsteban [' + sheet.getName() + '] hdr=' + hdrIdx + ' headers: ' + headers.join(' | '));
 
-      // Detectar columnas por nombre
       const iObra      = _findCobCol(headers, ['OBRA']);
       const iCliente   = _findCobCol(headers, ['CLIENTE']);
       const iConcepto  = _findCobCol(headers, ['CONCEPTO']);
@@ -1412,56 +1416,93 @@ function leerCobrosEsteban() {
       const iCod       = _findCobCol(headers, ['COD']);
 
       if (iObra === null || iImporte === null) {
-        Logger.log('CobrosEsteban [' + sheet.getName() + '] — no se encontraron columnas OBRA/IMPORTE, omitida');
+        Logger.log('CobrosEsteban [' + sheet.getName() + '] — sin columnas OBRA/IMPORTE, omitida');
         continue;
       }
 
-      const cobros   = [];  // filas con fecha real de cobro
-      const pipeline = [];  // filas sin fecha real (pendiente)
-      let totalCobros   = 0;
-      let totalPipeline = 0;
+      const cobrados      = [];
+      const facturados    = [];
+      const sinFecha      = [];
+      const menosProbable = [];
+      let totalCobrado = 0, totalFacturado = 0, totalSinFecha = 0, totalMenosProbable = 0;
+      let pastTotal = false;
 
       for (let i = hdrIdx + 1; i < rows.length; i++) {
         const row = rows[i];
+
+        // Detectar fila TOTAL en col CONCEPTO → separador de secciones
+        const conceptoRaw = String(iConcepto !== null ? row[iConcepto] || '' : '').trim();
+        if (!pastTotal && conceptoRaw.toUpperCase() === 'TOTAL') {
+          pastTotal = true;
+          continue;
+        }
+
         const obra = String(iObra !== null ? row[iObra] || '' : '').trim();
         if (!obra) continue;
-
         const importe = parsearMonto(iImporte !== null ? row[iImporte] : 0);
         if (importe <= 0) continue;
 
         const item = {
-          obra:       obra,
-          cliente:    iCliente   !== null ? String(row[iCliente]   || '').trim() : '',
-          concepto:   iConcepto  !== null ? String(row[iConcepto]  || '').trim() : '',
-          periodo:    iPeriodo   !== null ? String(row[iPeriodo]   || '').trim() : '',
-          importe:    Math.round(importe),
-          fechaProb:  iFechaProb !== null ? _fmtFecha(row[iFechaProb]) : '',
-          fechaReal:  iFechaReal !== null ? _fmtFecha(row[iFechaReal]) : '',
-          cod:        iCod       !== null ? String(row[iCod]       || '').trim() : '',
+          obra:      obra,
+          cliente:   iCliente   !== null ? String(row[iCliente]   || '').trim() : '',
+          concepto:  conceptoRaw,
+          periodo:   iPeriodo   !== null ? String(row[iPeriodo]   || '').trim() : '',
+          importe:   Math.round(importe),
+          fechaProb: iFechaProb !== null ? _fmtFecha(row[iFechaProb]) : '',
+          fechaReal: iFechaReal !== null ? _fmtFecha(row[iFechaReal]) : '',
+          cod:       iCod       !== null ? String(row[iCod]       || '').trim() : '',
         };
 
-        if (item.fechaReal && item.fechaReal !== '-') {
-          cobros.push(item);
-          totalCobros += importe;
+        if (pastTotal) {
+          menosProbable.push(item);
+          totalMenosProbable += importe;
+          continue;
+        }
+
+        // Categorizar por valor RAW de col G (antes de formatear)
+        const gRaw = iFechaReal !== null ? row[iFechaReal] : '';
+        const gStr = String(gRaw || '').trim();
+
+        if (gStr === '' || gStr === '-') {
+          item.categoria = 'sinFecha';
+          sinFecha.push(item);
+          totalSinFecha += importe;
+        } else if (gStr.toUpperCase() === 'F') {
+          item.categoria = 'facturado';
+          item.fechaReal = ''; // "F" no es una fecha real → limpiar
+          facturados.push(item);
+          totalFacturado += importe;
         } else {
-          pipeline.push(item);
-          totalPipeline += importe;
+          item.categoria = 'cobrado';
+          cobrados.push(item);
+          totalCobrado += importe;
         }
       }
 
-      cobros.sort(function(a, b) { return b.importe - a.importe; });
-      pipeline.sort(function(a, b) { return b.importe - a.importe; });
+      const sortByImporte = function(a, b) { return b.importe - a.importe; };
+      cobrados.sort(sortByImporte);
+      facturados.sort(sortByImporte);
+      sinFecha.sort(sortByImporte);
+      menosProbable.sort(sortByImporte);
 
       resultado[mesKey] = {
-        totalCobros:   Math.round(totalCobros),
-        totalPipeline: Math.round(totalPipeline),
-        nCobros:       cobros.length,
-        nPipeline:     pipeline.length,
-        cobros:        cobros,
-        pipeline:      pipeline,
+        totalCobrado:       Math.round(totalCobrado),
+        totalFacturado:     Math.round(totalFacturado),
+        totalSinFecha:      Math.round(totalSinFecha),
+        totalMenosProbable: Math.round(totalMenosProbable),
+        nCobrado:           cobrados.length,
+        nFacturado:         facturados.length,
+        nSinFecha:          sinFecha.length,
+        nMenosProbable:     menosProbable.length,
+        cobrados:           cobrados,
+        facturados:         facturados,
+        sinFecha:           sinFecha,
+        menosProbable:      menosProbable,
       };
-      Logger.log('CobrosEsteban [' + mesKey + ']: cobros=' + cobros.length +
-                 ' $' + totalCobros + ' | pipeline=' + pipeline.length + ' $' + totalPipeline);
+      Logger.log('CobrosEsteban [' + mesKey + ']: cobrado=' + cobrados.length + ' $' + Math.round(totalCobrado) +
+                 ' | facturado=' + facturados.length + ' $' + Math.round(totalFacturado) +
+                 ' | sinFecha=' + sinFecha.length + ' $' + Math.round(totalSinFecha) +
+                 ' | menosProbable=' + menosProbable.length);
     }
 
     Logger.log('CobrosEsteban — meses: ' + Object.keys(resultado).join(', '));
