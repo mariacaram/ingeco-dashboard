@@ -25,7 +25,7 @@ const FILE_IDS = {
   ocInsumos:    '1_lhq9c1MddkrK1Tf0kexRtgqw5aPhmZWiQkAIRjpfxs',  // OC Insumos — Google Sheet (Guillermo)
   maestroObras: '1VbG7DPqaOSlYkvQxbxag-4P2sOoRJQwWGccbx9OMyBM',  // Maestro de Obras con COD_OBRA
   fernandoObras:'1Hl8HZqrH6lMwnAGpitA37ZGLg4szTcFGK7vmv92qkBA',  // Obras activas (nuevo archivo)
-  estebanSheet: '1F38mB4NUBHsKxpiY4mds3zgje6DR2Y4h',              // Cobros reales (Esteban) — una pestaña por mes
+  estebanSheet: '1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY',    // Cobros reales (Esteban) — una pestaña por mes (Google Sheets)
   equiposFlota: '1PEcPzwrQ8kE2evmUlrFq9wPbgWOR92MPl3LEqcSYbIk',  // Equipos + PF mensual (Adrián)
   usageEquipos:     '1e_emRVEUxTaNtLxeC0wXIWKzcKuoulZkFSS9O1e0XHo',  // Partes diarios — hoja única (Nico)
   repuestosEquipos: '1JpXjGTJwlvMuEI-rFTd4KeKvzd708-yuSLAhIRuCFC0',  // Compra de repuestos — hoja ENTREGAS (Nico)
