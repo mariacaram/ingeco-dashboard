@@ -25,6 +25,7 @@ const FILE_IDS = {
   ocInsumos:    '1_lhq9c1MddkrK1Tf0kexRtgqw5aPhmZWiQkAIRjpfxs',  // OC Insumos — Google Sheet (Guillermo)
   maestroObras: '1VbG7DPqaOSlYkvQxbxag-4P2sOoRJQwWGccbx9OMyBM',  // Maestro de Obras con COD_OBRA
   fernandoObras:'1Hl8HZqrH6lMwnAGpitA37ZGLg4szTcFGK7vmv92qkBA',  // Obras activas (nuevo archivo)
+  estebanSheet: '1F38mB4NUBHsKxpiY4mds3zgje6DR2Y4h',              // Cobros reales (Esteban) — una pestaña por mes
   equiposFlota: '1PEcPzwrQ8kE2evmUlrFq9wPbgWOR92MPl3LEqcSYbIk',  // Equipos + PF mensual (Adrián)
   usageEquipos:     '1e_emRVEUxTaNtLxeC0wXIWKzcKuoulZkFSS9O1e0XHo',  // Partes diarios — hoja única (Nico)
   repuestosEquipos: '1JpXjGTJwlvMuEI-rFTd4KeKvzd708-yuSLAhIRuCFC0',  // Compra de repuestos — hoja ENTREGAS (Nico)
@@ -90,6 +91,10 @@ function doGet(e) {
         const cachedRem = PROPS.getProperty(CACHE_KEY + '_remitos');
         if (cachedRem) data.remitosAsfalto = JSON.parse(cachedRem);
       }
+      if (data && !data.cobrosEsteban) {
+        const cachedCob = PROPS.getProperty(CACHE_KEY + '_cobros_est');
+        if (cachedCob) data.cobrosEsteban = JSON.parse(cachedCob);
+      }
     } else {
       data = buildData();
       // Guardar cada campo en su propia clave — PropertiesService tiene límite de 9 KB por propiedad
@@ -111,6 +116,9 @@ function doGet(e) {
       try {
         if (data.remitosAsfalto) PROPS.setProperty(CACHE_KEY + '_remitos', JSON.stringify(data.remitosAsfalto));
       } catch(ce) { Logger.log('Cache write (remitos) error: ' + ce); }
+      try {
+        if (data.cobrosEsteban) PROPS.setProperty(CACHE_KEY + '_cobros_est', JSON.stringify(data.cobrosEsteban));
+      } catch(ce) { Logger.log('Cache write (cobros_est) error: ' + ce); }
     }
 
     const json = JSON.stringify(data);
@@ -148,6 +156,7 @@ function actualizarNocturno() {
     if (data.moCtroCosto)     PROPS.setProperty(CACHE_KEY + '_mo',       JSON.stringify(data.moCtroCosto));
     if (data.ocInsumos)       PROPS.setProperty(CACHE_KEY + '_oc',       JSON.stringify(data.ocInsumos));
     if (data.remitosAsfalto)  PROPS.setProperty(CACHE_KEY + '_remitos',  JSON.stringify(data.remitosAsfalto));
+    if (data.cobrosEsteban)   PROPS.setProperty(CACHE_KEY + '_cobros_est', JSON.stringify(data.cobrosEsteban));
     Logger.log('Cache actualizado: ' + data.timestamp);
   } catch (err) {
     Logger.log('Error en trigger nocturno: ' + err.toString());
@@ -170,6 +179,8 @@ function buildData() {
   catch(e) { Logger.log('alquilerEquipos error: ' + e); result.alquilerEquipos = null; }
   try { result.remitosAsfalto   = leerRemitosAsfalto(); }
   catch(e) { Logger.log('remitosAsfalto error: ' + e); result.remitosAsfalto = null; }
+  try { result.cobrosEsteban    = leerCobrosEsteban(); }
+  catch(e) { Logger.log('cobrosEsteban error: ' + e); result.cobrosEsteban = null; }
   try { result.repuestosEquipos = leerRepuestosEquipos(); }
   catch(e) { Logger.log('repuestosEquipos error: ' + e); result.repuestosEquipos = null; }
   try {
@@ -1348,6 +1359,139 @@ function leerRemitosAsfalto() {
     Logger.log('leerRemitosAsfalto error: ' + err.toString());
     return null;
   }
+}
+
+// ============================================================
+// COBROS REALES — Planilla de Esteban (una pestaña por mes)
+// Columnas: OBRA | CLIENTE | CONCEPTO | PERIODO | IMPORTE |
+//           FECHA PROBABLE DE COBRO | FECHA REAL DE COBRO | COD
+// Cobros   = filas CON FECHA REAL DE COBRO (ingreso efectivo)
+// Pipeline = filas SIN FECHA REAL DE COBRO (pendientes)
+// ============================================================
+function leerCobrosEsteban() {
+  try {
+    const ss = SpreadsheetApp.openById(FILE_IDS.estebanSheet);
+    const MES_TAB = {
+      'enero':'ene','febrero':'feb','marzo':'mar','abril':'abr',
+      'mayo':'may','junio':'jun','julio':'jul','agosto':'ago',
+      'septiembre':'sep','octubre':'oct','noviembre':'nov','diciembre':'dic'
+    };
+    const resultado = {};
+
+    for (const sheet of ss.getSheets()) {
+      const tabRaw = sheet.getName().trim().toLowerCase();
+      // Aceptar nombre exacto ("mayo") o con año ("mayo 2026")
+      let mesKey = null;
+      for (const nombre of Object.keys(MES_TAB)) {
+        if (tabRaw === nombre || tabRaw.startsWith(nombre + ' ') || tabRaw.startsWith(nombre + '-')) {
+          mesKey = MES_TAB[nombre]; break;
+        }
+      }
+      if (!mesKey) continue;
+
+      const rows = sheet.getDataRange().getValues();
+      if (rows.length < 2) continue;
+
+      // Detectar fila de encabezados (buscar OBRA o IMPORTE)
+      let hdrIdx = 0;
+      for (let i = 0; i < Math.min(5, rows.length); i++) {
+        const rowStr = rows[i].map(c => String(c).toUpperCase().trim()).join('|');
+        if (rowStr.includes('OBRA') || rowStr.includes('IMPORTE')) { hdrIdx = i; break; }
+      }
+      const headers = rows[hdrIdx].map(h => String(h).toUpperCase().trim());
+      Logger.log('CobrosEsteban [' + sheet.getName() + '] hdr=' + hdrIdx + ' headers: ' + headers.join(' | '));
+
+      // Detectar columnas por nombre
+      const iObra      = _findCobCol(headers, ['OBRA']);
+      const iCliente   = _findCobCol(headers, ['CLIENTE']);
+      const iConcepto  = _findCobCol(headers, ['CONCEPTO']);
+      const iPeriodo   = _findCobCol(headers, ['PERIODO','PERÍODO']);
+      const iImporte   = _findCobCol(headers, ['IMPORTE']);
+      const iFechaProb = _findCobCol(headers, ['PROBABLE']);
+      const iFechaReal = _findCobCol(headers, ['REAL']);
+      const iCod       = _findCobCol(headers, ['COD']);
+
+      if (iObra === null || iImporte === null) {
+        Logger.log('CobrosEsteban [' + sheet.getName() + '] — no se encontraron columnas OBRA/IMPORTE, omitida');
+        continue;
+      }
+
+      const cobros   = [];  // filas con fecha real de cobro
+      const pipeline = [];  // filas sin fecha real (pendiente)
+      let totalCobros   = 0;
+      let totalPipeline = 0;
+
+      for (let i = hdrIdx + 1; i < rows.length; i++) {
+        const row = rows[i];
+        const obra = String(iObra !== null ? row[iObra] || '' : '').trim();
+        if (!obra) continue;
+
+        const importe = parsearMonto(iImporte !== null ? row[iImporte] : 0);
+        if (importe <= 0) continue;
+
+        const item = {
+          obra:       obra,
+          cliente:    iCliente   !== null ? String(row[iCliente]   || '').trim() : '',
+          concepto:   iConcepto  !== null ? String(row[iConcepto]  || '').trim() : '',
+          periodo:    iPeriodo   !== null ? String(row[iPeriodo]   || '').trim() : '',
+          importe:    Math.round(importe),
+          fechaProb:  iFechaProb !== null ? _fmtFecha(row[iFechaProb]) : '',
+          fechaReal:  iFechaReal !== null ? _fmtFecha(row[iFechaReal]) : '',
+          cod:        iCod       !== null ? String(row[iCod]       || '').trim() : '',
+        };
+
+        if (item.fechaReal && item.fechaReal !== '-') {
+          cobros.push(item);
+          totalCobros += importe;
+        } else {
+          pipeline.push(item);
+          totalPipeline += importe;
+        }
+      }
+
+      cobros.sort(function(a, b) { return b.importe - a.importe; });
+      pipeline.sort(function(a, b) { return b.importe - a.importe; });
+
+      resultado[mesKey] = {
+        totalCobros:   Math.round(totalCobros),
+        totalPipeline: Math.round(totalPipeline),
+        nCobros:       cobros.length,
+        nPipeline:     pipeline.length,
+        cobros:        cobros,
+        pipeline:      pipeline,
+      };
+      Logger.log('CobrosEsteban [' + mesKey + ']: cobros=' + cobros.length +
+                 ' $' + totalCobros + ' | pipeline=' + pipeline.length + ' $' + totalPipeline);
+    }
+
+    Logger.log('CobrosEsteban — meses: ' + Object.keys(resultado).join(', '));
+    return resultado;
+
+  } catch (err) {
+    Logger.log('leerCobrosEsteban error: ' + err.toString());
+    return null;
+  }
+}
+
+// Helper: busca la primera columna cuyo header incluya alguna de las keywords
+function _findCobCol(headers, keywords) {
+  for (const kw of keywords) {
+    const idx = headers.findIndex(function(h) { return h.includes(kw); });
+    if (idx >= 0) return idx;
+  }
+  return null;
+}
+
+// Formatea una celda de fecha (Date o string) como DD/MM/YYYY
+function _fmtFecha(raw) {
+  if (!raw || raw === '') return '';
+  if (raw instanceof Date) {
+    if (isNaN(raw.getTime())) return '';
+    const d = raw.getUTCDate(), m = raw.getUTCMonth() + 1, y = raw.getUTCFullYear();
+    return (d < 10 ? '0' : '') + d + '/' + (m < 10 ? '0' : '') + m + '/' + y;
+  }
+  const s = String(raw).trim();
+  return s === '' ? '' : s;
 }
 
 function jsonResponse(obj) {

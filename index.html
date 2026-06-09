@@ -490,64 +490,39 @@
 <div class="tab-panel" id="tab-cobros">
   <div class="kpi-grid">
     <div class="kpi-card pos">
-      <div class="kpi-label">Percibido Febrero 2026</div>
-      <div class="kpi-value pos-val">$1,66B</div>
-      <div class="kpi-sub">14 cobros — datos reales</div>
-      <div class="fuente"><a href="https://drive.google.com/file/d/1w9t2A1La45Ab0-KTdX66f1yJDh5TcZZB/view" target="_blank">Cobros Ingeco Feb-Mar-Abr 2026.xlsx (Esteban)</a> — leído 13/05/2026</div>
-    </div>
-    <div class="kpi-card pos">
-      <div class="kpi-label">Percibido Marzo 2026</div>
-      <div class="kpi-value pos-val">$1,53B</div>
-      <div class="kpi-sub">15 cobros — datos reales</div>
-      <div class="fuente"><a href="https://drive.google.com/file/d/1w9t2A1La45Ab0-KTdX66f1yJDh5TcZZB/view" target="_blank">Cobros Ingeco Feb-Mar-Abr 2026.xlsx (Esteban)</a> — leído 13/05/2026</div>
-    </div>
-    <div class="kpi-card pos">
-      <div class="kpi-label">Percibido Abril 2026</div>
-      <div class="kpi-value pos-val">$419M</div>
-      <div class="kpi-sub">12 cobros al 29/04 — parcial</div>
-      <div class="fuente"><a href="https://drive.google.com/file/d/1w9t2A1La45Ab0-KTdX66f1yJDh5TcZZB/view" target="_blank">Cobros Ingeco Feb-Mar-Abr 2026.xlsx (Esteban)</a> — leído 13/05/2026</div>
+      <div class="kpi-label">Percibido · <span id="cobros-mes-label">—</span></div>
+      <div class="kpi-value nd" id="kpi-cobros-total">sin dato</div>
+      <div class="kpi-sub" id="kpi-cobros-sub">—</div>
+      <div class="fuente"><a href="https://docs.google.com/spreadsheets/d/1F38mB4NUBHsKxpiY4mds3zgje6DR2Y4h/edit" target="_blank">Planilla Cobros (Esteban)</a></div>
     </div>
     <div class="kpi-card accent">
-      <div class="kpi-label">Pipeline Mayo (confirmado)</div>
-      <div class="kpi-value">$2,80B</div>
-      <div class="kpi-sub">7 ítems con fecha estimada</div>
-      <div class="fuente">Cobros Ingeco Feb-Mar-Abr 2026.xlsx (Esteban) — sección pendientes</div>
+      <div class="kpi-label">Pipeline · <span id="pipeline-mes-label">—</span></div>
+      <div class="kpi-value nd" id="kpi-pipeline-total">sin dato</div>
+      <div class="kpi-sub" id="kpi-pipeline-sub">—</div>
+      <div class="fuente"><a href="https://docs.google.com/spreadsheets/d/1F38mB4NUBHsKxpiY4mds3zgje6DR2Y4h/edit" target="_blank">Planilla Cobros (Esteban)</a> — filas sin fecha real de cobro</div>
     </div>
   </div>
 
   <div class="section">
-    <div class="section-title">Cobros Reales por Mes <span class="badge real">Datos reales — Drive</span></div>
+    <div class="section-title">Cobros reales · <span id="cobros-tabla-mes">—</span> <span class="badge real">Datos reales — Google Sheets</span></div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Mes</th><th>Obra / Concepto</th><th>Cliente</th><th class="num">Importe percibido</th><th>Fecha cobro real</th></tr></thead>
+        <thead><tr><th>Obra</th><th>Cliente</th><th>Concepto</th><th>Período</th><th class="num">Importe</th><th>Fecha real cobro</th><th>COD</th></tr></thead>
         <tbody id="tbody-cobros-real"></tbody>
       </table>
     </div>
-    <div class="nota-fuente"><strong>Fuente:</strong> <a href="https://drive.google.com/file/d/1w9t2A1La45Ab0-KTdX66f1yJDh5TcZZB/view" target="_blank">Cobros Ingeco Feb-Mar-Abr 2026.xlsx (Esteban)</a> — Leído: 13/05/2026 — Columnas usadas: OBRA, CLIENTE, CONCEPTO, IMPORTE, FECHA REAL DE COBRO</div>
+    <div class="nota-fuente"><strong>Fuente:</strong> <a href="https://docs.google.com/spreadsheets/d/1F38mB4NUBHsKxpiY4mds3zgje6DR2Y4h/edit" target="_blank">Planilla Cobros (Esteban)</a> — pestaña del mes en curso — filas con FECHA REAL DE COBRO completada</div>
   </div>
 
-  <div class="grid2">
-    <div class="section">
-      <div class="section-title">Pipeline — Pendiente de cobro</div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Obra</th><th class="num">Monto</th><th>Est. cobro</th><th>Estado</th></tr></thead>
-          <tbody id="tbody-pipeline"></tbody>
-        </table>
-      </div>
-      <div class="nota-fuente"><strong>Fuente:</strong> <a href="https://drive.google.com/file/d/1w9t2A1La45Ab0-KTdX66f1yJDh5TcZZB/view" target="_blank">Cobros Ingeco Feb-Mar-Abr 2026.xlsx (Esteban)</a> — ítems sin FECHA REAL DE COBRO al 13/05/2026 — Estado DEMORADO = fecha probable pasada sin cobro confirmado</div>
+  <div class="section">
+    <div class="section-title">Pipeline — Pendiente de cobro · <span id="pipeline-tabla-mes">—</span></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Obra</th><th>Cliente</th><th>Concepto</th><th>Período</th><th class="num">Importe</th><th>Fecha probable</th><th>COD</th></tr></thead>
+        <tbody id="tbody-pipeline"></tbody>
+      </table>
     </div>
-
-    <div class="section">
-      <div class="section-title">Costo Financiero por Demora en Cobro</div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Obra</th><th class="num">Monto</th><th class="num">Meses demora</th><th class="num">Costo fin. (5%/mes)</th><th>Obs.</th></tr></thead>
-          <tbody id="tbody-costo-fin"></tbody>
-        </table>
-      </div>
-      <div class="nota-fuente"><strong>Fórmula:</strong> Costo fin. = monto × 5%/mes × meses demora — <strong>Fuente montos:</strong> <a href="https://drive.google.com/file/d/1w9t2A1La45Ab0-KTdX66f1yJDh5TcZZB/view" target="_blank">Cobros Ingeco Feb-Mar-Abr 2026.xlsx (Esteban)</a> — <strong>Tasa:</strong> regla de negocio Adrián (5%/mes)</div>
-    </div>
+    <div class="nota-fuente"><strong>Fuente:</strong> <a href="https://docs.google.com/spreadsheets/d/1F38mB4NUBHsKxpiY4mds3zgje6DR2Y4h/edit" target="_blank">Planilla Cobros (Esteban)</a> — filas SIN FECHA REAL DE COBRO (pendientes de cobro)</div>
   </div>
 </div>
 
@@ -859,7 +834,7 @@
       <div class="kpi-label">Pipeline Mayo confirmado</div>
       <div class="kpi-value pos-val">$2,80B</div>
       <div class="kpi-sub">7 ítems con fecha estimada</div>
-      <div class="fuente">Cobros Ingeco Feb-Mar-Abr 2026.xlsx — Esteban — ID Drive: 1w9t2A1La45Ab0-KTdX66f1yJDh5TcZZB — Leído: 12/05/2026 — hoja Pipeline</div>
+      <div class="fuente">Cobros Ingeco Feb-Mar-Abr 2026.xlsx — Esteban — ID Drive: 1F38mB4NUBHsKxpiY4mds3zgje6DR2Y4h — Leído: 12/05/2026 — hoja Pipeline</div>
     </div>
     <div class="kpi-card pos">
       <div class="kpi-label">Ingresos 1° quinc Mayo</div>
@@ -887,7 +862,7 @@
       </div>
       <div id="flujo-rows"></div>
     </div>
-    <div class="nota-fuente"><strong>Ingresos:</strong> <a href="https://drive.google.com/file/d/1w9t2A1La45Ab0-KTdX66f1yJDh5TcZZB/view" target="_blank">Cobros Ingeco Feb-Mar-Abr 2026.xlsx (Esteban)</a> — Leído: 12/05/2026 — hoja Pipeline, columnas: Obra, Monto, Fecha estimada cobro — <strong>Egresos:</strong> $430M/quinc — regla de negocio Adrián — Semáforo: verde = ingresos > egresos, rojo = alerta déficit, gris = sin datos</div>
+    <div class="nota-fuente"><strong>Ingresos:</strong> <a href="https://drive.google.com/file/d/1F38mB4NUBHsKxpiY4mds3zgje6DR2Y4h/view" target="_blank">Cobros Ingeco Feb-Mar-Abr 2026.xlsx (Esteban)</a> — Leído: 12/05/2026 — hoja Pipeline, columnas: Obra, Monto, Fecha estimada cobro — <strong>Egresos:</strong> $430M/quinc — regla de negocio Adrián — Semáforo: verde = ingresos > egresos, rojo = alerta déficit, gris = sin datos</div>
   </div>
 
   <div class="section">
@@ -897,7 +872,7 @@
         <div class="kpi-label">Monto real percibido</div>
         <div class="kpi-value">$109,27M</div>
         <div class="kpi-sub">Devengado Marzo 2026</div>
-        <div class="fuente">Cobros Ingeco Feb-Mar-Abr 2026.xlsx — Esteban — ID Drive: 1w9t2A1La45Ab0-KTdX66f1yJDh5TcZZB — Leído: 12/05/2026 — fila: Canal 82008, col Monto = $109.271.297,44</div>
+        <div class="fuente">Cobros Ingeco Feb-Mar-Abr 2026.xlsx — Esteban — ID Drive: 1F38mB4NUBHsKxpiY4mds3zgje6DR2Y4h — Leído: 12/05/2026 — fila: Canal 82008, col Monto = $109.271.297,44</div>
       </div>
       <div class="kpi-card accent">
         <div class="kpi-label">Percibido</div>
@@ -1254,7 +1229,11 @@ const MO_TOTAL = 102500000;
 // Stock planta
 const STOCK = { asfaltoMP: 700, coef: 20, frioTerminado: 35 };
 
-// Cobros reales por mes (Cobros Ingeco Feb-Mar-Abr 2026.xlsx — Esteban)
+// Cobros reales + Pipeline — cargado dinámicamente desde Apps Script (planilla Esteban)
+// Estructura: { may: { totalCobros, totalPipeline, nCobros, nPipeline, cobros: [...], pipeline: [...] }, jun: {...}, ... }
+let COBROS_ESTEBAN = {};
+
+// Datos históricos estáticos (Feb-Mar-Abr) — se mantienen como fallback
 const COBROS_REAL = {
   feb: {
     total: 1657718906,
@@ -1836,46 +1815,106 @@ function renderResumenObra() {
 }
 
 function renderCobrosReal() {
+  const MES_LABEL = { ene:'Enero',feb:'Febrero',mar:'Marzo',abr:'Abril',may:'Mayo',
+                      jun:'Junio',jul:'Julio',ago:'Agosto',sep:'Septiembre',
+                      oct:'Octubre',nov:'Noviembre',dic:'Diciembre' };
+  const mesLabel = (MES_LABEL[mesActual] || mesActual) + ' 2026';
+
+  // Actualizar KPI cards
+  const kpiTotal  = document.getElementById('kpi-cobros-total');
+  const kpiSub    = document.getElementById('kpi-cobros-sub');
+  const mesEl     = document.getElementById('cobros-mes-label');
+  const tabMesEl  = document.getElementById('cobros-tabla-mes');
+  const plMesEl   = document.getElementById('pipeline-mes-label');
+  const plTabEl   = document.getElementById('pipeline-tabla-mes');
+  const kpiPL     = document.getElementById('kpi-pipeline-total');
+  const kpiPLSub  = document.getElementById('kpi-pipeline-sub');
+
+  if (mesEl)    mesEl.textContent  = mesLabel;
+  if (tabMesEl) tabMesEl.textContent = mesLabel;
+  if (plMesEl)  plMesEl.textContent  = mesLabel;
+  if (plTabEl)  plTabEl.textContent  = mesLabel;
+
+  const d = COBROS_ESTEBAN[mesActual];
+
+  if (d) {
+    if (kpiTotal) { kpiTotal.textContent = fmt(d.totalCobros); kpiTotal.className = 'kpi-value pos-val'; }
+    if (kpiSub)   kpiSub.textContent = d.nCobros + ' cobro' + (d.nCobros !== 1 ? 's' : '') + ' — datos reales';
+    if (kpiPL)    { kpiPL.textContent = fmt(d.totalPipeline); kpiPL.className = 'kpi-value'; }
+    if (kpiPLSub) kpiPLSub.textContent = d.nPipeline + ' ítem' + (d.nPipeline !== 1 ? 's' : '') + ' pendientes';
+  } else {
+    if (kpiTotal) { kpiTotal.textContent = 'sin dato'; kpiTotal.className = 'kpi-value nd'; }
+    if (kpiSub)   kpiSub.textContent = 'sin datos para este mes';
+    if (kpiPL)    { kpiPL.textContent = 'sin dato'; kpiPL.className = 'kpi-value nd'; }
+    if (kpiPLSub) kpiPLSub.textContent = '—';
+  }
+
+  // Tabla de cobros (filas con fecha real)
   const tbody = document.getElementById('tbody-cobros-real');
   if (!tbody) return;
-  const rows = [];
-  ['feb','mar','abr'].forEach(mes => {
-    const d = COBROS_REAL[mes];
-    const label = mes === 'feb' ? 'Febrero 2026' : mes === 'mar' ? 'Marzo 2026' : 'Abril 2026';
-    d.items.forEach((it, i) => {
-      rows.push(`<tr>
-        ${i === 0 ? `<td rowspan="${d.items.length}" style="font-weight:600;vertical-align:top;border-right:2px solid var(--border);">${label}<br><small style="color:var(--muted);font-weight:400;">${fmt(d.total)}</small></td>` : ''}
-        <td>${it.obra}</td>
-        <td style="font-size:11px;color:var(--muted);">${it.concepto}</td>
-        <td style="font-size:11px;color:var(--muted);">${it.cliente}</td>
-        <td class="num pos-val">${fmt(it.monto)}</td>
-        <td style="font-size:11px;">${it.fecha}/2026</td>
-      </tr>`);
-    });
-    rows.push(`<tr style="background:#f8fafc;font-weight:700;">
-      <td colspan="4" style="padding:8px 12px;">TOTAL ${label}${d.label ? ' — ' + d.label : ''}</td>
-      <td class="num pos-val" style="padding:8px 12px;">${fmt(d.total)}</td>
-      <td></td>
-    </tr>`);
-  });
+
+  if (!d || !d.cobros || d.cobros.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:16px;">Sin cobros registrados para ${mesLabel}</td></tr>`;
+    return;
+  }
+
+  const rows = d.cobros.map(it => `<tr>
+    <td style="font-size:12px;">${it.obra}</td>
+    <td style="font-size:11px;color:var(--muted);">${it.cliente}</td>
+    <td style="font-size:11px;color:var(--muted);">${it.concepto}</td>
+    <td style="font-size:11px;">${it.periodo}</td>
+    <td class="num pos-val">${fmt(it.importe)}</td>
+    <td style="font-size:11px;">${it.fechaReal}</td>
+    <td style="font-size:11px;color:var(--muted);">${it.cod}</td>
+  </tr>`);
+
+  rows.push(`<tr style="background:#f8fafc;font-weight:700;">
+    <td colspan="4" style="padding:8px 12px;">TOTAL PERCIBIDO ${mesLabel}</td>
+    <td class="num pos-val" style="padding:8px 12px;">${fmt(d.totalCobros)}</td>
+    <td colspan="2"></td>
+  </tr>`);
+
   tbody.innerHTML = rows.join('');
 }
 
 function renderPipeline() {
   const tbody = document.getElementById('tbody-pipeline');
-  const estadoClass = { 'DEMORADO': 'neg', 'PENDIENTE': 'parcial', 'PIPELINE': 'pendiente' };
-  tbody.innerHTML = PIPELINE.map(p => `
-    <tr>
-      <td>${p.obra}</td>
-      <td class="num pos-val">${fmt(p.monto)}</td>
-      <td style="font-size:11px;">${p.estimCobro}</td>
-      <td><span class="status-badge ${estadoClass[p.estado] || 'pendiente'}" style="font-size:10px;">${p.estado}</span></td>
-    </tr>
-  `).join('');
+  if (!tbody) return;
+
+  const MES_LABEL = { ene:'Enero',feb:'Febrero',mar:'Marzo',abr:'Abril',may:'Mayo',
+                      jun:'Junio',jul:'Julio',ago:'Agosto',sep:'Septiembre',
+                      oct:'Octubre',nov:'Noviembre',dic:'Diciembre' };
+  const mesLabel = (MES_LABEL[mesActual] || mesActual) + ' 2026';
+
+  const d = COBROS_ESTEBAN[mesActual];
+
+  if (!d || !d.pipeline || d.pipeline.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:16px;">Sin ítems en pipeline para ${mesLabel}</td></tr>`;
+    return;
+  }
+
+  const rows = d.pipeline.map(it => `<tr>
+    <td style="font-size:12px;">${it.obra}</td>
+    <td style="font-size:11px;color:var(--muted);">${it.cliente}</td>
+    <td style="font-size:11px;color:var(--muted);">${it.concepto}</td>
+    <td style="font-size:11px;">${it.periodo}</td>
+    <td class="num pos-val">${fmt(it.importe)}</td>
+    <td style="font-size:11px;">${it.fechaProb || '—'}</td>
+    <td style="font-size:11px;color:var(--muted);">${it.cod}</td>
+  </tr>`);
+
+  rows.push(`<tr style="background:#f8fafc;font-weight:700;">
+    <td colspan="4" style="padding:8px 12px;">TOTAL PIPELINE ${mesLabel}</td>
+    <td class="num pos-val" style="padding:8px 12px;">${fmt(d.totalPipeline)}</td>
+    <td colspan="2"></td>
+  </tr>`);
+
+  tbody.innerHTML = rows.join('');
 }
 
 function renderCostoFinanciero() {
   const tbody = document.getElementById('tbody-costo-fin');
+  if (!tbody) return;
   // Canal 82008: devengado marzo, cobrado 14/4 → 1 mes demora
   const c82008 = { obra: 'Canal 82008', monto: CANAL_82008.monto, demora: 1, obs: 'Dev.mar → cobr.14/abr' };
   // Demorados de abril (estimación 1 mes de espera)
@@ -3952,6 +3991,9 @@ async function refreshData() {
       }
       if (data.pipeline && Array.isArray(data.pipeline)) {
         PIPELINE.splice(0, PIPELINE.length, ...data.pipeline);
+      }
+      if (data.cobrosEsteban && typeof data.cobrosEsteban === 'object') {
+        Object.assign(COBROS_ESTEBAN, data.cobrosEsteban);
       }
       if (data.moCtroCosto && typeof data.moCtroCosto === 'object') {
         Object.assign(MO_CTRO_COSTO, data.moCtroCosto);
