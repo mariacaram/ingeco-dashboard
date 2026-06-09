@@ -507,7 +507,7 @@
     <div class="section-title">Cobros reales · <span id="cobros-tabla-mes">—</span> <span class="badge real">Datos reales — Google Sheets</span></div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Obra</th><th>Cliente</th><th>Concepto</th><th>Período</th><th class="num">Importe</th><th>Fecha real cobro</th><th>COD</th></tr></thead>
+        <thead><tr><th>Código</th><th>Cliente</th><th>Concepto</th><th>Período</th><th class="num">Importe</th><th>Fecha real cobro</th><th>Obra</th></tr></thead>
         <tbody id="tbody-cobros-real"></tbody>
       </table>
     </div>
@@ -518,7 +518,7 @@
     <div class="section-title">Pipeline — Pendiente de cobro · <span id="pipeline-tabla-mes">—</span></div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Obra</th><th>Cliente</th><th>Concepto</th><th>Período</th><th class="num">Importe</th><th>Fecha probable</th><th>COD</th></tr></thead>
+        <thead><tr><th>Código</th><th>Cliente</th><th>Concepto</th><th>Período</th><th class="num">Importe</th><th>Fecha probable</th><th>Obra</th></tr></thead>
         <tbody id="tbody-pipeline"></tbody>
       </table>
     </div>
@@ -1859,13 +1859,13 @@ function renderCobrosReal() {
   }
 
   const rows = d.cobros.map(it => `<tr>
-    <td style="font-size:12px;">${it.obra}</td>
+    <td style="font-size:12px;">${it.cod || it.obra}</td>
     <td style="font-size:11px;color:var(--muted);">${it.cliente}</td>
     <td style="font-size:11px;color:var(--muted);">${it.concepto}</td>
     <td style="font-size:11px;">${it.periodo}</td>
     <td class="num pos-val">${fmt(it.importe)}</td>
     <td style="font-size:11px;">${it.fechaReal}</td>
-    <td style="font-size:11px;color:var(--muted);">${it.cod}</td>
+    <td style="font-size:11px;color:var(--muted);">${it.obra}</td>
   </tr>`);
 
   rows.push(`<tr style="background:#f8fafc;font-weight:700;">
@@ -1894,13 +1894,13 @@ function renderPipeline() {
   }
 
   const rows = d.pipeline.map(it => `<tr>
-    <td style="font-size:12px;">${it.obra}</td>
+    <td style="font-size:12px;">${it.cod || it.obra}</td>
     <td style="font-size:11px;color:var(--muted);">${it.cliente}</td>
     <td style="font-size:11px;color:var(--muted);">${it.concepto}</td>
     <td style="font-size:11px;">${it.periodo}</td>
     <td class="num pos-val">${fmt(it.importe)}</td>
     <td style="font-size:11px;">${it.fechaProb || '—'}</td>
-    <td style="font-size:11px;color:var(--muted);">${it.cod}</td>
+    <td style="font-size:11px;color:var(--muted);">${it.obra}</td>
   </tr>`);
 
   rows.push(`<tr style="background:#f8fafc;font-weight:700;">
