@@ -1422,9 +1422,10 @@ function leerCobrosEsteban() {
 
       const cobrados      = [];
       const facturados    = [];
+      const noCobrados    = [];
       const sinFecha      = [];
       const menosProbable = [];
-      let totalCobrado = 0, totalFacturado = 0, totalSinFecha = 0, totalMenosProbable = 0;
+      let totalCobrado = 0, totalFacturado = 0, totalNoCobrado = 0, totalSinFecha = 0, totalMenosProbable = 0;
       let pastTotal = false;
 
       for (let i = hdrIdx + 1; i < rows.length; i++) {
@@ -1469,9 +1470,14 @@ function leerCobrosEsteban() {
           totalSinFecha += importe;
         } else if (gStr.toUpperCase() === 'F') {
           item.categoria = 'facturado';
-          item.fechaReal = ''; // "F" no es una fecha real → limpiar
+          item.fechaReal = '';
           facturados.push(item);
           totalFacturado += importe;
+        } else if (gStr.toUpperCase() === 'N/C') {
+          item.categoria = 'noCobrado';
+          item.fechaReal = '';
+          noCobrados.push(item);
+          totalNoCobrado += importe;
         } else {
           item.categoria = 'cobrado';
           cobrados.push(item);
@@ -1482,25 +1488,30 @@ function leerCobrosEsteban() {
       const sortByImporte = function(a, b) { return b.importe - a.importe; };
       cobrados.sort(sortByImporte);
       facturados.sort(sortByImporte);
+      noCobrados.sort(sortByImporte);
       sinFecha.sort(sortByImporte);
       menosProbable.sort(sortByImporte);
 
       resultado[mesKey] = {
         totalCobrado:       Math.round(totalCobrado),
         totalFacturado:     Math.round(totalFacturado),
+        totalNoCobrado:     Math.round(totalNoCobrado),
         totalSinFecha:      Math.round(totalSinFecha),
         totalMenosProbable: Math.round(totalMenosProbable),
         nCobrado:           cobrados.length,
         nFacturado:         facturados.length,
+        nNoCobrado:         noCobrados.length,
         nSinFecha:          sinFecha.length,
         nMenosProbable:     menosProbable.length,
         cobrados:           cobrados,
         facturados:         facturados,
+        noCobrados:         noCobrados,
         sinFecha:           sinFecha,
         menosProbable:      menosProbable,
       };
       Logger.log('CobrosEsteban [' + mesKey + ']: cobrado=' + cobrados.length + ' $' + Math.round(totalCobrado) +
                  ' | facturado=' + facturados.length + ' $' + Math.round(totalFacturado) +
+                 ' | noCobrado=' + noCobrados.length + ' $' + Math.round(totalNoCobrado) +
                  ' | sinFecha=' + sinFecha.length + ' $' + Math.round(totalSinFecha) +
                  ' | menosProbable=' + menosProbable.length);
     }

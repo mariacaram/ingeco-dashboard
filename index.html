@@ -503,7 +503,13 @@
       <div class="kpi-sub" id="kpi-facturado-sub">—</div>
       <div class="fuente"><a href="https://docs.google.com/spreadsheets/d/1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY/edit" target="_blank" onclick="event.stopPropagation()">Planilla Cobros (Esteban)</a> — col G con "F"</div>
     </div>
-    <div class="kpi-card neg" style="cursor:pointer;" onclick="openCobrosPanel('sinFecha')" title="Ver detalle sin fecha">
+    <div class="kpi-card neg" style="cursor:pointer;" onclick="openCobrosPanel('noCobrado')" title="Ver detalle no cobrado">
+      <div class="kpi-label">❌ No cobrado · <span class="cobros-mes-lbl">—</span></div>
+      <div class="kpi-value nd" id="kpi-nocobrado-total">sin dato</div>
+      <div class="kpi-sub" id="kpi-nocobrado-sub">—</div>
+      <div class="fuente"><a href="https://docs.google.com/spreadsheets/d/1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY/edit" target="_blank" onclick="event.stopPropagation()">Planilla Cobros (Esteban)</a> — col G con "N/C"</div>
+    </div>
+    <div class="kpi-card" style="cursor:pointer;border-color:#94a3b8;" onclick="openCobrosPanel('sinFecha')" title="Ver detalle sin fecha">
       <div class="kpi-label">⏳ Sin fecha · <span class="cobros-mes-lbl">—</span></div>
       <div class="kpi-value nd" id="kpi-sinfecha-total">sin dato</div>
       <div class="kpi-sub" id="kpi-sinfecha-sub">—</div>
@@ -1861,14 +1867,15 @@ function renderCobrosReal() {
   };
 
   if (d) {
-    _kpi('kpi-cobrado-total',   d.totalCobrado,   'pos-val', d.nCobrado   + ' cobro'  + (d.nCobrado   !== 1 ? 's' : ''), 'kpi-cobrado-sub');
-    _kpi('kpi-facturado-total', d.totalFacturado, '',        d.nFacturado + ' factura' + (d.nFacturado !== 1 ? 's' : ''), 'kpi-facturado-sub');
-    _kpi('kpi-sinfecha-total',  d.totalSinFecha,  'neg-val', d.nSinFecha  + ' ítem'   + (d.nSinFecha  !== 1 ? 's' : '') + ' sin fecha', 'kpi-sinfecha-sub');
+    _kpi('kpi-cobrado-total',   d.totalCobrado,   'pos-val', d.nCobrado    + ' cobro'    + (d.nCobrado    !== 1 ? 's' : ''), 'kpi-cobrado-sub');
+    _kpi('kpi-facturado-total', d.totalFacturado, '',        d.nFacturado  + ' factura'  + (d.nFacturado  !== 1 ? 's' : ''), 'kpi-facturado-sub');
+    _kpi('kpi-nocobrado-total', d.totalNoCobrado || 0, 'neg-val', (d.nNoCobrado||0) + ' ítem' + ((d.nNoCobrado||0) !== 1 ? 's' : '') + ' N/C', 'kpi-nocobrado-sub');
+    _kpi('kpi-sinfecha-total',  d.totalSinFecha,  '',        d.nSinFecha   + ' ítem'     + (d.nSinFecha   !== 1 ? 's' : '') + ' sin fecha', 'kpi-sinfecha-sub');
   } else {
-    ['kpi-cobrado-total','kpi-facturado-total','kpi-sinfecha-total'].forEach(id => {
+    ['kpi-cobrado-total','kpi-facturado-total','kpi-nocobrado-total','kpi-sinfecha-total'].forEach(id => {
       const el = document.getElementById(id); if (el) { el.textContent = 'sin dato'; el.className = 'kpi-value nd'; }
     });
-    ['kpi-cobrado-sub','kpi-facturado-sub','kpi-sinfecha-sub'].forEach(id => {
+    ['kpi-cobrado-sub','kpi-facturado-sub','kpi-nocobrado-sub','kpi-sinfecha-sub'].forEach(id => {
       const el = document.getElementById(id); if (el) el.textContent = '—';
     });
   }
@@ -1884,9 +1891,10 @@ function renderCobrosReal() {
     if (chartEmpty) chartEmpty.style.display = 'none';
 
     const segmentos = [
-      { label: '✅ Cobrado',      valor: d.totalCobrado,   color: '#22c55e', n: d.nCobrado },
-      { label: '🧾 Facturado',    valor: d.totalFacturado, color: '#f59e0b', n: d.nFacturado },
-      { label: '⏳ Sin fecha',    valor: d.totalSinFecha,  color: '#94a3b8', n: d.nSinFecha },
+      { label: '✅ Cobrado',      valor: d.totalCobrado,        color: '#22c55e', n: d.nCobrado },
+      { label: '🧾 Facturado',    valor: d.totalFacturado,      color: '#f59e0b', n: d.nFacturado },
+      { label: '❌ No cobrado',   valor: d.totalNoCobrado || 0, color: '#ef4444', n: d.nNoCobrado || 0 },
+      { label: '⏳ Sin fecha',    valor: d.totalSinFecha,       color: '#94a3b8', n: d.nSinFecha },
     ].filter(s => s.valor > 0);
 
     const total = segmentos.reduce((s, x) => s + x.valor, 0);
@@ -1943,8 +1951,9 @@ function renderCobrosReal() {
   if (!tbody) return;
 
   const BADGE = {
-    cobrado:   '<span class="status-badge pos"  style="font-size:10px;">Cobrado</span>',
-    facturado: '<span class="status-badge parcial" style="font-size:10px;">Facturado</span>',
+    cobrado:   '<span class="status-badge pos"      style="font-size:10px;">Cobrado</span>',
+    facturado: '<span class="status-badge parcial"  style="font-size:10px;">Facturado</span>',
+    noCobrado: '<span class="status-badge neg"      style="font-size:10px;">N/C</span>',
     sinFecha:  '<span class="status-badge pendiente" style="font-size:10px;">Sin fecha</span>',
   };
 
@@ -1962,7 +1971,7 @@ function renderCobrosReal() {
   if (!d) {
     tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:16px;">Sin datos para ${mesLabel}</td></tr>`;
   } else {
-    const allItems = [...(d.cobrados||[]), ...(d.facturados||[]), ...(d.sinFecha||[])];
+    const allItems = [...(d.cobrados||[]), ...(d.facturados||[]), ...(d.noCobrados||[]), ...(d.sinFecha||[])];
     if (allItems.length === 0) {
       tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:16px;">Sin registros para ${mesLabel}</td></tr>`;
     } else {
@@ -3051,9 +3060,10 @@ function openCobrosPanel(categoria) {
   const mesLabel = (MES_LABEL[mesActual] || mesActual) + ' 2026';
 
   const CFG = {
-    cobrado:   { titulo: '✅ Cobrados',            colorBorde: '#22c55e', campo: 'cobrados',   total: 'totalCobrado',   colFecha: 'Fecha real cobro' },
+    cobrado:   { titulo: '✅ Cobrados',             colorBorde: '#22c55e', campo: 'cobrados',   total: 'totalCobrado',   colFecha: 'Fecha real cobro' },
     facturado: { titulo: '🧾 Facturados (no cobrados)', colorBorde: '#f59e0b', campo: 'facturados', total: 'totalFacturado', colFecha: 'Fecha probable' },
-    sinFecha:  { titulo: '⏳ Sin fecha probable',  colorBorde: '#94a3b8', campo: 'sinFecha',   total: 'totalSinFecha',  colFecha: 'Fecha probable' },
+    noCobrado: { titulo: '❌ No cobrados (N/C)',    colorBorde: '#ef4444', campo: 'noCobrados', total: 'totalNoCobrado', colFecha: 'Fecha probable' },
+    sinFecha:  { titulo: '⏳ Sin fecha probable',   colorBorde: '#94a3b8', campo: 'sinFecha',   total: 'totalSinFecha',  colFecha: 'Fecha probable' },
   };
   const cfg = CFG[categoria];
   if (!cfg) return;
