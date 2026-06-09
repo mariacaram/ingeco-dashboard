@@ -396,6 +396,7 @@
   <button class="tab-btn" onclick="openTab('estructura')">Estructura</button>
   <button class="tab-btn" onclick="openTab('fuentes')">Fuentes de Datos</button>
   <button class="tab-btn" onclick="openTab('metodologia')">Rentabilidad</button>
+  <button class="tab-btn" onclick="openTab('rrhh')">Recursos Humanos</button>
 </div>
 
 <!-- CONTENT -->
@@ -1172,6 +1173,53 @@
         <div style="font-size:12px;font-weight:700;color:#92400e;margin-bottom:5px;">⛏ Gastos de Cantera</div>
         <div style="font-size:12px;color:var(--text);line-height:1.7;">Explosivos, permisos de extracción, royalties o alquiler de cantera. Definir si es costo fijo mensual o proporcional a las TN trituradas.</div>
       </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ================================================================ -->
+<!-- TAB 9: RECURSOS HUMANOS -->
+<!-- ================================================================ -->
+<div class="tab-panel" id="tab-rrhh">
+
+  <!-- KPI Cards -->
+  <div class="kpi-grid">
+    <div class="kpi-card neg">
+      <div class="kpi-label">Total pagado · RRHH</div>
+      <div class="kpi-value" id="rrhh-kpi-total">—</div>
+      <div class="kpi-sub" id="rrhh-kpi-total-sub">Suma banco + efectivo del período</div>
+      <div class="fuente"><a href="https://drive.google.com/drive/folders/1hQZoJovbFDHNsJhNiGMEueH1bLfXuuCP" target="_blank">Liquidaciones TANGO — Mauro Orellana</a></div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Personas activas</div>
+      <div class="kpi-value" id="rrhh-kpi-personas">—</div>
+      <div class="kpi-sub" id="rrhh-kpi-personas-sub">Con liquidación en el período</div>
+      <div class="fuente"><a href="https://drive.google.com/drive/folders/1hQZoJovbFDHNsJhNiGMEueH1bLfXuuCP" target="_blank">Liquidaciones TANGO — Mauro Orellana</a></div>
+    </div>
+    <div class="kpi-card accent">
+      <div class="kpi-label">Total Banco</div>
+      <div class="kpi-value" id="rrhh-kpi-banco">—</div>
+      <div class="kpi-sub">Acreditación bancaria</div>
+    </div>
+    <div class="kpi-card accent">
+      <div class="kpi-label">Total Efectivo</div>
+      <div class="kpi-value" id="rrhh-kpi-efectivo">—</div>
+      <div class="kpi-sub">Pago en mano</div>
+    </div>
+  </div>
+
+  <!-- Detalle por persona agrupado por categoría -->
+  <div class="section">
+    <div class="section-title">
+      Detalle por persona · <span id="rrhh-mes-label"></span>
+      <span class="badge real" id="rrhh-fuente-badge">TANGO — Mauro Orellana</span>
+    </div>
+    <div id="rrhh-detalle-container"></div>
+    <div class="nota-fuente" style="margin-top:8px;">
+      <strong>Banco:</strong> acreditación en cuenta bancaria del empleado ·
+      <strong>Efectivo:</strong> adicional pagado en mano ·
+      Fuente: <a href="https://drive.google.com/drive/folders/1hQZoJovbFDHNsJhNiGMEueH1bLfXuuCP" target="_blank">Carpeta TANGO (Mauro Orellana)</a>
     </div>
   </div>
 
@@ -4040,6 +4088,120 @@ async function refreshData() {
 }
 
 // ================================================================
+// RECURSOS HUMANOS
+// ================================================================
+
+function renderRRHH() {
+  // Etiqueta del mes
+  const mesLbl = document.getElementById('rrhh-mes-label');
+  if (mesLbl) mesLbl.textContent = MES[mesActual] || mesActual;
+
+  // Fuente de datos individual: MO_TALLER_1Q_ABR (disponible siempre)
+  // En el futuro, aquí se puede conectar un array completo con todos los empleados
+  const datos = MO_TALLER_1Q_ABR;
+
+  // Totales generales
+  const totalBanco    = datos.reduce((s, p) => s + (p.neto      || 0), 0);
+  const totalEfectivo = datos.reduce((s, p) => s + (p.adicional || 0), 0);
+  const totalGeneral  = totalBanco + totalEfectivo;
+  const totalPersonas = datos.length;
+
+  // Actualizar KPI cards
+  const setKpi = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  setKpi('rrhh-kpi-total',    totalGeneral  > 0 ? fmt(totalGeneral)  : 'sin dato');
+  setKpi('rrhh-kpi-banco',    totalBanco    > 0 ? fmt(totalBanco)    : 'sin dato');
+  setKpi('rrhh-kpi-efectivo', totalEfectivo > 0 ? fmt(totalEfectivo) : 'sin dato');
+  setKpi('rrhh-kpi-personas', totalPersonas > 0 ? totalPersonas + ' personas' : 'sin dato');
+  setKpi('rrhh-kpi-total-sub',    totalGeneral  > 0 ? 'Banco ' + fmt(totalBanco) + ' + Efectivo ' + fmt(totalEfectivo) : 'Actualizá datos para cargar');
+  setKpi('rrhh-kpi-personas-sub', totalPersonas > 0 ? '1° Quinc. — dato parcial (Taller)' : 'Requiere liquidación TANGO');
+
+  // Agrupar por categoría
+  const porCategoria = {};
+  datos.forEach(p => {
+    const cat = p.cat || 'Sin categoría';
+    if (!porCategoria[cat]) porCategoria[cat] = [];
+    porCategoria[cat].push(p);
+  });
+
+  // Orden de categorías (de mayor a menor jerarquía)
+  const ordenCat = ['Ofic. Especial', 'Oficial', 'Med. Oficial', 'Ayudante', 'Sin categoría'];
+  const catsOrdenadas = Object.keys(porCategoria).sort((a, b) => {
+    const ia = ordenCat.indexOf(a), ib = ordenCat.indexOf(b);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  });
+
+  // Construir HTML del detalle
+  const container = document.getElementById('rrhh-detalle-container');
+  if (!container) return;
+
+  if (datos.length === 0) {
+    container.innerHTML = '<div class="alert info">⏳ Sin datos individuales disponibles. Actualizá los datos desde Drive para cargar la liquidación completa.</div>';
+    return;
+  }
+
+  container.innerHTML = catsOrdenadas.map(cat => {
+    const personas = porCategoria[cat];
+    const subBanco    = personas.reduce((s, p) => s + (p.neto      || 0), 0);
+    const subEfectivo = personas.reduce((s, p) => s + (p.adicional || 0), 0);
+    const subTotal    = subBanco + subEfectivo;
+
+    const filas = personas.map(p => {
+      const total = (p.neto || 0) + (p.adicional || 0);
+      return `<tr>
+        <td style="font-family:monospace;font-size:11px;color:var(--muted);">${p.leg}</td>
+        <td style="font-weight:600;">${p.nombre}</td>
+        <td style="font-size:11px;color:var(--muted);">${p.cat}</td>
+        <td class="num" style="color:#1d4ed8;">${fmt(p.neto || 0)}</td>
+        <td class="num" style="color:#92400e;">${fmt(p.adicional || 0)}</td>
+        <td class="num neg-val" style="font-weight:700;">${fmt(total)}</td>
+      </tr>`;
+    }).join('');
+
+    return `
+    <div style="margin-bottom:16px;">
+      <div style="background:var(--primary);color:#fff;font-size:11px;font-weight:700;
+                  text-transform:uppercase;letter-spacing:0.5px;padding:7px 12px;
+                  border-radius:8px 8px 0 0;">
+        ${cat}
+        <span style="font-weight:400;opacity:0.75;margin-left:8px;">${personas.length} persona${personas.length !== 1 ? 's' : ''}</span>
+      </div>
+      <div class="table-wrap" style="border-radius:0 0 8px 8px;border-top:none;">
+        <table>
+          <thead>
+            <tr>
+              <th>Leg.</th>
+              <th>Nombre</th>
+              <th>Categoría</th>
+              <th style="text-align:right;">🏦 Banco</th>
+              <th style="text-align:right;">💵 Efectivo</th>
+              <th style="text-align:right;">Total</th>
+            </tr>
+          </thead>
+          <tbody>${filas}</tbody>
+          <tfoot>
+            <tr style="background:#f8fafc;font-weight:700;">
+              <td colspan="3" style="padding:9px 12px;font-size:12px;">Subtotal ${cat}</td>
+              <td class="num" style="color:#1d4ed8;padding:9px 12px;">${fmt(subBanco)}</td>
+              <td class="num" style="color:#92400e;padding:9px 12px;">${fmt(subEfectivo)}</td>
+              <td class="num neg-val" style="padding:9px 12px;">${fmt(subTotal)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>`;
+  }).join('') + `
+  <div style="background:#f8fafc;border:1.5px solid var(--border);border-radius:8px;
+              padding:10px 16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+    <span style="font-size:13px;font-weight:700;color:var(--primary);">TOTAL GENERAL</span>
+    <div style="display:flex;gap:24px;font-size:13px;font-weight:700;">
+      <span style="color:#1d4ed8;">🏦 Banco: ${fmt(totalBanco)}</span>
+      <span style="color:#92400e;">💵 Efectivo: ${fmt(totalEfectivo)}</span>
+      <span style="color:var(--neg);">Total: ${fmt(totalGeneral)}</span>
+    </div>
+  </div>`;
+}
+
+// ================================================================
 // TABS Y MES
 // ================================================================
 
@@ -4048,7 +4210,7 @@ function openTab(id) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-' + id).classList.add('active');
   const btns = document.querySelectorAll('.tab-btn');
-  const map = { margen: 0, cobros: 1, planta: 2, taller: 3, flujo: 4, estructura: 5, fuentes: 6, metodologia: 7 };
+  const map = { margen: 0, cobros: 1, planta: 2, taller: 3, flujo: 4, estructura: 5, fuentes: 6, metodologia: 7, rrhh: 8 };
   btns[map[id]].classList.add('active');
 }
 
@@ -4066,6 +4228,7 @@ function setMes(mes) {
   renderPlanta();
   renderCtroCosto();
   renderRentabilidad();
+  renderRRHH();
 }
 
 // ================================================================
@@ -4112,6 +4275,7 @@ renderReparaciones();
 renderTallerLiq();
 renderCtroCosto();
 renderRentabilidad();
+renderRRHH();
 renderFlujo();
 renderPersonas();
 renderFuentes();
