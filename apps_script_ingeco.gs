@@ -482,8 +482,8 @@ function parsearMes(fechaRaw) {
   let mes = null;
 
   if (fechaRaw instanceof Date) {
-    // Apps Script devuelve objetos Date para celdas con fecha
-    mes = fechaRaw.getMonth() + 1; // getMonth() es 0-indexed
+    // Apps Script guarda fechas como medianoche UTC → usar getUTCMonth() para evitar desfase con UTC-3
+    mes = fechaRaw.getUTCMonth() + 1;
   } else {
     const s = String(fechaRaw).trim();
     // Formato D/M/YYYY o DD/MM/YYYY (común en Argentina)
@@ -504,8 +504,8 @@ function _parseMesKey(raw, curYear) {
   if (!raw && raw !== 0) return null;
   if (raw instanceof Date) {
     if (isNaN(raw.getTime())) return null;
-    if (raw.getFullYear() !== curYear) return null;
-    return MAP[raw.getMonth()];
+    if (raw.getUTCFullYear() !== curYear) return null;
+    return MAP[raw.getUTCMonth()];
   }
   const s = String(raw).trim().toLowerCase();
   if (!s || s === '-') return null;
@@ -1282,7 +1282,8 @@ function leerRemitosAsfalto() {
         if (iFecha >= 0 && row[iFecha] !== '' && row[iFecha] != null) {
           var rawF = row[iFecha];
           if (rawF instanceof Date) {
-            fechaObj = new Date(rawF.getFullYear(), rawF.getMonth(), rawF.getDate());
+            // Usar UTC para evitar desfase UTC-3 (medianoche UTC = día anterior en Argentina)
+            fechaObj = new Date(Date.UTC(rawF.getUTCFullYear(), rawF.getUTCMonth(), rawF.getUTCDate()));
           } else {
             var parts = String(rawF).trim().split('/');
             if (parts.length === 3) {
@@ -1296,8 +1297,8 @@ function leerRemitosAsfalto() {
         // ── Mes/año para el agregado mensual ────────────────────────────────
         var mesNum, anioNum;
         if (fechaObj && !isNaN(fechaObj.getTime())) {
-          mesNum  = fechaObj.getMonth() + 1;
-          anioNum = fechaObj.getFullYear();
+          mesNum  = fechaObj.getUTCMonth() + 1;
+          anioNum = fechaObj.getUTCFullYear();
           // Guardar en detalle con objeto Date real
           detalle.push({ fecha: fechaObj, fechaStr: Utilities.formatDate(fechaObj, TZ, 'dd/MM/yyyy'), tipo: tipo, cant: Math.round(cant * 10) / 10, obra: obra });
         } else {
