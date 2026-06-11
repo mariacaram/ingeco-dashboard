@@ -4394,7 +4394,9 @@ async function refreshData() {
   }
 
   try {
-    const data = await fetchJSONP(APPS_SCRIPT_URL + '?cache=1');
+    const res = await fetch('/api/datos?cache=1');
+    if (!res.ok) throw new Error('Proxy HTTP ' + res.status);
+    const data = await res.json();
 
     if (data.status === 'ok') {
       if (data.cobros) {
@@ -4533,7 +4535,9 @@ if (APPS_SCRIPT_URL) {
     const lastUpEl = document.getElementById('last-update');
     if (lastUpEl) lastUpEl.textContent = 'Cargando datos guardados...';
     try {
-      const data = await fetchJSONP(APPS_SCRIPT_URL + '?cache=1');
+      const res = await fetch('/api/datos?cache=1');
+      if (!res.ok) throw new Error('Proxy HTTP ' + res.status);
+      const data = await res.json();
       if (data.status === 'ok') {
         if (data.moCtroCosto && typeof data.moCtroCosto === 'object') {
           Object.assign(MO_CTRO_COSTO, data.moCtroCosto);
