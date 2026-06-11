@@ -4382,7 +4382,7 @@ async function refreshData() {
   }
 
   try {
-    const data = await fetchJSONP(APPS_SCRIPT_URL);
+    const data = await fetchJSONP(APPS_SCRIPT_URL + '?cache=1');
 
     if (data.status === 'ok') {
       if (data.cobros) {
