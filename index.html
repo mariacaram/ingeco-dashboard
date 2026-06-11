@@ -4346,12 +4346,24 @@ function updateTimestamp(isoStr) {
   }
 }
 
-// JSONP — evita el bloqueo CORS de Google Apps Script
-function fetchJSONP(url) {
+// Fetch desde Apps Script — intenta fetch() directo primero (CORS), luego JSONP como fallback
+async function fetchJSONP(url) {
+  // Intento 1: fetch() directo — Apps Script sirve Access-Control-Allow-Origin: * desde googleusercontent.com
+  try {
+    const res = await fetch(url, { redirect: 'follow' });
+    if (res.ok) {
+      const data = await res.json();
+      return data;
+    }
+  } catch (fetchErr) {
+    console.warn('fetch() directo falló, intentando JSONP:', fetchErr.message);
+  }
+
+  // Intento 2: JSONP — fallback si CORS no está disponible
   return new Promise((resolve, reject) => {
     const cbName = 'igcb_' + Date.now();
     const script = document.createElement('script');
-    const timer = setTimeout(() => { cleanup(); reject(new Error('Timeout')); }, 180000); // 3 min — lee 4 archivos de Drive
+    const timer = setTimeout(() => { cleanup(); reject(new Error('Timeout')); }, 180000);
 
     function cleanup() {
       clearTimeout(timer);
@@ -4362,7 +4374,7 @@ function fetchJSONP(url) {
     window[cbName] = function(data) { cleanup(); resolve(data); };
     script.onerror = function() { cleanup(); reject(new Error('Script load error')); };
     script.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cbName;
-    document.head.appendChild(script);
+    document.body.appendChild(script);
   });
 }
 
