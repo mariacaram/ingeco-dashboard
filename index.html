@@ -504,7 +504,7 @@
       <div class="fuente"><a href="https://docs.google.com/spreadsheets/d/1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY/edit" target="_blank" onclick="event.stopPropagation()">Planilla Cobros (Esteban)</a> — col G con "F"</div>
     </div>
     <div class="kpi-card neg" style="cursor:pointer;" onclick="openCobrosPanel('noCobrado')" title="Ver detalle no cobrado">
-      <div class="kpi-label">❌ No cobrado · <span class="cobros-mes-lbl">—</span></div>
+      <div class="kpi-label">📝 Nota de crédito · <span class="cobros-mes-lbl">—</span></div>
       <div class="kpi-value nd" id="kpi-nocobrado-total">sin dato</div>
       <div class="kpi-sub" id="kpi-nocobrado-sub">—</div>
       <div class="fuente"><a href="https://docs.google.com/spreadsheets/d/1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY/edit" target="_blank" onclick="event.stopPropagation()">Planilla Cobros (Esteban)</a> — col G con "N/C"</div>
@@ -1902,7 +1902,7 @@ function renderCobrosReal() {
     const segmentos = [
       { label: '✅ Cobrado',      valor: d.totalCobrado,        color: '#22c55e', n: d.nCobrado },
       { label: '🧾 Facturado',    valor: d.totalFacturado,      color: '#f59e0b', n: d.nFacturado },
-      { label: '❌ No cobrado',   valor: d.totalNoCobrado || 0, color: '#ef4444', n: d.nNoCobrado || 0 },
+      { label: '📝 Nota de crédito',   valor: d.totalNoCobrado || 0, color: '#ef4444', n: d.nNoCobrado || 0 },
       { label: '⏳ Sin fecha',    valor: d.totalSinFecha,       color: '#94a3b8', n: d.nSinFecha },
     ].filter(s => s.valor > 0);
 
@@ -2039,7 +2039,7 @@ function renderCobrosTimeline(d) {
   // Recopilar todos los ítems con fechaProb (excluyendo cobrados — ya ingresaron)
   const fuentes = [
     { lista: d.facturados  || [], color: '#f59e0b', label: 'Facturado' },
-    { lista: d.noCobrados  || [], color: '#ef4444', label: 'No cobrado' },
+    { lista: d.noCobrados  || [], color: '#ef4444', label: 'Nota de crédito' },
     { lista: d.sinFecha    || [], color: '#94a3b8', label: 'Sin fecha' },
     { lista: d.cobrados    || [], color: '#22c55e', label: 'Cobrado' },
   ];
@@ -2107,8 +2107,8 @@ function renderCobrosTimeline(d) {
   });
 
   // Preparar datos para barras apiladas por categoría
-  const CATS = ['Cobrado','Facturado','No cobrado','Sin fecha'];
-  const COLORS = { 'Cobrado':'#22c55e','Facturado':'#f59e0b','No cobrado':'#ef4444','Sin fecha':'#94a3b8' };
+  const CATS = ['Cobrado','Facturado','Nota de crédito','Sin fecha'];
+  const COLORS = { 'Cobrado':'#22c55e','Facturado':'#f59e0b','Nota de crédito':'#ef4444','Sin fecha':'#94a3b8' };
 
   const semLabels = keys.map(k => mapaFecha[k].label);
 
@@ -2200,7 +2200,7 @@ function _openTimelinePanel(fechaLabel, grp) {
   const content = document.getElementById('panelContent');
   if (!panel || !content) return;
 
-  const COLORS = { 'Cobrado':'#22c55e','Facturado':'#f59e0b','No cobrado':'#ef4444','Sin fecha':'#94a3b8' };
+  const COLORS = { 'Cobrado':'#22c55e','Facturado':'#f59e0b','Nota de crédito':'#ef4444','Sin fecha':'#94a3b8' };
   const items = grp.items.slice().sort((a,b) => b.importe - a.importe);
 
   content.innerHTML = `
@@ -3284,7 +3284,7 @@ function openCobrosPanel(categoria) {
   const CFG = {
     cobrado:   { titulo: '✅ Cobrados',             colorBorde: '#22c55e', campo: 'cobrados',   total: 'totalCobrado',   colFecha: 'Fecha real cobro' },
     facturado: { titulo: '🧾 Facturados (no cobrados)', colorBorde: '#f59e0b', campo: 'facturados', total: 'totalFacturado', colFecha: 'Fecha probable' },
-    noCobrado: { titulo: '❌ No cobrados (N/C)',    colorBorde: '#ef4444', campo: 'noCobrados', total: 'totalNoCobrado', colFecha: 'Fecha probable' },
+    noCobrado: { titulo: '📝 Notas de crédito (N/C)',    colorBorde: '#ef4444', campo: 'noCobrados', total: 'totalNoCobrado', colFecha: 'Fecha probable' },
     sinFecha:  { titulo: '⏳ Sin fecha probable',   colorBorde: '#94a3b8', campo: 'sinFecha',   total: 'totalSinFecha',  colFecha: 'Fecha probable' },
   };
   const cfg = CFG[categoria];
