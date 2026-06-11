@@ -521,11 +521,8 @@
   <div class="section" style="padding:16px 20px;">
     <div class="section-title">Distribución · <span class="cobros-mes-lbl">—</span></div>
     <div id="cobros-chart-wrap" style="display:none;">
-      <div style="display:flex;gap:12px;align-items:stretch;flex-wrap:wrap;">
-        <div style="flex:1;min-width:220px;">
-          <canvas id="cobros-donut" width="220" height="220"></canvas>
-        </div>
-        <div style="flex:2;min-width:240px;display:flex;flex-direction:column;justify-content:center;gap:8px;" id="cobros-leyenda"></div>
+      <div style="display:flex;justify-content:center;">
+        <canvas id="cobros-donut" width="720" height="320" style="max-width:100%;height:auto;"></canvas>
       </div>
     </div>
     <div id="cobros-chart-empty" style="color:var(--muted);font-size:13px;padding:8px 0;">Sin datos para el mes seleccionado</div>
@@ -1893,26 +1890,29 @@ function renderCobrosReal() {
   const chartWrap  = document.getElementById('cobros-chart-wrap');
   const chartEmpty = document.getElementById('cobros-chart-empty');
   const canvas     = document.getElementById('cobros-donut');
-  const leyenda    = document.getElementById('cobros-leyenda');
 
   if (d && (d.totalCobrado + d.totalFacturado + d.totalSinFecha) > 0) {
     if (chartWrap)  chartWrap.style.display  = '';
     if (chartEmpty) chartEmpty.style.display = 'none';
 
     const segmentos = [
-      { label: '✅ Cobrado',      valor: d.totalCobrado,        color: '#22c55e', n: d.nCobrado },
-      { label: '🧾 Facturado',    valor: d.totalFacturado,      color: '#f59e0b', n: d.nFacturado },
-      { label: '📝 Nota de crédito',   valor: d.totalNoCobrado || 0, color: '#ef4444', n: d.nNoCobrado || 0 },
-      { label: '⏳ Fecha probable de cobro no cargada',    valor: d.totalSinFecha,       color: '#94a3b8', n: d.nSinFecha },
+      { label: '✅ Cobrado',                              short: '✅ Cobrado',          valor: d.totalCobrado,        color: '#22c55e', n: d.nCobrado },
+      { label: '🧾 Facturado',                            short: '🧾 Facturado',        valor: d.totalFacturado,      color: '#f59e0b', n: d.nFacturado },
+      { label: '📝 Nota de crédito',                      short: '📝 Nota de crédito',  valor: d.totalNoCobrado || 0, color: '#ef4444', n: d.nNoCobrado || 0 },
+      { label: '⏳ Fecha probable de cobro no cargada',   short: '⏳ Sin fecha cargada', valor: d.totalSinFecha,       color: '#94a3b8', n: d.nSinFecha },
     ].filter(s => s.valor > 0);
 
     const total = segmentos.reduce((s, x) => s + x.valor, 0);
 
     if (canvas) {
       const ctx = canvas.getContext('2d');
-      const cx = 110, cy = 110, r = 90, ri = 55;
-      ctx.clearRect(0, 0, 220, 220);
+      const W = canvas.width, H = canvas.height;
+      const cx = W / 2, cy = H / 2;
+      const r = 95, ri = 58;
+      ctx.clearRect(0, 0, W, H);
+
       let angle = -Math.PI / 2;
+      const slicesInfo = [];
       segmentos.forEach(seg => {
         const slice = (seg.valor / total) * Math.PI * 2;
         ctx.beginPath();
@@ -1921,34 +1921,56 @@ function renderCobrosReal() {
         ctx.closePath();
         ctx.fillStyle = seg.color;
         ctx.fill();
+        slicesInfo.push({ seg, midAngle: angle + slice / 2, pct: Math.round(seg.valor / total * 100) });
         angle += slice;
       });
+
       // Hueco interior
       ctx.beginPath();
       ctx.arc(cx, cy, ri, 0, Math.PI * 2);
       ctx.fillStyle = '#fff';
       ctx.fill();
+
       // Total en el centro
       ctx.fillStyle = '#1e293b';
-      ctx.font = 'bold 13px sans-serif';
+      ctx.font = 'bold 15px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(fmtM(total), cx, cy - 8);
+      ctx.fillText(fmtM(total), cx, cy - 9);
       ctx.font = '11px sans-serif';
       ctx.fillStyle = '#64748b';
-      ctx.fillText('total', cx, cy + 10);
-    }
+      ctx.fillText('total', cx, cy + 11);
 
-    if (leyenda) {
-      leyenda.innerHTML = segmentos.map(seg => `
-        <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#f8fafc;border-radius:8px;border-left:4px solid ${seg.color};">
-          <div style="flex:1;">
-            <div style="font-weight:600;font-size:13px;">${seg.label}</div>
-            <div style="font-size:11px;color:var(--muted);">${seg.n} ítem${seg.n !== 1 ? 's' : ''}</div>
-          </div>
-          <div style="font-size:16px;font-weight:700;color:${seg.color};">${fmt(seg.valor)}</div>
-          <div style="font-size:11px;color:var(--muted);min-width:36px;text-align:right;">${Math.round(seg.valor/total*100)}%</div>
-        </div>`).join('');
+      // Etiquetas con líneas guía
+      slicesInfo.forEach(({ seg, midAngle, pct }) => {
+        const x1 = cx + Math.cos(midAngle) * r;
+        const y1 = cy + Math.sin(midAngle) * r;
+        const x2 = cx + Math.cos(midAngle) * (r + 22);
+        const y2 = cy + Math.sin(midAngle) * (r + 22);
+        const isRight = Math.cos(midAngle) >= 0;
+        const x3 = isRight ? x2 + 30 : x2 - 30;
+
+        ctx.strokeStyle = seg.color;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.lineTo(x3, y2);
+        ctx.stroke();
+
+        ctx.textAlign = isRight ? 'left' : 'right';
+        const textX = isRight ? x3 + 5 : x3 - 5;
+
+        ctx.fillStyle = seg.color;
+        ctx.font = 'bold 13px sans-serif';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(`${pct}%  ${seg.short}`, textX, y2 - 1);
+
+        ctx.fillStyle = '#64748b';
+        ctx.font = '11px sans-serif';
+        ctx.textBaseline = 'top';
+        ctx.fillText(`${fmt(seg.valor)} · ${seg.n} ítem${seg.n !== 1 ? 's' : ''}`, textX, y2 + 2);
+      });
     }
   } else {
     if (chartWrap)  chartWrap.style.display  = 'none';
