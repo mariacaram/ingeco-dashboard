@@ -2084,6 +2084,47 @@ function renderCobrosReal() {
 let _menosProbableActuales = [];
 let _mpFiltroCliente = '';
 
+// Reclasifica items de menosProbable que tienen 'F' o 'N/C' en col G a facturados / noCobrados.
+// El Apps Script los manda a menosProbable solo porque están después de la fila TOTAL.
+function _normalizeMesCobros(d) {
+  if (!d || d._normalizedFacturados) return;
+  const mp = d.menosProbable || [];
+  if (mp.length === 0) { d._normalizedFacturados = true; return; }
+
+  const factExtra = [];
+  const ncExtra   = [];
+  const restoMP   = [];
+  mp.forEach(it => {
+    const g = String(it.fechaReal || '').trim().toUpperCase();
+    if (g === 'F') {
+      it.categoria = 'facturado';
+      it.fechaReal = '';
+      factExtra.push(it);
+    } else if (g === 'N/C') {
+      it.categoria = 'noCobrado';
+      it.fechaReal = '';
+      ncExtra.push(it);
+    } else {
+      restoMP.push(it);
+    }
+  });
+
+  if (factExtra.length) {
+    d.facturados      = [...(d.facturados || []), ...factExtra].sort((a,b) => (b.importe||0) - (a.importe||0));
+    d.totalFacturado  = (d.totalFacturado || 0) + factExtra.reduce((s,i) => s + (i.importe||0), 0);
+    d.nFacturado      = (d.nFacturado || 0) + factExtra.length;
+  }
+  if (ncExtra.length) {
+    d.noCobrados      = [...(d.noCobrados || []), ...ncExtra].sort((a,b) => (b.importe||0) - (a.importe||0));
+    d.totalNoCobrado  = (d.totalNoCobrado || 0) + ncExtra.reduce((s,i) => s + (i.importe||0), 0);
+    d.nNoCobrado      = (d.nNoCobrado || 0) + ncExtra.length;
+  }
+  d.menosProbable      = restoMP;
+  d.totalMenosProbable = restoMP.reduce((s,i) => s + (i.importe||0), 0);
+  d.nMenosProbable     = restoMP.length;
+  d._normalizedFacturados = true;
+}
+
 function setMPFiltro(c) {
   _mpFiltroCliente = c || '';
   const chipsBox = document.getElementById('mp-chips');
@@ -4592,6 +4633,7 @@ async function refreshData() {
       }
       if (data.cobrosEsteban && typeof data.cobrosEsteban === 'object') {
         Object.assign(COBROS_ESTEBAN, data.cobrosEsteban);
+        Object.keys(COBROS_ESTEBAN).forEach(m => _normalizeMesCobros(COBROS_ESTEBAN[m]));
       }
       if (data.moCtroCosto && typeof data.moCtroCosto === 'object') {
         Object.assign(MO_CTRO_COSTO, data.moCtroCosto);
