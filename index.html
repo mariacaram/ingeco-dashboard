@@ -549,12 +549,27 @@
     <div class="nota-fuente"><strong>Fuente:</strong> <a href="https://docs.google.com/spreadsheets/d/1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY/edit" target="_blank">Planilla Cobros (Esteban)</a> — filas hasta TOTAL en col Concepto</div>
   </div>
 
+  <!-- Gráfico pendiente de cobro por cliente -->
+  <div class="section" id="section-pendiente-cliente" style="padding:16px 20px;display:none;">
+    <div class="section-title">Pendiente de cobro por cliente · <span class="cobros-mes-lbl">—</span></div>
+    <div style="position:relative;height:320px;">
+      <canvas id="pendiente-cliente-chart"></canvas>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-top:6px;">Suma Facturado + Sin fecha cargada + Menos probables, agrupado por cliente del Maestro de Obras.</div>
+  </div>
+
   <!-- Tabla obras menos probables (después de TOTAL) -->
   <div class="section" id="section-menos-probable" style="display:none;">
     <div class="section-title">Obras menos probables · <span class="cobros-mes-lbl">—</span> <span class="badge parcial">después del TOTAL</span></div>
+    <div style="margin:6px 0 12px;font-size:12px;">
+      <label style="color:var(--muted);margin-right:6px;">Filtrar por cliente:</label>
+      <select id="mp-filtro-cliente" onchange="renderMenosProbablesTabla()" style="padding:4px 8px;font-size:12px;border:1px solid #cbd5e1;border-radius:4px;background:#fff;">
+        <option value="">Todos</option>
+      </select>
+    </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Código</th><th>Cliente</th><th>Concepto</th><th>Período</th><th class="num">Importe</th><th>Fecha probable</th></tr></thead>
+        <thead><tr><th>Código</th><th>Cliente</th><th>Concepto</th><th>Período</th><th class="num">Importe</th></tr></thead>
         <tbody id="tbody-menos-probable"></tbody>
       </table>
     </div>
@@ -2019,30 +2034,135 @@ function renderCobrosReal() {
   // ── Gráfico timeline por fecha probable ────────────────────────
   renderCobrosTimeline(d);
 
-  // ── Tabla obras menos probables ─────────────────────────────────
-  const secMP  = document.getElementById('section-menos-probable');
-  const tbodyMP = document.getElementById('tbody-menos-probable');
-  if (d && d.menosProbable && d.menosProbable.length > 0) {
+  // ── Tabla obras menos probables + filtro por cliente ────────────
+  _menosProbableActuales = d && d.menosProbable ? d.menosProbable : [];
+  const secMP = document.getElementById('section-menos-probable');
+  if (_menosProbableActuales.length > 0) {
     if (secMP) secMP.style.display = '';
-    if (tbodyMP) {
-      const totalMP = d.totalMenosProbable;
-      tbodyMP.innerHTML = d.menosProbable.map(it => `<tr>
-        <td style="font-size:12px;">${it.cod || it.obra}</td>
-        <td style="font-size:11px;color:var(--muted);">${it.cliente}</td>
-        <td style="font-size:11px;color:var(--muted);">${it.concepto}</td>
-        <td style="font-size:11px;">${it.periodo}</td>
-        <td class="num pos-val">${fmt(it.importe)}</td>
-        <td style="font-size:11px;">${it.fechaProb || '—'}</td>
-      </tr>`).join('') + `
-        <tr style="background:#f8fafc;font-weight:700;">
-          <td colspan="4" style="padding:8px 12px;">TOTAL menos probable</td>
-          <td class="num" style="padding:8px 12px;">${fmt(totalMP)}</td>
-          <td></td>
-        </tr>`;
+    const sel = document.getElementById('mp-filtro-cliente');
+    if (sel) {
+      const valorActual = sel.value;
+      const clientesUnicos = [...new Set(_menosProbableActuales.map(it => (it.cliente || '—').trim()).filter(Boolean))].sort();
+      sel.innerHTML = '<option value="">Todos</option>' + clientesUnicos.map(c => `<option value="${c}">${c}</option>`).join('');
+      if (clientesUnicos.includes(valorActual)) sel.value = valorActual; else sel.value = '';
     }
+    renderMenosProbablesTabla();
   } else {
     if (secMP) secMP.style.display = 'none';
   }
+
+  // ── Gráfico pendiente por cliente ────────────────────────────────
+  renderPendientePorCliente(d);
+}
+
+// Estado para la tabla de obras menos probables (con filtro)
+let _menosProbableActuales = [];
+
+function _fmtPeriodoMesAnio(p) {
+  if (!p) return '—';
+  const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const d = new Date(p);
+  if (!isNaN(d.getTime())) return MESES[d.getMonth()] + ' ' + d.getFullYear();
+  return String(p);
+}
+
+function renderMenosProbablesTabla() {
+  const tbodyMP = document.getElementById('tbody-menos-probable');
+  const sel     = document.getElementById('mp-filtro-cliente');
+  if (!tbodyMP) return;
+  const filtro = sel ? sel.value : '';
+  const items  = filtro ? _menosProbableActuales.filter(it => (it.cliente || '—').trim() === filtro) : _menosProbableActuales;
+  const total  = items.reduce((s, it) => s + (it.importe || 0), 0);
+  tbodyMP.innerHTML = items.map(it => `<tr>
+    <td style="font-size:12px;">${it.cod || it.obra}</td>
+    <td style="font-size:11px;color:var(--muted);">${it.cliente || '—'}</td>
+    <td style="font-size:11px;color:var(--muted);">${it.concepto}</td>
+    <td style="font-size:11px;">${_fmtPeriodoMesAnio(it.periodo)}</td>
+    <td class="num pos-val">${fmt(it.importe)}</td>
+  </tr>`).join('') + `
+    <tr style="background:#f8fafc;font-weight:700;">
+      <td colspan="4" style="padding:8px 12px;">TOTAL${filtro ? ' (' + filtro + ')' : ' menos probable'}</td>
+      <td class="num" style="padding:8px 12px;">${fmt(total)}</td>
+    </tr>`;
+}
+
+let _pendienteClienteChart = null;
+
+function renderPendientePorCliente(d) {
+  const section = document.getElementById('section-pendiente-cliente');
+  const canvas  = document.getElementById('pendiente-cliente-chart');
+  if (!section || !canvas) return;
+
+  if (_pendienteClienteChart) { _pendienteClienteChart.destroy(); _pendienteClienteChart = null; }
+
+  if (!d) { section.style.display = 'none'; return; }
+
+  // Pendiente = Facturado + Sin fecha cargada + Menos probable (excluye Cobrado y Notas de crédito)
+  const fuentes = [
+    { lista: d.facturados    || [], label: 'Facturado',        color: '#f59e0b' },
+    { lista: d.sinFecha      || [], label: 'Sin fecha cargada', color: '#94a3b8' },
+    { lista: d.menosProbable || [], label: 'Menos probable',    color: '#a78bfa' },
+  ];
+
+  const porCliente = {};
+  fuentes.forEach(({ lista, label }) => {
+    lista.forEach(it => {
+      const c = (it.cliente || '—').trim() || '—';
+      if (!porCliente[c]) porCliente[c] = { total: 0, partes: {} };
+      porCliente[c].total += it.importe || 0;
+      porCliente[c].partes[label] = (porCliente[c].partes[label] || 0) + (it.importe || 0);
+    });
+  });
+
+  const clientes = Object.keys(porCliente);
+  if (clientes.length === 0) { section.style.display = 'none'; return; }
+
+  clientes.sort((a, b) => porCliente[b].total - porCliente[a].total);
+
+  const datasets = fuentes.map(({ label, color }) => ({
+    label,
+    backgroundColor: color,
+    data: clientes.map(c => porCliente[c].partes[label] || 0),
+    borderRadius: 4,
+    borderSkipped: false,
+  }));
+
+  section.style.display = '';
+
+  _pendienteClienteChart = new Chart(canvas, {
+    type: 'bar',
+    data: { labels: clientes, datasets },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'top', labels: { font: { size: 11 }, boxWidth: 12, padding: 12 } },
+        tooltip: {
+          callbacks: {
+            label: (item) => `${item.dataset.label}: $${(item.raw || 0).toLocaleString('es-AR')}`,
+            footer: (items) => {
+              const idx = items[0].dataIndex;
+              const tot = porCliente[clientes[idx]].total;
+              return 'Total cliente: $' + tot.toLocaleString('es-AR');
+            }
+          },
+          backgroundColor: 'rgba(15,23,42,0.92)',
+          padding: 10, cornerRadius: 8,
+          titleFont: { weight: 'bold', size: 12 }, bodyFont: { size: 11 },
+        }
+      },
+      scales: {
+        x: { stacked: true, grid: { color: '#e2e8f0' }, ticks: { font: { size: 11 }, callback: (v) => {
+          if (v >= 1e9) return '$' + (v/1e9).toFixed(1) + 'B';
+          if (v >= 1e6) return '$' + Math.round(v/1e6) + 'M';
+          if (v >= 1e3) return '$' + Math.round(v/1e3) + 'K';
+          return '$' + v;
+        }}},
+        y: { stacked: true, grid: { display: false }, ticks: { font: { size: 11 } } }
+      }
+    }
+  });
 }
 
 // ── Timeline cobros por fecha probable ─────────────────────────────
