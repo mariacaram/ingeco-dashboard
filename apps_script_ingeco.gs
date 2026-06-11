@@ -1438,10 +1438,11 @@ function leerCobrosEsteban() {
           continue;
         }
 
-        const obra = String(iObra !== null ? row[iObra] || '' : '').trim();
-        if (!obra) continue;
         const importe = parsearMonto(iImporte !== null ? row[iImporte] : 0);
         if (importe <= 0) continue;
+        const obra = String(iObra !== null ? row[iObra] || '' : '').trim();
+        // No saltear filas sin OBRA: en la planilla de Esteban algunas filas (p.ej. Air Liquide)
+        // tienen el cliente en col B y la col A vacía. Usamos el cliente como fallback.
 
         const item = {
           obra:      obra,
