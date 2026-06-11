@@ -287,6 +287,22 @@
   .status-badge.parcial { background: #fef3c7; color: #92400e; }
   .status-badge.pendiente { background: #fee2e2; color: #991b1b; }
 
+  /* CHIPS DE FILTRO */
+  .mp-chip {
+    cursor: pointer;
+    background: #fff;
+    border: 1px solid #cbd5e1;
+    color: #475569;
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 500;
+    transition: all .15s ease;
+    font-family: inherit;
+  }
+  .mp-chip:hover { border-color: var(--primary); color: var(--primary); }
+  .mp-chip.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
   /* NOTA */
   .nota { font-size: 11px; color: var(--muted); font-style: italic; padding: 8px 12px; background: #f8fafc; border-radius: 6px; margin-top: 10px; }
 
@@ -522,7 +538,7 @@
     <div class="section-title">Distribución · <span class="cobros-mes-lbl">—</span></div>
     <div id="cobros-chart-wrap" style="display:none;">
       <div style="display:flex;justify-content:center;">
-        <canvas id="cobros-donut" width="720" height="320" style="max-width:100%;height:auto;"></canvas>
+        <canvas id="cobros-donut" style="display:block;"></canvas>
       </div>
     </div>
     <div id="cobros-chart-empty" style="color:var(--muted);font-size:13px;padding:8px 0;">Sin datos para el mes seleccionado</div>
@@ -561,11 +577,9 @@
   <!-- Tabla obras menos probables (después de TOTAL) -->
   <div class="section" id="section-menos-probable" style="display:none;">
     <div class="section-title">Obras menos probables · <span class="cobros-mes-lbl">—</span> <span class="badge parcial">después del TOTAL</span></div>
-    <div style="margin:6px 0 12px;font-size:12px;">
-      <label style="color:var(--muted);margin-right:6px;">Filtrar por cliente:</label>
-      <select id="mp-filtro-cliente" onchange="renderMenosProbablesTabla()" style="padding:4px 8px;font-size:12px;border:1px solid #cbd5e1;border-radius:4px;background:#fff;">
-        <option value="">Todos</option>
-      </select>
+    <div style="margin:8px 0 14px;font-size:12px;">
+      <div style="color:var(--muted);margin-bottom:6px;">Filtrar por cliente:</div>
+      <div id="mp-chips" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
     </div>
     <div class="table-wrap">
       <table>
@@ -1920,10 +1934,17 @@ function renderCobrosReal() {
     const total = segmentos.reduce((s, x) => s + x.valor, 0);
 
     if (canvas) {
+      // Tamaño de display (CSS) y backing-store con DPR para que no pixele
+      const W = 580, H = 250;
+      const dpr = window.devicePixelRatio || 1;
+      canvas.style.width  = W + 'px';
+      canvas.style.height = H + 'px';
+      canvas.width  = Math.round(W * dpr);
+      canvas.height = Math.round(H * dpr);
       const ctx = canvas.getContext('2d');
-      const W = canvas.width, H = canvas.height;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const cx = W / 2, cy = H / 2;
-      const r = 95, ri = 58;
+      const r = 75, ri = 45;
       ctx.clearRect(0, 0, W, H);
 
       let angle = -Math.PI / 2;
@@ -1948,25 +1969,25 @@ function renderCobrosReal() {
 
       // Total en el centro
       ctx.fillStyle = '#1e293b';
-      ctx.font = 'bold 15px sans-serif';
+      ctx.font = 'bold 14px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(fmtM(total), cx, cy - 9);
-      ctx.font = '11px sans-serif';
+      ctx.fillText(fmtM(total), cx, cy - 7);
+      ctx.font = '10px sans-serif';
       ctx.fillStyle = '#64748b';
-      ctx.fillText('total', cx, cy + 11);
+      ctx.fillText('total', cx, cy + 9);
 
       // Etiquetas con líneas guía
       slicesInfo.forEach(({ seg, midAngle, pct }) => {
         const x1 = cx + Math.cos(midAngle) * r;
         const y1 = cy + Math.sin(midAngle) * r;
-        const x2 = cx + Math.cos(midAngle) * (r + 22);
-        const y2 = cy + Math.sin(midAngle) * (r + 22);
+        const x2 = cx + Math.cos(midAngle) * (r + 16);
+        const y2 = cy + Math.sin(midAngle) * (r + 16);
         const isRight = Math.cos(midAngle) >= 0;
-        const x3 = isRight ? x2 + 30 : x2 - 30;
+        const x3 = isRight ? x2 + 22 : x2 - 22;
 
         ctx.strokeStyle = seg.color;
-        ctx.lineWidth = 1.5;
+        ctx.lineWidth = 1.25;
         ctx.beginPath();
         ctx.moveTo(x1, y1);
         ctx.lineTo(x2, y2);
@@ -1974,15 +1995,15 @@ function renderCobrosReal() {
         ctx.stroke();
 
         ctx.textAlign = isRight ? 'left' : 'right';
-        const textX = isRight ? x3 + 5 : x3 - 5;
+        const textX = isRight ? x3 + 4 : x3 - 4;
 
         ctx.fillStyle = seg.color;
-        ctx.font = 'bold 13px sans-serif';
+        ctx.font = 'bold 12px sans-serif';
         ctx.textBaseline = 'bottom';
         ctx.fillText(`${pct}%  ${seg.short}`, textX, y2 - 1);
 
         ctx.fillStyle = '#64748b';
-        ctx.font = '11px sans-serif';
+        ctx.font = '10px sans-serif';
         ctx.textBaseline = 'top';
         ctx.fillText(`${fmt(seg.valor)} · ${seg.n} ítem${seg.n !== 1 ? 's' : ''}`, textX, y2 + 2);
       });
@@ -2039,12 +2060,16 @@ function renderCobrosReal() {
   const secMP = document.getElementById('section-menos-probable');
   if (_menosProbableActuales.length > 0) {
     if (secMP) secMP.style.display = '';
-    const sel = document.getElementById('mp-filtro-cliente');
-    if (sel) {
-      const valorActual = sel.value;
+    const chipsBox = document.getElementById('mp-chips');
+    if (chipsBox) {
       const clientesUnicos = [...new Set(_menosProbableActuales.map(it => (it.cliente || '—').trim()).filter(Boolean))].sort();
-      sel.innerHTML = '<option value="">Todos</option>' + clientesUnicos.map(c => `<option value="${c}">${c}</option>`).join('');
-      if (clientesUnicos.includes(valorActual)) sel.value = valorActual; else sel.value = '';
+      if (!clientesUnicos.includes(_mpFiltroCliente)) _mpFiltroCliente = '';
+      const opciones = [''].concat(clientesUnicos);
+      chipsBox.innerHTML = opciones.map(c => {
+        const label   = c === '' ? 'Todos' : c;
+        const activo  = c === _mpFiltroCliente;
+        return `<button type="button" class="mp-chip${activo ? ' active' : ''}" data-cli="${c.replace(/"/g, '&quot;')}" onclick="setMPFiltro(this.dataset.cli)">${label}</button>`;
+      }).join('');
     }
     renderMenosProbablesTabla();
   } else {
@@ -2057,6 +2082,18 @@ function renderCobrosReal() {
 
 // Estado para la tabla de obras menos probables (con filtro)
 let _menosProbableActuales = [];
+let _mpFiltroCliente = '';
+
+function setMPFiltro(c) {
+  _mpFiltroCliente = c || '';
+  const chipsBox = document.getElementById('mp-chips');
+  if (chipsBox) {
+    chipsBox.querySelectorAll('.mp-chip').forEach(b => {
+      b.classList.toggle('active', b.dataset.cli === _mpFiltroCliente);
+    });
+  }
+  renderMenosProbablesTabla();
+}
 
 function _fmtPeriodoMesAnio(p) {
   if (!p) return '—';
@@ -2066,12 +2103,18 @@ function _fmtPeriodoMesAnio(p) {
   return String(p);
 }
 
+function _periodoTs(p) {
+  if (!p) return Infinity; // sin período → al final
+  const d = new Date(p);
+  return isNaN(d.getTime()) ? Infinity : d.getTime();
+}
+
 function renderMenosProbablesTabla() {
   const tbodyMP = document.getElementById('tbody-menos-probable');
-  const sel     = document.getElementById('mp-filtro-cliente');
   if (!tbodyMP) return;
-  const filtro = sel ? sel.value : '';
-  const items  = filtro ? _menosProbableActuales.filter(it => (it.cliente || '—').trim() === filtro) : _menosProbableActuales;
+  const filtro = _mpFiltroCliente;
+  const items  = (filtro ? _menosProbableActuales.filter(it => (it.cliente || '—').trim() === filtro) : _menosProbableActuales.slice())
+                  .sort((a, b) => _periodoTs(a.periodo) - _periodoTs(b.periodo));
   const total  = items.reduce((s, it) => s + (it.importe || 0), 0);
   tbodyMP.innerHTML = items.map(it => `<tr>
     <td style="font-size:12px;">${it.cod || it.obra}</td>
