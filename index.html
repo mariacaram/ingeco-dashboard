@@ -303,6 +303,45 @@
   .mp-chip:hover { border-color: var(--primary); color: var(--primary); }
   .mp-chip.active { background: var(--primary); color: #fff; border-color: var(--primary); }
 
+  /* Drawer lateral de detalle por cliente */
+  #pend-drawer-overlay {
+    position: fixed; inset: 0; background: rgba(15,23,42,.35);
+    opacity: 0; visibility: hidden; transition: opacity .2s ease, visibility .2s ease;
+    z-index: 998;
+  }
+  #pend-drawer-overlay.open { opacity: 1; visibility: visible; }
+  #pend-drawer {
+    position: fixed; top: 0; right: 0; height: 100%; width: 460px; max-width: 92vw;
+    background: #fff; box-shadow: -6px 0 24px rgba(15,23,42,.18);
+    transform: translateX(100%); transition: transform .25s ease;
+    z-index: 999; display: flex; flex-direction: column;
+  }
+  #pend-drawer.open { transform: translateX(0); }
+  #pend-drawer .pd-head {
+    padding: 16px 20px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  }
+  #pend-drawer .pd-close {
+    cursor: pointer; border: none; background: #f1f5f9; color: #475569;
+    width: 30px; height: 30px; border-radius: 8px; font-size: 18px; line-height: 1;
+    flex: 0 0 auto; transition: background .15s ease;
+  }
+  #pend-drawer .pd-close:hover { background: #e2e8f0; }
+  #pend-drawer .pd-body { overflow-y: auto; padding: 8px 0 20px; flex: 1 1 auto; }
+  #pend-drawer .pd-row {
+    display: grid; grid-template-columns: 1fr auto; gap: 4px 12px;
+    padding: 10px 20px; border-bottom: 1px solid #f1f5f9; align-items: baseline;
+  }
+  #pend-drawer .pd-row:hover { background: #f8fafc; }
+  #pend-drawer .pd-concepto { font-size: 12.5px; color: #1e293b; }
+  #pend-drawer .pd-meta { font-size: 10.5px; color: var(--muted); margin-top: 2px; }
+  #pend-drawer .pd-imp { font-size: 12.5px; font-weight: 700; color: #16a34a; white-space: nowrap; }
+  #pend-drawer .pd-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:5px; vertical-align:middle; }
+  #pend-drawer .pd-group-head {
+    padding: 10px 20px 4px; font-size: 10px; font-weight: 700; letter-spacing: .05em;
+    text-transform: uppercase; color: var(--muted);
+  }
+
   /* NOTA */
   .nota { font-size: 11px; color: var(--muted); font-style: italic; padding: 8px 12px; background: #f8fafc; border-radius: 6px; margin-top: 10px; }
 
@@ -601,8 +640,22 @@
     <div style="position:relative;height:320px;">
       <canvas id="pendiente-cliente-chart"></canvas>
     </div>
-    <div style="font-size:11px;color:var(--muted);margin-top:6px;">Suma Facturado + Sin fecha cargada + Menos probables, agrupado por cliente del Maestro de Obras.</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:6px;">Suma Facturado + Sin fecha cargada + Menos probables, agrupado por cliente del Maestro de Obras. <strong>Click en una barra</strong> para ver el detalle por concepto.</div>
   </div>
+
+  <!-- Drawer lateral: detalle por concepto del cliente -->
+  <div id="pend-drawer-overlay" onclick="cerrarPendDrawer()"></div>
+  <aside id="pend-drawer" aria-hidden="true">
+    <div class="pd-head">
+      <div>
+        <div style="font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);">Detalle pendiente</div>
+        <div id="pd-cliente" style="font-size:16px;font-weight:700;color:#1e293b;margin-top:2px;">—</div>
+        <div id="pd-total" style="font-size:12px;color:var(--muted);margin-top:2px;">—</div>
+      </div>
+      <button type="button" class="pd-close" onclick="cerrarPendDrawer()" aria-label="Cerrar">&times;</button>
+    </div>
+    <div class="pd-body" id="pd-body"></div>
+  </aside>
 
   <!-- Tabla obras menos probables (después de TOTAL) -->
   <div class="section" id="section-menos-probable" style="display:none;">
@@ -2223,6 +2276,52 @@ function renderDetalleTabla() {
 }
 
 let _pendienteClienteChart = null;
+let _pendientePorCliente = {};
+
+function abrirPendDrawer(cliente) {
+  const info = _pendientePorCliente[cliente];
+  if (!info) return;
+
+  document.getElementById('pd-cliente').textContent = cliente;
+  document.getElementById('pd-total').textContent =
+    `Total pendiente: ${fmt(info.total)} · ${info.items.length} concepto${info.items.length !== 1 ? 's' : ''}`;
+
+  // Agrupar por estado, ordenado de mayor a menor importe dentro de cada grupo
+  const ORDEN = ['Facturado', 'Sin fecha cargada', 'Menos probable'];
+  const porEstado = {};
+  info.items.forEach(it => { (porEstado[it.estado] = porEstado[it.estado] || []).push(it); });
+
+  let html = '';
+  ORDEN.forEach(est => {
+    const arr = porEstado[est];
+    if (!arr || !arr.length) return;
+    arr.sort((a, b) => b.importe - a.importe);
+    const subt = arr.reduce((s, x) => s + x.importe, 0);
+    html += `<div class="pd-group-head">${est} · ${fmt(subt)}</div>`;
+    arr.forEach(it => {
+      html += `<div class="pd-row">
+        <div>
+          <div class="pd-concepto"><span class="pd-dot" style="background:${it.color};"></span>${it.concepto}</div>
+          <div class="pd-meta">${[it.cod, it.periodo].filter(Boolean).join(' · ') || '—'}</div>
+        </div>
+        <div class="pd-imp">${fmt(it.importe)}</div>
+      </div>`;
+    });
+  });
+
+  document.getElementById('pd-body').innerHTML = html;
+  document.getElementById('pend-drawer').classList.add('open');
+  document.getElementById('pend-drawer').setAttribute('aria-hidden', 'false');
+  document.getElementById('pend-drawer-overlay').classList.add('open');
+}
+
+function cerrarPendDrawer() {
+  document.getElementById('pend-drawer').classList.remove('open');
+  document.getElementById('pend-drawer').setAttribute('aria-hidden', 'true');
+  document.getElementById('pend-drawer-overlay').classList.remove('open');
+}
+
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') cerrarPendDrawer(); });
 
 function renderPendientePorCliente(d) {
   const section = document.getElementById('section-pendiente-cliente');
@@ -2241,14 +2340,23 @@ function renderPendientePorCliente(d) {
   ];
 
   const porCliente = {};
-  fuentes.forEach(({ lista, label }) => {
+  fuentes.forEach(({ lista, label, color }) => {
     lista.forEach(it => {
       const c = (it.cliente || '—').trim() || '—';
-      if (!porCliente[c]) porCliente[c] = { total: 0, partes: {} };
+      if (!porCliente[c]) porCliente[c] = { total: 0, partes: {}, items: [] };
       porCliente[c].total += it.importe || 0;
       porCliente[c].partes[label] = (porCliente[c].partes[label] || 0) + (it.importe || 0);
+      porCliente[c].items.push({
+        concepto: it.concepto || '(sin concepto)',
+        cod: it.cod || it.obra || '',
+        periodo: it.periodo || '',
+        importe: it.importe || 0,
+        estado: label,
+        color,
+      });
     });
   });
+  _pendientePorCliente = porCliente;
 
   const clientes = Object.keys(porCliente);
   if (clientes.length === 0) { section.style.display = 'none'; return; }
@@ -2272,6 +2380,10 @@ function renderPendientePorCliente(d) {
       indexAxis: 'y',
       responsive: true,
       maintainAspectRatio: false,
+      onHover: (e, els) => { e.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
+      onClick: (e, els) => {
+        if (els && els.length) abrirPendDrawer(clientes[els[0].index]);
+      },
       plugins: {
         legend: { position: 'top', labels: { font: { size: 11 }, boxWidth: 12, padding: 12 } },
         tooltip: {
@@ -2280,12 +2392,12 @@ function renderPendientePorCliente(d) {
             footer: (items) => {
               const idx = items[0].dataIndex;
               const tot = porCliente[clientes[idx]].total;
-              return 'Total cliente: $' + tot.toLocaleString('es-AR');
+              return 'Total: $' + tot.toLocaleString('es-AR') + '\n(click para ver conceptos)';
             }
           },
           backgroundColor: 'rgba(15,23,42,0.92)',
           padding: 10, cornerRadius: 8,
-          titleFont: { weight: 'bold', size: 12 }, bodyFont: { size: 11 },
+          titleFont: { weight: 'bold', size: 12 }, bodyFont: { size: 11 }, footerFont: { size: 10, weight: 'normal' },
         }
       },
       scales: {
