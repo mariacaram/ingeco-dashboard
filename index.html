@@ -359,6 +359,12 @@
     font-size: 12px; font-weight: 600; border-radius: 6px;
     padding: 8px 12px; text-align: center;
   }
+
+  /* CONTROL DE ACCESO POR ROL — admin no ve sueldos/MO */
+  body.role-admin [data-restrict="sueldos"] { display: none !important; }
+  /* Oculta la columna "MO (prorrateada)" (4ta) en la tabla de contribución por obra */
+  body.role-admin #tabla-resumen-obra th:nth-child(4),
+  body.role-admin #tabla-resumen-obra td:nth-child(4):not([colspan]) { display: none !important; }
 </style>
 </head>
 <body>
@@ -407,7 +413,7 @@
   <button class="tab-btn active" onclick="openTab('margen')">Contribución marginal por obra</button>
   <button class="tab-btn" onclick="openTab('cobros')">Cobros y Pipeline</button>
   <button class="tab-btn" onclick="openTab('planta')">Planta de Asfalto</button>
-  <button class="tab-btn" onclick="openTab('taller')">Taller Mecánico</button>
+  <button class="tab-btn" data-restrict="sueldos" onclick="openTab('taller')">Taller Mecánico</button>
   <button class="tab-btn" onclick="openTab('flujo')">Flujo de Fondos</button>
   <button class="tab-btn" onclick="openTab('estructura')">Estructura</button>
   <button class="tab-btn" onclick="openTab('fuentes')">Fuentes de Datos</button>
@@ -442,7 +448,7 @@
       <div class="kpi-sub" id="kpi-oc-insumos-sub">Requiere datos de Guillermo</div>
       <div class="fuente"><a href="https://docs.google.com/spreadsheets/d/1_lhq9c1MddkrK1Tf0kexRtgqw5aPhmZWiQkAIRjpfxs/edit?gid=42005977#gid=42005977" target="_blank" onclick="event.stopPropagation()">OC Insumos — Guillermo Konicek</a></div>
     </div>
-    <div class="kpi-card neg" style="cursor:pointer;" onclick="openMOPanel()" title="Ver detalle por centro de costo">
+    <div class="kpi-card neg" data-restrict="sueldos" style="cursor:pointer;" onclick="openMOPanel()" title="Ver detalle por centro de costo">
       <div class="kpi-label">Mano de Obra</div>
       <div class="kpi-value nd" id="kpi-mo-obras">sin dato</div>
       <div class="kpi-sub" id="kpi-mo-obras-sub">Requiere TANGO (Mauro)</div>
@@ -771,7 +777,7 @@
     </div>
   </div>
 
-  <div class="section">
+  <div class="section" data-restrict="sueldos">
     <div class="section-title">Análisis MO / tn <span class="badge">sin dato — requiere TANGO</span></div>
     <div class="kpi-grid">
       <div class="kpi-card neg">
@@ -787,7 +793,7 @@
 <!-- ================================================================ -->
 <!-- TAB 4: TALLER MECÁNICO -->
 <!-- ================================================================ -->
-<div class="tab-panel" id="tab-taller">
+<div class="tab-panel" id="tab-taller" data-restrict="sueldos">
   <div class="kpi-grid">
     <div class="kpi-card neg">
       <div class="kpi-label">MO Taller · <span id="mes-label-mo-taller"></span></div>
@@ -1054,7 +1060,7 @@
         </div>
 
         <!-- Mauro -->
-        <div class="org-node oper">
+        <div class="org-node oper" data-restrict="sueldos">
           <div class="org-av">MO</div>
           <div class="org-name">Mauro Orellana</div>
           <div class="org-role">RRHH / Liquidación</div>
@@ -4670,11 +4676,32 @@ function setMes(mes) {
 // LOGIN
 // ================================================================
 
+const ROLES = {
+  directorio:     { pass: 'DirectorioIngeco', bodyClass: 'role-directorio' },
+  administracion: { pass: 'TableroIngeco',    bodyClass: 'role-admin' },
+};
+
+function applyRole(roleName) {
+  document.body.classList.remove('role-directorio', 'role-admin');
+  const r = ROLES[roleName];
+  if (r) document.body.classList.add(r.bodyClass);
+  // Si el admin estaba parado en la tab Taller (oculta), llevarlo a Margen
+  if (roleName === 'administracion') {
+    const tallerPanel = document.getElementById('tab-taller');
+    if (tallerPanel && tallerPanel.classList.contains('active') && typeof openTab === 'function') {
+      openTab('margen');
+    }
+  }
+}
+
 function doLogin() {
-  const user = document.getElementById('login-user').value.trim();
+  const user = document.getElementById('login-user').value.trim().toLowerCase();
   const pass = document.getElementById('login-pass').value;
-  if (user === 'administracion' && pass === 'TableroIngeco') {
+  const r = ROLES[user];
+  if (r && pass === r.pass) {
     sessionStorage.setItem('ingeco_auth', '1');
+    sessionStorage.setItem('ingeco_role', user);
+    applyRole(user);
     document.getElementById('login-overlay').style.display = 'none';
   } else {
     document.getElementById('login-error').style.display = 'block';
@@ -4691,8 +4718,9 @@ document.getElementById('login-user').addEventListener('keydown', function(e) {
   if (e.key === 'Enter') document.getElementById('login-pass').focus();
 });
 
-// Si ya estaba autenticado en esta sesión, no mostrar el login
+// Si ya estaba autenticado en esta sesión, restaurar role y ocultar login
 if (sessionStorage.getItem('ingeco_auth') === '1') {
+  applyRole(sessionStorage.getItem('ingeco_role') || 'administracion');
   document.getElementById('login-overlay').style.display = 'none';
 }
 
