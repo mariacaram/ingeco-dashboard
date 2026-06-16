@@ -96,6 +96,20 @@
   .btn-refresh.ok { border-color: #4ade80; color: #4ade80; }
   .btn-refresh.err { border-color: #f87171; color: #f87171; }
   .last-update { font-size: 10px; color: #6b90b0; text-align: right; }
+  .btn-logout {
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.30);
+    color: #cbd5e1;
+    padding: 5px 14px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 600;
+    transition: all 0.2s;
+    font-family: inherit;
+    white-space: nowrap;
+  }
+  .btn-logout:hover { background: rgba(248,113,113,0.18); border-color: #f87171; color: #fecaca; }
 
   /* TABS */
   .tabs-bar {
@@ -433,7 +447,7 @@
 <div class="header">
   <div>
     <h1>INGECO — Dashboard Ejecutivo</h1>
-    <div class="subtitle">Adrián Caram, Socio Director</div>
+    <div class="subtitle">Adrián Koss, Socio Director</div>
   </div>
   <div style="display:flex; gap:20px; align-items:center;">
     <div class="month-selector">
@@ -443,6 +457,10 @@
     <div class="refresh-area">
       <button class="btn-refresh" id="btn-refresh" onclick="refreshData()">🔄 Actualizar datos</button>
       <div class="last-update" id="last-update">Datos locales — sin conexión a Drive</div>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+      <button class="btn-logout" onclick="cerrarSesion()" title="Cerrar sesión / cambiar de usuario">⎋ Cerrar sesión</button>
+      <div class="last-update" id="rol-actual">—</div>
     </div>
   </div>
 </div>
@@ -487,7 +505,7 @@
       <div class="kpi-sub" id="kpi-oc-insumos-sub">Requiere datos de Guillermo</div>
       <div class="fuente"><a href="https://docs.google.com/spreadsheets/d/1344ZyEM-E4ptp-Gv4J3uQlOouSE4ApWxIIaQ-OoN2Cg/edit" target="_blank" onclick="event.stopPropagation()">OC Insumos — Guillermo Konicek</a></div>
     </div>
-    <div class="kpi-card neg" data-restrict="sueldos" style="cursor:pointer;" onclick="openMOPanel()" title="Ver detalle por centro de costo">
+    <div class="kpi-card neg" style="cursor:pointer;" onclick="openMOPanel()" title="Ver detalle por centro de costo">
       <div class="kpi-label">Mano de Obra</div>
       <div class="kpi-value nd" id="kpi-mo-obras">sin dato</div>
       <div class="kpi-sub" id="kpi-mo-obras-sub">Requiere TANGO (Mauro)</div>
@@ -1606,7 +1624,7 @@ const PIPELINE = [
 // Personas
 const PERSONAS = [
   {
-    nombre: 'Adrián Caram', rol: 'Socio Director', avatar: 'AC',
+    nombre: 'Adrián Koss', rol: 'Socio Director', avatar: 'AK',
     archivos: ['Copia de OBRAS INGECO.xlsx'],
     aporte: 'Certificados emitidos, montos a cobrar, maestro de obras',
     pendientes: ['Compartir OBRAS INGECO.xlsx con cuenta dashboard']
@@ -3456,6 +3474,17 @@ function openMOPanel() {
   let html = '';
   if (moArr.length === 0) {
     html = `<p class="nd" style="padding:16px;">Sin datos de MO para ${mesLabel}</p>`;
+  } else if (esAdmin()) {
+    // Rol Administración: solo el TOTAL, nunca el detalle por centro de costo (sueldos individuales)
+    const total = moArr.reduce((s, r) => s + r.monto, 0);
+    html = `<div style="text-align:center;padding:18px 16px;">
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">Total Mano de Obra · ${mesLabel}</div>
+        <div class="neg-val" style="font-size:30px;font-weight:800;margin-top:8px;">${fmt(total)}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:6px;">${moArr.length} centros de costo · TANGO (Mauro)</div>
+      </div>
+      <div style="margin-top:8px;background:#f1f5f9;border:1px solid var(--border);border-radius:10px;padding:11px 14px;font-size:12px;color:var(--text);line-height:1.5;">
+        🔒 El desglose por centro de costo no está disponible para tu usuario. Solo se muestra el total de mano de obra.
+      </div>`;
   } else {
     const sorted = [...moArr].sort((a, b) => b.monto - a.monto);
     const total  = sorted.reduce((s, r) => s + r.monto, 0);
@@ -4967,14 +4996,21 @@ function setMes(mes) {
 // ================================================================
 
 const ROLES = {
-  directorio:     { pass: 'DirectorioIngeco', bodyClass: 'role-directorio' },
-  administracion: { pass: 'TableroIngeco',    bodyClass: 'role-admin' },
+  directorio:     { pass: 'DirectorioIngeco', bodyClass: 'role-directorio', label: 'Directorio' },
+  administracion: { pass: 'TableroIngeco',    bodyClass: 'role-admin',      label: 'Administración' },
 };
+
+function esAdmin() {
+  return document.body.classList.contains('role-admin');
+}
 
 function applyRole(roleName) {
   document.body.classList.remove('role-directorio', 'role-admin');
   const r = ROLES[roleName];
   if (r) document.body.classList.add(r.bodyClass);
+  // Mostrar el rol activo en el header
+  const rolEl = document.getElementById('rol-actual');
+  if (rolEl) rolEl.textContent = r ? 'Usuario: ' + r.label : '—';
   // Si el admin estaba parado en la tab Taller (oculta), llevarlo a Margen
   if (roleName === 'administracion') {
     const tallerPanel = document.getElementById('tab-taller');
@@ -4982,6 +5018,26 @@ function applyRole(roleName) {
       openTab('margen');
     }
   }
+}
+
+function cerrarSesion() {
+  sessionStorage.removeItem('ingeco_auth');
+  sessionStorage.removeItem('ingeco_role');
+  document.body.classList.remove('role-directorio', 'role-admin');
+  // Cerrar cualquier panel abierto
+  const panel = document.getElementById('sidePanel');
+  const overlay = document.getElementById('overlay');
+  if (panel) panel.classList.remove('open');
+  if (overlay) overlay.classList.remove('open');
+  // Limpiar y mostrar el login
+  const lu = document.getElementById('login-user');
+  const lp = document.getElementById('login-pass');
+  const le = document.getElementById('login-error');
+  if (lu) lu.value = '';
+  if (lp) lp.value = '';
+  if (le) le.style.display = 'none';
+  document.getElementById('login-overlay').style.display = '';
+  if (lu) lu.focus();
 }
 
 function doLogin() {
