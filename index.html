@@ -1708,7 +1708,7 @@ const FUENTES = [
 
 function fmt(n) {
   if (n == null) return '—';
-  if (n >= 1e9) return '$' + (n/1e9).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + 'B';
+  // Siempre en millones (M), nunca billones (B)
   if (n >= 1e6) return '$' + (n/1e6).toLocaleString('es-AR', {minimumFractionDigits: 1, maximumFractionDigits: 1}) + 'M';
   return '$' + n.toLocaleString('es-AR', {minimumFractionDigits: 0, maximumFractionDigits: 0});
 }
@@ -2438,8 +2438,7 @@ function renderPendientePorCliente(d) {
       },
       scales: {
         x: { stacked: true, grid: { color: '#e2e8f0' }, ticks: { font: { size: 11 }, callback: (v) => {
-          if (v >= 1e9) return '$' + (v/1e9).toFixed(1) + 'B';
-          if (v >= 1e6) return '$' + Math.round(v/1e6) + 'M';
+          if (v >= 1e6) return '$' + Math.round(v/1e6).toLocaleString('es-AR') + 'M';
           if (v >= 1e3) return '$' + Math.round(v/1e3) + 'K';
           return '$' + v;
         }}},
@@ -2666,8 +2665,7 @@ function renderCobrosTimeline(d) {
           ticks: {
             font: { size: 11 },
             callback: function(v) {
-              if (v >= 1e9) return '$' + (v/1e9).toFixed(1) + 'B';
-              if (v >= 1e6) return '$' + Math.round(v/1e6) + 'M';
+              if (v >= 1e6) return '$' + Math.round(v/1e6).toLocaleString('es-AR') + 'M';
               if (v >= 1e3) return '$' + Math.round(v/1e3) + 'K';
               return '$' + v;
             }
@@ -2727,8 +2725,8 @@ function _openTimelinePanel(fechaLabel, grp) {
 // Helper para mostrar millones/miles en el centro del donut
 function fmtM(n) {
   if (!n) return '$0';
-  if (n >= 1e9) return '$' + (n/1e9).toFixed(1) + 'B';
-  if (n >= 1e6) return '$' + Math.round(n/1e6) + 'M';
+  // Siempre en millones (M), nunca billones (B)
+  if (n >= 1e6) return '$' + Math.round(n/1e6).toLocaleString('es-AR') + 'M';
   return fmt(n);
 }
 
@@ -4987,7 +4985,9 @@ async function refreshData() {
   }
 
   try {
-    const res = await fetch('/api/datos?cache=1');
+    // Sin cache=1 → el Apps Script lee los sheets en vivo (refleja cambios al instante).
+    // El timestamp evita cualquier cacheo del navegador / edge.
+    const res = await fetch('/api/datos?_=' + Date.now());
     if (!res.ok) throw new Error('Proxy HTTP ' + res.status);
     const data = await res.json();
 
