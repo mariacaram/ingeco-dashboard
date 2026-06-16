@@ -22,7 +22,7 @@
 // IDs de los archivos en Google Drive
 const FILE_IDS = {
   tangoFolder:  '1hQZoJovbFDHNsJhNiGMEueH1bLfXuuCP',              // Carpeta liquidaciones TANGO (Mauro) — un archivo por mes
-  ocInsumos:    '1_lhq9c1MddkrK1Tf0kexRtgqw5aPhmZWiQkAIRjpfxs',  // OC Insumos — Google Sheet (Guillermo)
+  ocInsumos:    '1344ZyEM-E4ptp-Gv4J3uQlOouSE4ApWxIIaQ-OoN2Cg',  // Órdenes de Compra — Google Sheet (Guillermo) — hoja "ÓRDENES"
   maestroObras: '1VbG7DPqaOSlYkvQxbxag-4P2sOoRJQwWGccbx9OMyBM',  // Maestro de Obras con COD_OBRA
   fernandoObras:'1Hl8HZqrH6lMwnAGpitA37ZGLg4szTcFGK7vmv92qkBA',  // Obras activas (nuevo archivo)
   estebanSheet: '1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY',    // Cobros reales (Esteban) — una pestaña por mes (Google Sheets)
@@ -390,7 +390,9 @@ function mapearCentro(ctro) {
 function leerOCInsumos() {
   try {
     const ss    = SpreadsheetApp.openById(FILE_IDS.ocInsumos);
-    const sheet = ss.getSheets()[0];
+    // Hoja "ÓRDENES" (la planilla ahora tiene también "Maestro de obras" como primera pestaña)
+    const sheet = ss.getSheetByName('ÓRDENES') || ss.getSheetByName('ORDENES')
+               || ss.getSheetByName('Órdenes') || ss.getSheets()[ss.getSheets().length - 1];
     const rows  = sheet.getDataRange().getValues();
 
     if (rows.length < 2) return null;
@@ -408,16 +410,15 @@ function leerOCInsumos() {
     const headers = rows[hdrIdx].map(h => String(h).toLowerCase().trim());
     Logger.log('OC Insumos — headers detectados: ' + headers.join(' | '));
 
-    // Columna O (índice 14): nombre de obra según el Maestro (Guillermo)
-    // Columna C (índice 2): Proveedor
-    // Columna F (índice 5): Monto
-    // Columna D (índice 3): fecha fact
-    const COL_FECHA = _findCol(headers, ['fecha']) ?? 3;
-    const COL_MONTO = _findCol(headers, ['monto', 'importe', 'total']) ?? 5;
-    const COL_OBRA  = 14; // Columna O — nombre obra como aparece en el Maestro
-    const COL_PROV  = _findCol(headers, ['proveedor', 'prov']) ?? 2; // Columna C
+    // Estructura nueva (Guillermo):
+    //  A Nº ORDEN · B PROVEEDOR · C FECHA · D DESCRIPCIÓN · E MONTO · F OBRA · G CÓDIGO OBRA · H ESTADO
+    const COL_FECHA = _findCol(headers, ['fecha']) ?? 2;
+    const COL_MONTO = _findCol(headers, ['monto', 'importe', 'total']) ?? 4;
+    const COL_PROV  = _findCol(headers, ['proveedor', 'prov']) ?? 1;
+    const COL_COD   = _findCol(headers, ['código obra', 'codigo obra', 'cod obra', 'cod_obra']) ?? 6;
+    const COL_OBRA  = _findCol(headers, ['obra']) ?? 5; // primer header que contiene "obra" → columna OBRA (nombre)
 
-    Logger.log('OC Insumos — cols: fecha=' + COL_FECHA + ' monto=' + COL_MONTO + ' obra=' + COL_OBRA + ' prov=' + COL_PROV);
+    Logger.log('OC Insumos — cols: fecha=' + COL_FECHA + ' monto=' + COL_MONTO + ' obra=' + COL_OBRA + ' cod=' + COL_COD + ' prov=' + COL_PROV);
 
     const acum = {};
 
@@ -430,19 +431,22 @@ function leerOCInsumos() {
       const monto = parsearMonto(row[COL_MONTO]);
       if (!monto || monto <= 0) continue;
 
-      const obraRaw = String(row[COL_OBRA] || '').trim();
-      const obra = obraRaw || 'Sin clasificar';
+      const obraNom = String(row[COL_OBRA] || '').trim();
+      const codigo  = String(COL_COD !== null ? row[COL_COD] || '' : '').trim();
+      const obra    = obraNom || codigo || 'Sin clasificar';
+      // Clave de agrupación: código de obra si existe (cruza con el Maestro), si no el nombre
+      const key     = codigo || obraNom || 'Sin clasificar';
 
       const proveedorRaw = String(row[COL_PROV] || '').trim();
       const proveedor = proveedorRaw || 'Sin especificar';
 
       if (!acum[mes]) acum[mes] = { items: {}, total: 0, nOC: 0 };
-      if (!acum[mes].items[obra]) acum[mes].items[obra] = { monto: 0, nOC: 0, proveedores: {} };
-      if (!acum[mes].items[obra].proveedores[proveedor]) acum[mes].items[obra].proveedores[proveedor] = { monto: 0, nOC: 0 };
-      acum[mes].items[obra].proveedores[proveedor].monto += monto;
-      acum[mes].items[obra].proveedores[proveedor].nOC  += 1;
-      acum[mes].items[obra].monto += monto;
-      acum[mes].items[obra].nOC  += 1;
+      if (!acum[mes].items[key]) acum[mes].items[key] = { obra: obra, codigo: codigo, monto: 0, nOC: 0, proveedores: {} };
+      if (!acum[mes].items[key].proveedores[proveedor]) acum[mes].items[key].proveedores[proveedor] = { monto: 0, nOC: 0 };
+      acum[mes].items[key].proveedores[proveedor].monto += monto;
+      acum[mes].items[key].proveedores[proveedor].nOC  += 1;
+      acum[mes].items[key].monto += monto;
+      acum[mes].items[key].nOC  += 1;
       acum[mes].total += monto;
       acum[mes].nOC   += 1;
     }
@@ -455,8 +459,9 @@ function leerOCInsumos() {
         total: Math.round(data.total),
         nOC:   data.nOC,
         items: Object.entries(data.items)
-          .map(([obra, v]) => ({
-            obra,
+          .map(([key, v]) => ({
+            obra: v.obra,
+            codigo: v.codigo || '',
             monto: Math.round(v.monto),
             nOC: v.nOC,
             proveedores: Object.entries(v.proveedores)
