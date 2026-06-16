@@ -573,6 +573,19 @@
   <!-- Tabla principal: cobrados + facturados + sin fecha -->
   <div class="section">
     <div class="section-title">Detalle · <span class="cobros-mes-lbl">—</span> <span class="badge real">Google Sheets — Esteban</span></div>
+    <!-- Filtros de cliente y estado -->
+    <div id="detalle-filtros" style="display:none;margin:10px 0 14px;">
+      <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start;">
+        <div>
+          <div style="font-size:10px;font-weight:600;color:var(--muted);letter-spacing:.05em;text-transform:uppercase;margin-bottom:5px;">Cliente</div>
+          <div id="detalle-chips-cliente" style="display:flex;flex-wrap:wrap;gap:5px;"></div>
+        </div>
+        <div>
+          <div style="font-size:10px;font-weight:600;color:var(--muted);letter-spacing:.05em;text-transform:uppercase;margin-bottom:5px;">Estado</div>
+          <div id="detalle-chips-estado" style="display:flex;flex-wrap:wrap;gap:5px;"></div>
+        </div>
+      </div>
+    </div>
     <div class="table-wrap">
       <table>
         <thead><tr><th>Estado</th><th>Código</th><th>Cliente</th><th>Concepto</th><th>Período</th><th class="num">Importe</th><th>Fecha probable</th><th>Fecha real cobro</th></tr></thead>
@@ -2040,39 +2053,44 @@ function renderCobrosReal() {
   const tbody = document.getElementById('tbody-cobros-real');
   if (!tbody) return;
 
-  const BADGE = {
-    cobrado:   '<span class="status-badge pos"      style="font-size:10px;">Cobrado</span>',
-    facturado: '<span class="status-badge parcial"  style="font-size:10px;">Facturado</span>',
-    noCobrado: '<span class="status-badge neg"      style="font-size:10px;">N/C</span>',
-    sinFecha:  '<span class="status-badge pendiente" style="font-size:10px;">Sin fecha</span>',
-  };
-
-  const _fila = it => `<tr>
-    <td>${BADGE[it.categoria] || ''}</td>
-    <td style="font-size:12px;">${it.cod || it.obra}</td>
-    <td style="font-size:11px;color:var(--muted);">${it.cliente}</td>
-    <td style="font-size:11px;color:var(--muted);">${it.concepto}</td>
-    <td style="font-size:11px;">${it.periodo}</td>
-    <td class="num pos-val">${fmt(it.importe)}</td>
-    <td style="font-size:11px;">${it.fechaProb || '—'}</td>
-    <td style="font-size:11px;">${it.fechaReal || '—'}</td>
-  </tr>`;
-
   if (!d) {
+    _detalleAllItems = [];
+    const filtrosEl = document.getElementById('detalle-filtros');
+    if (filtrosEl) filtrosEl.style.display = 'none';
     tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:16px;">Sin datos para ${mesLabel}</td></tr>`;
   } else {
-    const allItems = [...(d.cobrados||[]), ...(d.facturados||[]), ...(d.noCobrados||[]), ...(d.sinFecha||[])];
-    if (allItems.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:16px;">Sin registros para ${mesLabel}</td></tr>`;
-    } else {
-      const totalMain = d.totalCobrado + d.totalFacturado + d.totalSinFecha;
-      tbody.innerHTML = allItems.map(_fila).join('') + `
-        <tr style="background:#f8fafc;font-weight:700;">
-          <td colspan="5" style="padding:8px 12px;">TOTAL ${mesLabel}</td>
-          <td class="num pos-val" style="padding:8px 12px;">${fmt(totalMain)}</td>
-          <td colspan="2"></td>
-        </tr>`;
+    _detalleAllItems      = [...(d.cobrados||[]), ...(d.facturados||[]), ...(d.noCobrados||[]), ...(d.sinFecha||[])];
+    _detalleFiltroCliente = '';
+    _detalleFiltroEstado  = '';
+
+    // Chips de cliente
+    const chipsCliente = document.getElementById('detalle-chips-cliente');
+    if (chipsCliente) {
+      const clis = [...new Set(_detalleAllItems.map(it => (it.cliente || '').trim()).filter(Boolean))].sort();
+      chipsCliente.innerHTML = ['', ...clis].map(c =>
+        `<button type="button" class="mp-chip${c === '' ? ' active' : ''}" data-val="${c.replace(/"/g,'&quot;')}" onclick="setDetalleFiltro('cliente',this.dataset.val)">${c || 'Todos'}</button>`
+      ).join('');
     }
+
+    // Chips de estado
+    const chipsEstado = document.getElementById('detalle-chips-estado');
+    if (chipsEstado) {
+      const ESTADO_OPTS = [
+        { val: '',          label: 'Todos' },
+        { val: 'cobrado',   label: 'Cobrado' },
+        { val: 'facturado', label: 'Facturado' },
+        { val: 'noCobrado', label: 'Nota de crédito' },
+        { val: 'sinFecha',  label: 'Sin fecha' },
+      ].filter(e => e.val === '' || _detalleAllItems.some(it => it.categoria === e.val));
+      chipsEstado.innerHTML = ESTADO_OPTS.map(e =>
+        `<button type="button" class="mp-chip${e.val === '' ? ' active' : ''}" data-val="${e.val}" onclick="setDetalleFiltro('estado',this.dataset.val)">${e.label}</button>`
+      ).join('');
+    }
+
+    const filtrosEl = document.getElementById('detalle-filtros');
+    if (filtrosEl) filtrosEl.style.display = _detalleAllItems.length > 0 ? '' : 'none';
+
+    renderDetalleTabla();
   }
 
   // ── Gráfico timeline por fecha probable ────────────────────────
@@ -2149,6 +2167,58 @@ function renderMenosProbablesTabla() {
     <tr style="background:#f8fafc;font-weight:700;">
       <td colspan="4" style="padding:8px 12px;">TOTAL${filtro ? ' (' + filtro + ')' : ' menos probable'}</td>
       <td class="num" style="padding:8px 12px;">${fmt(total)}</td>
+    </tr>`;
+}
+
+// ── Tabla Detalle con filtros ────────────────────────────────────
+const _DETALLE_BADGE = {
+  cobrado:   '<span class="status-badge pos"      style="font-size:10px;">Cobrado</span>',
+  facturado: '<span class="status-badge parcial"  style="font-size:10px;">Facturado</span>',
+  noCobrado: '<span class="status-badge neg"      style="font-size:10px;">N/C</span>',
+  sinFecha:  '<span class="status-badge pendiente" style="font-size:10px;">Sin fecha</span>',
+};
+
+const _detalleFilaHTML = it => `<tr>
+  <td>${_DETALLE_BADGE[it.categoria] || ''}</td>
+  <td style="font-size:12px;">${it.cod || it.obra}</td>
+  <td style="font-size:11px;color:var(--muted);">${it.cliente}</td>
+  <td style="font-size:11px;color:var(--muted);">${it.concepto}</td>
+  <td style="font-size:11px;">${it.periodo}</td>
+  <td class="num pos-val">${fmt(it.importe)}</td>
+  <td style="font-size:11px;">${it.fechaProb || '—'}</td>
+  <td style="font-size:11px;">${it.fechaReal || '—'}</td>
+</tr>`;
+
+let _detalleAllItems      = [];
+let _detalleFiltroCliente = '';
+let _detalleFiltroEstado  = '';
+
+function setDetalleFiltro(tipo, val) {
+  if (tipo === 'cliente') _detalleFiltroCliente = val;
+  else                    _detalleFiltroEstado  = val;
+  document.getElementById(`detalle-chips-${tipo}`)?.querySelectorAll('.mp-chip').forEach(b => {
+    b.classList.toggle('active', b.dataset.val === val);
+  });
+  renderDetalleTabla();
+}
+
+function renderDetalleTabla() {
+  const tbody = document.getElementById('tbody-cobros-real');
+  if (!tbody) return;
+  let items = _detalleAllItems.slice();
+  if (_detalleFiltroCliente) items = items.filter(it => (it.cliente || '').trim() === _detalleFiltroCliente);
+  if (_detalleFiltroEstado)  items = items.filter(it => it.categoria === _detalleFiltroEstado);
+  if (items.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:16px;">Sin resultados para el filtro seleccionado</td></tr>`;
+    return;
+  }
+  const subtotal = items.reduce((s, it) => s + (it.importe || 0), 0);
+  const lbl = (_detalleFiltroCliente || _detalleFiltroEstado) ? 'SUBTOTAL' : 'TOTAL';
+  tbody.innerHTML = items.map(_detalleFilaHTML).join('') + `
+    <tr style="background:#f8fafc;font-weight:700;">
+      <td colspan="5" style="padding:8px 12px;">${lbl}</td>
+      <td class="num pos-val" style="padding:8px 12px;">${fmt(subtotal)}</td>
+      <td colspan="2"></td>
     </tr>`;
 }
 
