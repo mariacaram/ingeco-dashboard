@@ -537,6 +537,12 @@
       <div class="kpi-sub" id="kpi-sinfecha-sub">—</div>
       <div class="fuente"><a href="https://docs.google.com/spreadsheets/d/1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY/edit" target="_blank" onclick="event.stopPropagation()">Planilla Cobros (Esteban)</a> — col G vacía</div>
     </div>
+    <div class="kpi-card" style="border-left-color:var(--primary);">
+      <div class="kpi-label">Σ Total · <span class="cobros-mes-lbl">—</span></div>
+      <div class="kpi-value nd" id="kpi-total-cobros">sin dato</div>
+      <div class="kpi-sub" id="kpi-total-cobros-sub">—</div>
+      <div class="fuente">Suma de Cobrado + Facturado + Nota de crédito + Sin fecha cargada</div>
+    </div>
   </div>
 
   <!-- Gráfico distribución -->
@@ -1912,11 +1918,14 @@ function renderCobrosReal() {
     _kpi('kpi-facturado-total', d.totalFacturado, '',        d.nFacturado  + ' factura'  + (d.nFacturado  !== 1 ? 's' : ''), 'kpi-facturado-sub');
     _kpi('kpi-nocobrado-total', d.totalNoCobrado || 0, 'neg-val', (d.nNoCobrado||0) + ' ítem' + ((d.nNoCobrado||0) !== 1 ? 's' : '') + ' N/C', 'kpi-nocobrado-sub');
     _kpi('kpi-sinfecha-total',  d.totalSinFecha,  '',        d.nSinFecha   + ' ítem'     + (d.nSinFecha   !== 1 ? 's' : '') + ' sin fecha cargada', 'kpi-sinfecha-sub');
+    const totalSum   = (d.totalCobrado || 0) + (d.totalFacturado || 0) + (d.totalNoCobrado || 0) + (d.totalSinFecha || 0);
+    const totalCount = (d.nCobrado || 0) + (d.nFacturado || 0) + (d.nNoCobrado || 0) + (d.nSinFecha || 0);
+    _kpi('kpi-total-cobros', totalSum, '', totalCount + ' ítem' + (totalCount !== 1 ? 's' : ''), 'kpi-total-cobros-sub');
   } else {
-    ['kpi-cobrado-total','kpi-facturado-total','kpi-nocobrado-total','kpi-sinfecha-total'].forEach(id => {
+    ['kpi-cobrado-total','kpi-facturado-total','kpi-nocobrado-total','kpi-sinfecha-total','kpi-total-cobros'].forEach(id => {
       const el = document.getElementById(id); if (el) { el.textContent = 'sin dato'; el.className = 'kpi-value nd'; }
     });
-    ['kpi-cobrado-sub','kpi-facturado-sub','kpi-nocobrado-sub','kpi-sinfecha-sub'].forEach(id => {
+    ['kpi-cobrado-sub','kpi-facturado-sub','kpi-nocobrado-sub','kpi-sinfecha-sub','kpi-total-cobros-sub'].forEach(id => {
       const el = document.getElementById(id); if (el) el.textContent = '—';
     });
   }
