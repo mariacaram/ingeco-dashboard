@@ -1239,7 +1239,9 @@ function leerRepuestosEquipos() {
 function leerRemitosAsfalto() {
   try {
     const ss     = SpreadsheetApp.openById(FILE_IDS.remitosAsfalto);
-    const sheets = ss.getSheets();
+    // Solo la hoja "General" (las demás —Bateas, Gasoil, etc.— no son remitos de asfalto)
+    const sheetGeneral = ss.getSheetByName('General') || ss.getSheetByName('GENERAL');
+    const sheets = sheetGeneral ? [sheetGeneral] : [];
     const TZ = 'America/Argentina/Buenos_Aires';
     const MES_MAP = { 1:'ene', 2:'feb', 3:'mar', 4:'abr', 5:'may', 6:'jun',
                       7:'jul', 8:'ago', 9:'sep', 10:'oct', 11:'nov', 12:'dic' };
