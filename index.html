@@ -499,7 +499,7 @@
       <div class="kpi-sub" id="kpi-alquiler-sub">Actualizá datos para cargar</div>
       <div class="fuente"><a href="https://docs.google.com/spreadsheets/d/1e_emRVEUxTaNtLxeC0wXIWKzcKuoulZkFSS9O1e0XHo/edit?gid=1172883606#gid=1172883606" target="_blank" onclick="event.stopPropagation()">Partes diarios (Nico)</a> · <a href="https://docs.google.com/spreadsheets/d/1PEcPzwrQ8kE2evmUlrFq9wPbgWOR92MPl3LEqcSYbIk/edit?gid=1528087869#gid=1528087869" target="_blank" onclick="event.stopPropagation()">Tarifas equipos</a> · <a href="https://www.bna.com.ar/Personas/TipoCambio" target="_blank" style="color:inherit;text-decoration:underline dotted;" onclick="event.stopPropagation()">TC BNA</a></div>
     </div>
-    <div class="kpi-card">
+    <div class="kpi-card" style="cursor:pointer;" onclick="openMargenPanel()" title="Ver cómo se calcula">
       <div class="kpi-label">Margen estimado</div>
       <div class="kpi-value nd" id="kpi-margen-est">sin dato</div>
       <div class="kpi-sub" id="kpi-margen-sub">Pendiente de archivos de costo</div>
@@ -3830,6 +3830,93 @@ function openOCInsumosPanel() {
     <div class="panel-title">OC Insumos</div>
     <div class="panel-sub">${mesLabel} · Guillermo Konicek</div>
     <div style="margin-top:14px;">${html}</div>`;
+  panel.classList.add('open');
+  overlay.classList.add('open');
+}
+
+function openMargenPanel() {
+  const panel   = document.getElementById('sidePanel');
+  const overlay = document.getElementById('overlay');
+  const content = document.getElementById('panelContent');
+  if (!panel) return;
+
+  const mesLabel = MES[mesActual] || mesActual;
+
+  // Mismos componentes que usa el KPI de margen
+  const obrasMes = _obrasActuales();
+  const sinP     = _obrasSinPeriodo();
+  const aCobrar  = obrasMes.length > 0 ? obrasMes.reduce((s, o) => s + (o.aCobrar ?? o.generado ?? 0), 0) : null;
+
+  const ocObj = OC_INSUMOS[mesActual];
+  const oc    = ocObj ? ocObj.total : null;
+
+  const moArr = getMOObra(mesActual);
+  const mo    = moArr.length > 0 ? moArr.reduce((s, r) => s + r.monto, 0) : null;
+
+  const alqObj = ALQUILER_EQUIPOS[mesActual];
+  const alq    = alqObj ? alqObj.totalArs : null;
+
+  // El KPI exige A Cobrar + OC + MO (alquiler opcional)
+  const calculable = (aCobrar != null && oc != null && mo != null);
+  const egresos    = calculable ? oc + mo + (alq || 0) : null;
+  const margen     = calculable ? aCobrar - egresos : null;
+  const pct        = (calculable && aCobrar) ? (margen / aCobrar * 100).toFixed(1) : null;
+
+  const faltantes = [];
+  if (aCobrar == null) faltantes.push('A Cobrar — Fernando Solís');
+  if (oc == null)      faltantes.push('OC Insumos — Guillermo');
+  if (mo == null)      faltantes.push('MO TANGO — Mauro');
+
+  // Helper de fila
+  const fila = (label, sub, val, signo, faltaTxt) => {
+    const valHtml = (val == null)
+      ? `<span style="font-size:11px;font-weight:600;color:#b45309;background:#fef3c7;padding:3px 9px;border-radius:6px;white-space:nowrap;">${faltaTxt || 'falta cargar'}</span>`
+      : `<strong style="font-size:14px;white-space:nowrap;" class="${signo === '+' ? 'pos-val' : 'neg-val'}">${signo === '-' ? '− ' : signo === '+' ? '+ ' : ''}${fmt(val)}</strong>`;
+    return `<tr style="border-top:1px solid var(--border);">
+      <td style="padding:10px 10px;">
+        <div style="font-size:13px;color:var(--text);font-weight:600;">${label}</div>
+        <div style="font-size:10.5px;color:var(--muted);margin-top:2px;">${sub}</div>
+      </td>
+      <td style="text-align:right;padding:10px 10px;vertical-align:middle;">${valHtml}</td>
+    </tr>`;
+  };
+
+  const subSinP = sinP.length > 0 ? ` · ${sinP.length} sin período (no entran)` : '';
+
+  const filas =
+    fila('A Cobrar', 'Obras certificadas con período · Fernando Solís<br>' + obrasMes.length + ' obra' + (obrasMes.length !== 1 ? 's' : '') + ' en ' + mesLabel + subSinP, aCobrar, '+', 'sin certificados') +
+    `<tr><td colspan="2" style="padding:10px 10px 4px;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);">− Egresos del mes</td></tr>` +
+    fila('OC Insumos', 'Órdenes de compra · Guillermo Konicek' + (ocObj ? '<br>' + ocObj.nOC + ' OC' : ''), oc, '-', 'falta Guillermo') +
+    fila('MO TANGO', 'Mano de obra mensual · Mauro (liquidación TANGO)' + (mo != null ? '<br>' + moArr.length + ' centros de costo' : ''), mo, '-', 'falta TANGO') +
+    fila('Alquiler equipos', 'Partes diarios (Nico) · tarifas · TC BNA' + (alq == null ? '<br><em>opcional — no bloquea el cálculo</em>' : ''), alq, '-', '—');
+
+  const totalRow = `<tr style="border-top:3px solid var(--border);background:${margen == null ? '#f8fafc' : (margen >= 0 ? '#f0fdf4' : '#fef2f2')};">
+    <td style="padding:12px 10px;font-size:13px;font-weight:700;">= Margen estimado</td>
+    <td style="text-align:right;padding:12px 10px;">
+      ${margen == null
+        ? '<span class="nd" style="font-size:14px;font-weight:700;">sin dato</span>'
+        : `<strong style="font-size:16px;" class="${margen >= 0 ? 'pos-val' : 'neg-val'}">${fmt(margen)}</strong><div style="font-size:11px;color:var(--muted);margin-top:2px;">${pct}% sobre A Cobrar</div>`}
+    </td>
+  </tr>`;
+
+  const aviso = !calculable
+    ? `<div style="margin-top:14px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:12px 14px;font-size:12px;color:#92400e;line-height:1.55;">
+         <strong>No se puede calcular el margen todavía.</strong><br>
+         Falta cargar: ${faltantes.map(f => '<strong>' + f + '</strong>').join(', ')}.<br>
+         El margen necesita sí o sí <strong>A Cobrar + OC Insumos + MO TANGO</strong> (el alquiler es opcional). Cargá lo que falte y volvé a correr <code>actualizarNocturno()</code>.
+       </div>`
+    : '';
+
+  content.innerHTML = `
+    <div class="panel-title">Margen estimado</div>
+    <div class="panel-sub">${mesLabel} · Cómo se calcula</div>
+    <div style="margin-top:12px;background:#f1f5f9;border-radius:10px;padding:11px 14px;font-size:12.5px;color:var(--text);line-height:1.5;">
+      <strong>Margen</strong> = A Cobrar − (OC Insumos + MO TANGO + Alquiler Equipos)
+    </div>
+    <table style="width:100%;border-collapse:collapse;margin-top:12px;">
+      <tbody>${filas}${totalRow}</tbody>
+    </table>
+    ${aviso}`;
   panel.classList.add('open');
   overlay.classList.add('open');
 }
