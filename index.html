@@ -2534,9 +2534,74 @@ function renderCobrosTimeline(d) {
 
   section.style.display = '';
 
+  // ── Línea vertical "Hoy" ─────────────────────────────────────────
+  // Semana actual (lunes) y tiempos de cada semana del gráfico
+  const hoyLun = getWeekStart(new Date());
+  const hoyTime = hoyLun.getTime();
+  const semanasConFecha = keys
+    .map((k, i) => ({ i, t: mapaFecha[k].fechaObj ? mapaFecha[k].fechaObj.getTime() : null }))
+    .filter(o => o.t !== null);
+
+  const hoyLinePlugin = {
+    id: 'hoyLine',
+    afterDatasetsDraw(chart) {
+      if (semanasConFecha.length < 1) return;
+      const xScale = chart.scales.x;
+      const { top, bottom } = chart.chartArea;
+      const primero = semanasConFecha[0], ultimo = semanasConFecha[semanasConFecha.length - 1];
+
+      // Posición X (px) de hoy: match exacto de semana, o interpolación si cae entre dos
+      let px = null;
+      const exacto = semanasConFecha.find(o => o.t === hoyTime);
+      if (exacto) {
+        px = xScale.getPixelForValue(exacto.i);
+      } else if (hoyTime > primero.t && hoyTime < ultimo.t) {
+        for (let j = 0; j < semanasConFecha.length - 1; j++) {
+          const a = semanasConFecha[j], b = semanasConFecha[j + 1];
+          if (hoyTime >= a.t && hoyTime <= b.t) {
+            const frac = (hoyTime - a.t) / (b.t - a.t);
+            px = xScale.getPixelForValue(a.i) + frac * (xScale.getPixelForValue(b.i) - xScale.getPixelForValue(a.i));
+            break;
+          }
+        }
+      }
+      if (px == null) return; // hoy fuera del rango mostrado → no dibujar
+
+      const ctx = chart.ctx;
+      ctx.save();
+      // Línea punteada
+      ctx.beginPath();
+      ctx.setLineDash([5, 4]);
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = '#0ea5e9';
+      ctx.moveTo(px, top);
+      ctx.lineTo(px, bottom);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Etiqueta "Hoy" arriba, clampeada al área del gráfico
+      const txt = 'Hoy';
+      ctx.font = 'bold 10px sans-serif';
+      const tw = ctx.measureText(txt).width;
+      const padX = 7, boxH = 16, boxW = tw + padX * 2;
+      let bx = px - boxW / 2;
+      bx = Math.max(chart.chartArea.left, Math.min(bx, chart.chartArea.right - boxW));
+      const by = top + 3;
+      ctx.fillStyle = '#0ea5e9';
+      if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(bx, by, boxW, boxH, 5); ctx.fill(); }
+      else { ctx.fillRect(bx, by, boxW, boxH); }
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(txt, bx + boxW / 2, by + boxH / 2);
+      ctx.restore();
+    }
+  };
+
   _cobrosTimelineChart = new Chart(canvas, {
     type: 'bar',
     data: { labels: semLabels, datasets },
+    plugins: [hoyLinePlugin],
     options: {
       responsive: true,
       maintainAspectRatio: false,
