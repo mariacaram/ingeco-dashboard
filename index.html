@@ -472,7 +472,8 @@
   <button class="tab-btn" onclick="openTab('planta')">Planta de Asfalto</button>
   <button class="tab-btn" data-restrict="sueldos" onclick="openTab('taller')">Taller Mecánico</button>
   <button class="tab-btn" onclick="openTab('flujo')">Flujo de Fondos</button>
-  <button class="tab-btn" onclick="openTab('estructura')">Estructura</button>
+  <button class="tab-btn" onclick="openTab('estructura')">Organigrama y datos</button>
+  <button class="tab-btn" onclick="openTab('manual')">Manual de tareas/instructivos</button>
   <button class="tab-btn" onclick="openTab('fuentes')">Fuentes de Datos</button>
   <button class="tab-btn" onclick="openTab('metodologia')">Rentabilidad</button>
 </div>
@@ -1186,6 +1187,23 @@
           </div>
         </div>
 
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- TAB: MANUAL DE TAREAS / INSTRUCTIVOS (placeholder) -->
+<!-- ================================================================ -->
+<div class="tab-panel" id="tab-manual">
+  <div class="section">
+    <div class="section-title">Manual de tareas / Instructivos</div>
+    <div style="text-align:center;padding:60px 24px;color:var(--muted);">
+      <div style="font-size:42px;line-height:1;margin-bottom:14px;">📚</div>
+      <div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:6px;">Próximamente</div>
+      <div style="font-size:13px;max-width:460px;margin:0 auto;line-height:1.6;">
+        Esta sección va a contener los instructivos y manuales de tareas del equipo.
+        Todavía no hay contenido cargado.
       </div>
     </div>
   </div>
@@ -5034,10 +5052,12 @@ async function refreshData() {
 function openTab(id) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  document.getElementById('tab-' + id).classList.add('active');
-  const btns = document.querySelectorAll('.tab-btn');
-  const map = { margen: 0, cobros: 1, planta: 2, taller: 3, flujo: 4, estructura: 5, fuentes: 6, metodologia: 7 };
-  btns[map[id]].classList.add('active');
+  const panel = document.getElementById('tab-' + id);
+  if (panel) panel.classList.add('active');
+  // Activar el botón cuyo onclick referencia esta pestaña (robusto al agregar/reordenar tabs)
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    if ((b.getAttribute('onclick') || '').indexOf("openTab('" + id + "')") !== -1) b.classList.add('active');
+  });
 }
 
 function setMes(mes) {
