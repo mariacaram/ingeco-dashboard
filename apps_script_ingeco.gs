@@ -209,18 +209,25 @@ function leerTangoMO() {
       const nombre  = file.getName().toUpperCase();
 
       // Detectar mes desde el nombre del archivo
-      // Soporta formato numérico "MM-YYYY" (ej: "01-2026 QUINCENAS") y texto (ENE, FEB...)
+      // Soporta "MM-YYYY" con o sin espacios (ej: "01-2026", "05 - 2026") y texto (ENE..DIC)
       let mes = null;
-      const mNum = nombre.match(/^(\d{2})-\d{4}/);
+      const MAP = { 1:'ene', 2:'feb', 3:'mar', 4:'abr', 5:'may', 6:'jun',
+                    7:'jul', 8:'ago', 9:'sep', 10:'oct', 11:'nov', 12:'dic' };
+      const mNum = nombre.match(/^(\d{1,2})\s*-\s*\d{4}/);
       if (mNum) {
-        const n = parseInt(mNum[1]);
-        const MAP = { 1:'ene', 2:'feb', 3:'mar', 4:'abr', 5:'may', 6:'jun',
-                      7:'jul', 8:'ago', 9:'sep', 10:'oct', 11:'nov', 12:'dic' };
-        mes = MAP[n] || null;
-      } else if (nombre.includes('ENE') || nombre.includes('ENERO'))    mes = 'ene';
-      else if (nombre.includes('FEB') || nombre.includes('FEBRERO'))  mes = 'feb';
-      else if (nombre.includes('MAR') || nombre.includes('MARZO'))    mes = 'mar';
-      else if (nombre.includes('ABR') || nombre.includes('ABRIL'))    mes = 'abr';
+        mes = MAP[parseInt(mNum[1])] || null;
+      } else if (nombre.includes('ENE'))  mes = 'ene';
+      else if (nombre.includes('FEB'))    mes = 'feb';
+      else if (nombre.includes('MARZO') || nombre.includes('MAR')) mes = 'mar';
+      else if (nombre.includes('ABR'))    mes = 'abr';
+      else if (nombre.includes('MAY'))    mes = 'may';
+      else if (nombre.includes('JUN'))    mes = 'jun';
+      else if (nombre.includes('JUL'))    mes = 'jul';
+      else if (nombre.includes('AGO'))    mes = 'ago';
+      else if (nombre.includes('SEP'))    mes = 'sep';
+      else if (nombre.includes('OCT'))    mes = 'oct';
+      else if (nombre.includes('NOV'))    mes = 'nov';
+      else if (nombre.includes('DIC'))    mes = 'dic';
 
       if (!mes) {
         Logger.log('Tango — no se detectó mes en: ' + file.getName() + ' — omitido');
