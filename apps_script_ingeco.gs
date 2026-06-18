@@ -657,7 +657,9 @@ function leerGeneradoFernando() {
     const aCobrarPorMes     = {}; // { mesKey: { cod: monto } }
     const aCobrarSinMes     = {}; // cod: monto — sin período válido en año actual
     const nombrePorCodigo   = {};
-    const detallesPorCodigo = {};
+    const detallesPorCodigo = {}; // cod: [items] — todos los renglones del código
+    const detallesPorMes    = {}; // { mesKey: { cod: [items] } } — renglones con ese período
+    const detallesSinMes    = {}; // cod: [items] — renglones sin período válido
     const tabSrcPorCodigo   = {}; // cod → 'MUNICIPIO' | 'VIALIDAD1' | 'OTROS INGRESOS'
 
     for (const sheet of sheets) {
@@ -731,12 +733,18 @@ function leerGeneradoFernando() {
 
         // Período → clave de mes
         const mesKey = _parseMesKey(row[cfg.iPeriodo], curYear);
+        const item = { nombre: nombre || cod, codigo: cod, monto: Math.round(monto) };
 
         if (mesKey) {
           if (!aCobrarPorMes[mesKey]) aCobrarPorMes[mesKey] = {};
           aCobrarPorMes[mesKey][cod] = (aCobrarPorMes[mesKey][cod] || 0) + monto;
+          if (!detallesPorMes[mesKey]) detallesPorMes[mesKey] = {};
+          if (!detallesPorMes[mesKey][cod]) detallesPorMes[mesKey][cod] = [];
+          detallesPorMes[mesKey][cod].push(item);
         } else {
           aCobrarSinMes[cod] = (aCobrarSinMes[cod] || 0) + monto;
+          if (!detallesSinMes[cod]) detallesSinMes[cod] = [];
+          detallesSinMes[cod].push(item);
         }
         aCobrarPorCodigo[cod] = (aCobrarPorCodigo[cod] || 0) + monto;
 
@@ -746,7 +754,7 @@ function leerGeneradoFernando() {
             : tabName.includes('VIALIDAD') ? 'VIALIDAD1' : 'OTROS INGRESOS';
         }
         if (!detallesPorCodigo[cod]) detallesPorCodigo[cod] = [];
-        detallesPorCodigo[cod].push({ nombre: nombre || cod, codigo: cod, monto: Math.round(monto) });
+        detallesPorCodigo[cod].push(item);
       }
     }
 
@@ -759,6 +767,8 @@ function leerGeneradoFernando() {
       aCobrarSinMes:  aCobrarSinMes,
       nombreFernando: nombrePorCodigo,
       detalles:       detallesPorCodigo,
+      detallesPorMes: detallesPorMes,
+      detallesSinMes: detallesSinMes,
       tabSrc:         tabSrcPorCodigo,
       tabsSinPeriodo: [],
     };
@@ -775,10 +785,11 @@ function leerGeneradoFernando() {
 function leerGeneradoPorObra() {
   try {
     const maestro = leerMaestroObras();
-    const { aCobrar, aCobrarPorMes, aCobrarSinMes, nombreFernando, detalles, tabSrc, tabsSinPeriodo } = leerGeneradoFernando();
+    const { aCobrar, aCobrarPorMes, aCobrarSinMes, nombreFernando, detalles, detallesPorMes, detallesSinMes, tabSrc, tabsSinPeriodo } = leerGeneradoFernando();
 
-    // Helper: construye lista de obras desde un mapa { cod: monto }
-    function _buildObras(montoPorCod) {
+    // Helper: construye lista de obras desde un mapa { cod: monto }.
+    // detMap = mapa de detalles a usar (todos, los del mes, o los sin período).
+    function _buildObras(montoPorCod, detMap) {
       var list = [];
       for (var cod in montoPorCod) {
         if (cod === 'SIN-CODIGO') continue;
@@ -792,7 +803,7 @@ function leerGeneradoPorObra() {
           cliente:  info ? info.cliente : '—',
           tipo:     info ? info.tipo    : '—',
           aCobrar:  montoRed,
-          items:    detalles[cod] || [],
+          items:    (detMap && detMap[cod]) || [],
           tabSrc:   tabSrc ? (tabSrc[cod] || null) : null,
         });
       }
@@ -801,7 +812,7 @@ function leerGeneradoPorObra() {
     }
 
     // Lista plana (sin filtro de mes) — compatibilidad con caché viejo
-    const obras = _buildObras(aCobrar);
+    const obras = _buildObras(aCobrar, detalles);
 
     // Filas sin código al final
     const montoSinCod = Math.round(aCobrar['SIN-CODIGO'] || 0);
@@ -811,7 +822,7 @@ function leerGeneradoPorObra() {
     }
 
     // Obras sin período de realización — van a una categoría separada en el dashboard
-    const obrasSinPeriodo = _buildObras(aCobrarSinMes);
+    const obrasSinPeriodo = _buildObras(aCobrarSinMes, detallesSinMes);
     const sinCodSinPeriodo = Math.round(aCobrarSinMes['SIN-CODIGO'] || 0);
     if (sinCodSinPeriodo > 0) {
       obrasSinPeriodo.push({ cod_obra: '—', nombre: 'Obra sin asignación de código',
@@ -825,7 +836,7 @@ function leerGeneradoPorObra() {
       var mes = MESES_KEYS[mi];
       var mesPeriodo = aCobrarPorMes[mes];
       if (!mesPeriodo) continue;
-      var list = _buildObras(mesPeriodo);
+      var list = _buildObras(mesPeriodo, detallesPorMes[mes]);
       // SIN-CODIGO del mes
       var sinCodMes = Math.round(mesPeriodo['SIN-CODIGO'] || 0);
       if (sinCodMes > 0) {
