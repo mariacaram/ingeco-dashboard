@@ -1909,13 +1909,15 @@ function renderResumenObra() {
 
   // Tn caliente/frío por obra desde remitos — base para prorratear MO y costo asfalto
   const remitosMes = REMITOS_ASFALTO[mesActual];
-  const tnPorObraKey = {}, tnFrioPorObraKey = {};
+  const tnPorObraKey = {}, tnFrioPorObraKey = {}, tnDisplayName = {};
   let tnCalTotal = 0;
   if (remitosMes && remitosMes.porObra) {
     Object.entries(remitosMes.porObra).forEach(([obra, v]) => {
       const k = obra.toLowerCase().trim();
+      if (!k) return;
       tnPorObraKey[k]     = (tnPorObraKey[k]     || 0) + (v.caliente || 0);
       tnFrioPorObraKey[k] = (tnFrioPorObraKey[k] || 0) + (v.frio     || 0);
+      if (!tnDisplayName[k]) tnDisplayName[k] = obra.trim();
       tnCalTotal += (v.caliente || 0);
     });
   }
@@ -1944,7 +1946,10 @@ function renderResumenObra() {
     sumaAlquiler += alquiler;
     if (moObra) sumaMO += moObra;
     sumaTn += tnObra;
-    const tnLabel = tnObra > 0 ? fmtTn(tnObra) + ' tn' + (tnFrioObra > 0 ? ' + ' + fmtTn(tnFrioObra) + ' frío' : '') : null;
+    const _tnPartes = [];
+    if (tnObra > 0)     _tnPartes.push(fmtTn(tnObra) + ' tn');
+    if (tnFrioObra > 0) _tnPartes.push(fmtTn(tnFrioObra) + ' frío');
+    const tnLabel = _tnPartes.join(' + ');
     const tnCell = (tnObra > 0 || tnFrioObra > 0)
       ? `<span style="font-size:12px;" title="${tnLabel}${costoAsfObra != null ? ' → ' + fmt(costoAsfObra) : ''}">${tnLabel}${costoAsfObra != null ? '<br><small class="neg-val" style="font-size:10px;">' + fmt(costoAsfObra) + '</small>' : ''}</span>`
       : '<span class="nd">—</span>';
@@ -1975,6 +1980,31 @@ function renderResumenObra() {
       Sin período asignado · ${obrasSinP.length} obra${obrasSinP.length !== 1 ? 's' : ''} · Completar "Período de realización" en la planilla de Fernando
     </td></tr>`);
     obrasSinP.forEach(o => filas.push(buildFilaObra(o)));
+  }
+
+  // Sección "Con salida de asfalto" — obras que tienen tn en Remitos del mes
+  // pero no figuran en obras activas (Fernando) para ese mes.
+  const clavesFernando = new Set();
+  [...obras, ...obrasSinP].forEach(o => {
+    const ck = (o.cod_obra || '').toLowerCase().trim();
+    const nk = (o.nombre   || '').toLowerCase().trim();
+    if (ck) clavesFernando.add(ck);
+    if (nk) clavesFernando.add(nk);
+  });
+  const clavesRemito = new Set([...Object.keys(tnPorObraKey), ...Object.keys(tnFrioPorObraKey)]);
+  const soloRemito = [...clavesRemito]
+    .filter(k => k && (tnPorObraKey[k] > 0 || tnFrioPorObraKey[k] > 0) && !clavesFernando.has(k))
+    .sort((a, b) => (tnPorObraKey[b] || 0) - (tnPorObraKey[a] || 0));
+
+  if (soloRemito.length > 0) {
+    filas.push(`<tr><td colspan="7" style="background:#f8fafc;padding:5px 12px;font-size:11px;color:var(--muted);border-top:2px solid var(--border);font-style:italic;">
+      Con salida de asfalto · ${soloRemito.length} obra${soloRemito.length !== 1 ? 's' : ''} en Remitos del mes sin certificado en obras activas
+    </td></tr>`);
+    soloRemito.forEach(k => filas.push(buildFilaObra({
+      cod_obra: tnDisplayName[k] || k,
+      nombre: 'Con salida de asfalto (Remitos)',
+      aCobrar: 0,
+    })));
   }
 
   // Fila total
