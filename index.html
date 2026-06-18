@@ -1885,12 +1885,19 @@ function renderResumenObra() {
     return;
   }
 
-  // OC Insumos del mes: mapa por nombre de obra (lowercase)
+  // OC Insumos del mes: mapa por nombre Y por código de obra (lowercase)
   const ocPorNombre = {};
+  const ocObras = {}; // canonKey → { cod, nombre } — para listar obras con OC sin certificado
   if (OC_INSUMOS && OC_INSUMOS[mesActual] && OC_INSUMOS[mesActual].items) {
     OC_INSUMOS[mesActual].items.forEach(item => {
-      const k = (item.obra || '').toLowerCase().trim();
-      if (k) ocPorNombre[k] = (ocPorNombre[k] || 0) + item.monto;
+      const nameK = (item.obra   || '').toLowerCase().trim();
+      const codeK = (item.codigo || '').toLowerCase().trim();
+      if (nameK)                 ocPorNombre[nameK] = (ocPorNombre[nameK] || 0) + item.monto;
+      if (codeK && codeK !== nameK) ocPorNombre[codeK] = (ocPorNombre[codeK] || 0) + item.monto;
+      const canon = codeK || nameK;
+      if (canon && !ocObras[canon]) {
+        ocObras[canon] = { cod: (item.codigo || item.obra || '').trim(), nombre: (item.obra || '').trim() };
+      }
     });
   }
 
@@ -1977,41 +1984,54 @@ function renderResumenObra() {
   // pero se usan para deduplicar contra las obras con salida en Remitos.
   const obrasSinP = _obrasSinPeriodo();
 
-  // Sección "Con salida de asfalto" — obras que tienen tn en Remitos del mes
-  // pero no figuran en obras activas (Fernando) para ese mes.
-  const clavesFernando = new Set();
+  // Sección "Con gasto/salida del mes" — obras que NO están certificadas en obras
+  // activas (Fernando) pero tienen actividad: salida en Remitos u OC de insumos.
+  // Claves ya representadas (Fernando con y sin período) para no duplicar.
+  const consumido = new Set();
   [...obras, ...obrasSinP].forEach(o => {
     const ck = (o.cod_obra || '').toLowerCase().trim();
     const nk = (o.nombre   || '').toLowerCase().trim();
-    if (ck) clavesFernando.add(ck);
-    if (nk) clavesFernando.add(nk);
+    if (ck) consumido.add(ck);
+    if (nk) consumido.add(nk);
   });
-  // Cualquier salida en Remitos del mes (no solo asfalto): piedra, escombro, base, etc.
+
+  // Mapa de nombre original (display) para cada clave de Remito
   const salidaDisplay = {};
+  Object.keys(tnDisplayName).forEach(k => { salidaDisplay[k] = tnDisplayName[k]; });
   if (remitosMes && remitosMes.obrasSalida) {
     Object.keys(remitosMes.obrasSalida).forEach(obra => {
       const k = (obra || '').toLowerCase().trim();
       if (k && !salidaDisplay[k]) salidaDisplay[k] = obra.trim();
     });
   }
-  const clavesRemito = new Set([
-    ...Object.keys(tnPorObraKey),
-    ...Object.keys(tnFrioPorObraKey),
-    ...Object.keys(salidaDisplay),
-  ]);
-  const soloRemito = [...clavesRemito]
-    .filter(k => k && !clavesFernando.has(k))
-    .sort((a, b) => (tnPorObraKey[b] || 0) - (tnPorObraKey[a] || 0));
 
-  if (soloRemito.length > 0) {
-    filas.push(`<tr><td colspan="7" style="background:#f8fafc;padding:5px 12px;font-size:11px;color:var(--muted);border-top:2px solid var(--border);font-style:italic;">
-      Con salida en Remitos · ${soloRemito.length} obra${soloRemito.length !== 1 ? 's' : ''} con remitos en el mes sin certificado en obras activas
-    </td></tr>`);
-    soloRemito.forEach(k => filas.push(buildFilaObra({
-      cod_obra: tnDisplayName[k] || salidaDisplay[k] || k,
-      nombre: 'Con salida en Remitos',
+  // Candidatos extra. OC primero (identidad más rica: código + nombre), luego Remitos.
+  const candidatos = [];
+  // OC de insumos del mes
+  Object.values(ocObras).forEach(o => candidatos.push({ cod: o.cod, nombre: o.nombre, origen: 'OC' }));
+  // Cualquier salida en Remitos del mes (asfalto, piedra, escombro, base, etc.)
+  Object.keys(salidaDisplay).forEach(k => candidatos.push({ cod: salidaDisplay[k] || k, nombre: '', origen: 'Remito' }));
+
+  // Construir filas extra deduplicando por clave (nombre o código ya representado)
+  const filasExtra = [];
+  candidatos.forEach(c => {
+    const ck = (c.cod    || '').toLowerCase().trim();
+    const nk = (c.nombre || '').toLowerCase().trim();
+    if ((ck && consumido.has(ck)) || (nk && consumido.has(nk))) return;
+    filasExtra.push(buildFilaObra({
+      cod_obra: c.cod || c.nombre,
+      nombre: c.nombre || (c.origen === 'OC' ? 'Con OC de insumos' : 'Con salida en Remitos'),
       aCobrar: 0,
-    })));
+    }));
+    if (ck) consumido.add(ck);
+    if (nk) consumido.add(nk);
+  });
+
+  if (filasExtra.length > 0) {
+    filas.push(`<tr><td colspan="7" style="background:#f8fafc;padding:5px 12px;font-size:11px;color:var(--muted);border-top:2px solid var(--border);font-style:italic;">
+      Con gasto/salida del mes · ${filasExtra.length} obra${filasExtra.length !== 1 ? 's' : ''} con OC de insumos o remitos, sin certificado en obras activas
+    </td></tr>`);
+    filasExtra.forEach(f => filas.push(f));
   }
 
   // Fila total
