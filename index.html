@@ -1901,12 +1901,16 @@ function renderResumenObra() {
     });
   }
 
-  // Alquiler del mes: mapa por nombre de obra (lowercase)
+  // Alquiler del mes: mapa por nombre de obra (lowercase) + display original
   const alqPorNombre = {};
+  const alqDisplay = {};
   if (ALQUILER_EQUIPOS && ALQUILER_EQUIPOS[mesActual] && ALQUILER_EQUIPOS[mesActual].porObra) {
     ALQUILER_EQUIPOS[mesActual].porObra.forEach(item => {
       const k = (item.obra || '').toLowerCase().trim();
-      if (k) alqPorNombre[k] = (alqPorNombre[k] || 0) + item.costoArs;
+      if (k) {
+        alqPorNombre[k] = (alqPorNombre[k] || 0) + item.costoArs;
+        if (!alqDisplay[k]) alqDisplay[k] = (item.obra || '').trim();
+      }
     });
   }
 
@@ -2005,12 +2009,14 @@ function renderResumenObra() {
     });
   }
 
-  // Candidatos extra. OC primero (identidad más rica: código + nombre), luego Remitos.
+  // Candidatos extra. OC primero (identidad más rica: código + nombre), luego Remitos y Alquiler.
   const candidatos = [];
   // OC de insumos del mes
   Object.values(ocObras).forEach(o => candidatos.push({ cod: o.cod, nombre: o.nombre, origen: 'OC' }));
   // Cualquier salida en Remitos del mes (asfalto, piedra, escombro, base, etc.)
   Object.keys(salidaDisplay).forEach(k => candidatos.push({ cod: salidaDisplay[k] || k, nombre: '', origen: 'Remito' }));
+  // Alquiler de maquinaria del mes (Partes diarios — Nico)
+  Object.keys(alqDisplay).forEach(k => candidatos.push({ cod: alqDisplay[k] || k, nombre: '', origen: 'Alquiler' }));
 
   // Construir filas extra deduplicando por clave (nombre o código ya representado)
   const filasExtra = [];
@@ -2018,9 +2024,10 @@ function renderResumenObra() {
     const ck = (c.cod    || '').toLowerCase().trim();
     const nk = (c.nombre || '').toLowerCase().trim();
     if ((ck && consumido.has(ck)) || (nk && consumido.has(nk))) return;
+    const _lblOrigen = { 'OC': 'Con OC de insumos', 'Remito': 'Con salida en Remitos', 'Alquiler': 'Con alquiler de maquinaria' };
     filasExtra.push(buildFilaObra({
       cod_obra: c.cod || c.nombre,
-      nombre: c.nombre || (c.origen === 'OC' ? 'Con OC de insumos' : 'Con salida en Remitos'),
+      nombre: c.nombre || _lblOrigen[c.origen] || 'Con gasto del mes',
       aCobrar: 0,
     }));
     if (ck) consumido.add(ck);
