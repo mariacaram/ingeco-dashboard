@@ -1973,14 +1973,9 @@ function renderResumenObra() {
 
   const filas = obras.map(buildFilaObra);
 
-  // Sección "Sin período asignado"
+  // Las obras "sin período asignado" NO se muestran en esta tabla (pedido del usuario),
+  // pero se usan para deduplicar contra las obras con salida en Remitos.
   const obrasSinP = _obrasSinPeriodo();
-  if (obrasSinP.length > 0) {
-    filas.push(`<tr><td colspan="7" style="background:#f8fafc;padding:5px 12px;font-size:11px;color:var(--muted);border-top:2px solid var(--border);font-style:italic;">
-      Sin período asignado · ${obrasSinP.length} obra${obrasSinP.length !== 1 ? 's' : ''} · Completar "Período de realización" en la planilla de Fernando
-    </td></tr>`);
-    obrasSinP.forEach(o => filas.push(buildFilaObra(o)));
-  }
 
   // Sección "Con salida de asfalto" — obras que tienen tn en Remitos del mes
   // pero no figuran en obras activas (Fernando) para ese mes.
