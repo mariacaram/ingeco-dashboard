@@ -1770,8 +1770,12 @@ function renderMargen() {
   const ocMes     = OC_INSUMOS[mesActual] ? OC_INSUMOS[mesActual].total : null;
   const moArr     = getMOObra(mesActual);
   const moMensual = moArr.length > 0 ? moArr.reduce((s, r) => s + r.monto, 0) : null;
+  // MO efectiva para el cálculo: real si existe, si no la estimada
+  const moEstObj     = moMensual == null ? getMOEstimado(mesActual) : null;
+  const moParaCalc   = moMensual != null ? moMensual : (moEstObj ? moEstObj.monto : null);
+  const moEsEstimado = (moMensual == null && moEstObj != null);
   const alqMes    = ALQUILER_EQUIPOS[mesActual] ? ALQUILER_EQUIPOS[mesActual].totalArs : null;
-  const totalEgresos = (ocMes != null && moMensual != null) ? ocMes + moMensual : null;
+  const totalEgresos = (ocMes != null && moParaCalc != null) ? ocMes + moParaCalc : null;
 
   // Card OC Insumos
   const kpiOC = document.getElementById('kpi-oc-insumos');
@@ -1790,7 +1794,7 @@ function renderMargen() {
   // Card MO Obras
   const kpiMO = document.getElementById('kpi-mo-obras');
   if (kpiMO) {
-    const moEst = moMensual == null ? getMOEstimado(mesActual) : null;
+    const moEst = moEstObj;
     if (moMensual != null) {
       kpiMO.textContent = fmt(moMensual);
       kpiMO.className   = 'kpi-value neg-val';
@@ -1822,23 +1826,32 @@ function renderMargen() {
   const kpiMg  = document.getElementById('kpi-margen-est');
   const kpiMgFormula = document.getElementById('kpi-margen-formula');
   if (kpiMg) {
+    const subEl = document.getElementById('kpi-margen-sub');
     if (totalACobrar != null && totalEgresosConAlq != null) {
       const margenVal = totalACobrar - totalEgresosConAlq;
       const pct = ((margenVal / totalACobrar) * 100).toFixed(1);
-      kpiMg.textContent = fmt(margenVal) + ' (' + pct + '%)';
+      kpiMg.textContent = (moEsEstimado ? '~' : '') + fmt(margenVal) + ' (' + pct + '%)';
       kpiMg.className   = 'kpi-value ' + (margenVal >= 0 ? 'pos-val' : 'neg-val');
-      document.getElementById('kpi-margen-sub').textContent =
-        'A Cobrar ' + MES[mesActual] + ' − Egresos + Alquiler';
+      if (subEl) {
+        if (moEsEstimado) {
+          subEl.textContent = '⚠️ Incluye MO estimada (' + MES[mesActual] + ' sin cargar)';
+          subEl.style.color = '#b45309';
+        } else {
+          subEl.textContent = 'A Cobrar ' + MES[mesActual] + ' − Egresos + Alquiler';
+          subEl.style.color = '';
+        }
+      }
       if (kpiMgFormula) {
         const partes = [];
-        if (ocMes != null)     partes.push('OC ' + fmt(ocMes));
-        if (moMensual != null)  partes.push('MO ' + fmt(moMensual));
+        if (ocMes != null)      partes.push('OC ' + fmt(ocMes));
+        if (moParaCalc != null) partes.push((moEsEstimado ? 'MO~ ' : 'MO ') + fmt(moParaCalc));
         if (alqMes != null)     partes.push('Alq. ' + fmt(alqMes));
         kpiMgFormula.textContent = fmt(totalACobrar) + ' − (' + partes.join(' + ') + ')';
       }
     } else {
       kpiMg.textContent = 'sin dato';
       kpiMg.className   = 'kpi-value nd';
+      if (subEl) subEl.style.color = '';
       if (kpiMgFormula) kpiMgFormula.textContent = 'A Cobrar − (OC Insumos + MO TANGO + Alquiler)';
     }
   }
@@ -4077,12 +4090,16 @@ function openMargenPanel() {
   const oc    = ocObj ? ocObj.total : null;
 
   const moArr = getMOObra(mesActual);
-  const mo    = moArr.length > 0 ? moArr.reduce((s, r) => s + r.monto, 0) : null;
+  const moReal = moArr.length > 0 ? moArr.reduce((s, r) => s + r.monto, 0) : null;
+  // MO efectiva: real si existe, si no la estimada por días transcurridos
+  const moEst       = moReal == null ? getMOEstimado(mesActual) : null;
+  const mo          = moReal != null ? moReal : (moEst ? moEst.monto : null);
+  const moEsEstimado = (moReal == null && moEst != null);
 
   const alqObj = ALQUILER_EQUIPOS[mesActual];
   const alq    = alqObj ? alqObj.totalArs : null;
 
-  // El KPI exige A Cobrar + OC + MO (alquiler opcional)
+  // Calculable con A Cobrar + OC + MO (real o estimada); alquiler opcional
   const calculable = (aCobrar != null && oc != null && mo != null);
   const egresos    = calculable ? oc + mo + (alq || 0) : null;
   const margen     = calculable ? aCobrar - egresos : null;
@@ -4093,12 +4110,18 @@ function openMargenPanel() {
   if (oc == null)      faltantes.push('OC Insumos — Guillermo');
   if (mo == null)      faltantes.push('MO TANGO — Mauro');
 
-  // Helper de fila
-  const fila = (label, sub, val, signo, faltaTxt) => {
-    const valHtml = (val == null)
-      ? `<span style="font-size:11px;font-weight:600;color:#b45309;background:#fef3c7;padding:3px 9px;border-radius:6px;white-space:nowrap;">${faltaTxt || 'falta cargar'}</span>`
-      : `<strong style="font-size:14px;white-space:nowrap;" class="${signo === '+' ? 'pos-val' : 'neg-val'}">${signo === '-' ? '− ' : signo === '+' ? '+ ' : ''}${fmt(val)}</strong>`;
-    return `<tr style="border-top:1px solid var(--border);">
+  // Helper de fila. esEst = el valor es una estimación (se pinta en ámbar).
+  const fila = (label, sub, val, signo, faltaTxt, esEst) => {
+    let valHtml;
+    if (val == null) {
+      valHtml = `<span style="font-size:11px;font-weight:600;color:#b45309;background:#fef3c7;padding:3px 9px;border-radius:6px;white-space:nowrap;">${faltaTxt || 'falta cargar'}</span>`;
+    } else if (esEst) {
+      valHtml = `<strong style="font-size:14px;white-space:nowrap;color:#b45309;">${signo === '-' ? '− ' : ''}~${fmt(val)}</strong>
+        <div style="font-size:10px;color:#b45309;margin-top:1px;">estimado</div>`;
+    } else {
+      valHtml = `<strong style="font-size:14px;white-space:nowrap;" class="${signo === '+' ? 'pos-val' : 'neg-val'}">${signo === '-' ? '− ' : signo === '+' ? '+ ' : ''}${fmt(val)}</strong>`;
+    }
+    return `<tr style="border-top:1px solid var(--border);${esEst && val != null ? 'background:#fffbeb;' : ''}">
       <td style="padding:10px 10px;">
         <div style="font-size:13px;color:var(--text);font-weight:600;">${label}</div>
         <div style="font-size:10.5px;color:var(--muted);margin-top:2px;">${sub}</div>
@@ -4113,7 +4136,11 @@ function openMargenPanel() {
     fila('A Cobrar', 'Obras certificadas con período · Fernando Solís<br>' + obrasMes.length + ' obra' + (obrasMes.length !== 1 ? 's' : '') + ' en ' + mesLabel + subSinP, aCobrar, '+', 'sin certificados') +
     `<tr><td colspan="2" style="padding:10px 10px 4px;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);">− Egresos del mes</td></tr>` +
     fila('OC Insumos', 'Órdenes de compra · Guillermo Konicek' + (ocObj ? '<br>' + ocObj.nOC + ' OC' : ''), oc, '-', 'falta Guillermo') +
-    fila('MO TANGO', 'Mano de obra mensual · Mauro (liquidación TANGO)' + (mo != null ? '<br>' + moArr.length + ' centros de costo' : ''), mo, '-', 'falta TANGO') +
+    fila('MO TANGO',
+      moEsEstimado
+        ? 'Estimado — ' + mesLabel + ' sin cargar · ' + (moEst.esMesActualCalendario ? moEst.diasTranscurridos + '/' + moEst.diasMes + ' días · ' : '') + 'base ' + (MES[moEst.refMes] || moEst.refMes)
+        : 'Mano de obra mensual · Mauro (liquidación TANGO)' + (mo != null ? '<br>' + moArr.length + ' centros de costo' : ''),
+      mo, '-', 'falta TANGO', moEsEstimado) +
     fila('Alquiler equipos', 'Partes diarios (Nico) · tarifas · TC BNA' + (alq == null ? '<br><em>opcional — no bloquea el cálculo</em>' : ''), alq, '-', '—');
 
   const totalRow = `<tr style="border-top:3px solid var(--border);background:${margen == null ? '#f8fafc' : (margen >= 0 ? '#f0fdf4' : '#fef2f2')};">
@@ -4121,7 +4148,7 @@ function openMargenPanel() {
     <td style="text-align:right;padding:12px 10px;">
       ${margen == null
         ? '<span class="nd" style="font-size:14px;font-weight:700;">sin dato</span>'
-        : `<strong style="font-size:16px;" class="${margen >= 0 ? 'pos-val' : 'neg-val'}">${fmt(margen)}</strong><div style="font-size:11px;color:var(--muted);margin-top:2px;">${pct}% sobre A Cobrar</div>`}
+        : `<strong style="font-size:16px;" class="${margen >= 0 ? 'pos-val' : 'neg-val'}">${moEsEstimado ? '~' : ''}${fmt(margen)}</strong><div style="font-size:11px;color:var(--muted);margin-top:2px;">${pct}% sobre A Cobrar${moEsEstimado ? ' · estimado' : ''}</div>`}
     </td>
   </tr>`;
 
@@ -4130,6 +4157,10 @@ function openMargenPanel() {
          <strong>No se puede calcular el margen todavía.</strong><br>
          Falta cargar: ${faltantes.map(f => '<strong>' + f + '</strong>').join(', ')}.<br>
          El margen necesita sí o sí <strong>A Cobrar + OC Insumos + MO TANGO</strong> (el alquiler es opcional). Cargá lo que falte y volvé a correr <code>actualizarNocturno()</code>.
+       </div>`
+    : moEsEstimado
+    ? `<div style="margin-top:14px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:12px 14px;font-size:12px;color:#92400e;line-height:1.55;">
+         ⚠️ <strong>Margen estimado.</strong> Los datos de <strong>MO de ${mesLabel}</strong> todavía no están cargados. Se usó una <strong>estimación</strong> de mano de obra (~${fmt(mo)}): se toma <strong>${MES[moEst.refMes] || moEst.refMes}</strong> como base y se prorratea${moEst.esMesActualCalendario ? ' por los ' + moEst.diasTranscurridos + ' días transcurridos del mes (de ' + moEst.diasMes + ')' : ''}. El número final cambiará cuando se cargue la MO real.
        </div>`
     : '';
 
