@@ -5331,6 +5331,15 @@ if (APPS_SCRIPT_URL) {
       if (!res.ok) throw new Error('Proxy HTTP ' + res.status);
       const data = await res.json();
       if (data.status === 'ok') {
+        if (data.cobros) {
+          Object.keys(data.cobros).forEach(m => { if (COBROS_REAL[m]) Object.assign(COBROS_REAL[m], data.cobros[m]); });
+        }
+        if (data.pipeline && Array.isArray(data.pipeline)) {
+          PIPELINE.splice(0, PIPELINE.length, ...data.pipeline);
+        }
+        if (data.cobrosEsteban && typeof data.cobrosEsteban === 'object') {
+          Object.assign(COBROS_ESTEBAN, data.cobrosEsteban);
+        }
         if (data.moCtroCosto && typeof data.moCtroCosto === 'object') {
           Object.assign(MO_CTRO_COSTO, data.moCtroCosto);
         }
