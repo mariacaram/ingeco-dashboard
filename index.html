@@ -1991,18 +1991,30 @@ function renderResumenObra() {
     if (ck) clavesFernando.add(ck);
     if (nk) clavesFernando.add(nk);
   });
-  const clavesRemito = new Set([...Object.keys(tnPorObraKey), ...Object.keys(tnFrioPorObraKey)]);
+  // Cualquier salida en Remitos del mes (no solo asfalto): piedra, escombro, base, etc.
+  const salidaDisplay = {};
+  if (remitosMes && remitosMes.obrasSalida) {
+    Object.keys(remitosMes.obrasSalida).forEach(obra => {
+      const k = (obra || '').toLowerCase().trim();
+      if (k && !salidaDisplay[k]) salidaDisplay[k] = obra.trim();
+    });
+  }
+  const clavesRemito = new Set([
+    ...Object.keys(tnPorObraKey),
+    ...Object.keys(tnFrioPorObraKey),
+    ...Object.keys(salidaDisplay),
+  ]);
   const soloRemito = [...clavesRemito]
-    .filter(k => k && (tnPorObraKey[k] > 0 || tnFrioPorObraKey[k] > 0) && !clavesFernando.has(k))
+    .filter(k => k && !clavesFernando.has(k))
     .sort((a, b) => (tnPorObraKey[b] || 0) - (tnPorObraKey[a] || 0));
 
   if (soloRemito.length > 0) {
     filas.push(`<tr><td colspan="7" style="background:#f8fafc;padding:5px 12px;font-size:11px;color:var(--muted);border-top:2px solid var(--border);font-style:italic;">
-      Con salida de asfalto · ${soloRemito.length} obra${soloRemito.length !== 1 ? 's' : ''} en Remitos del mes sin certificado en obras activas
+      Con salida en Remitos · ${soloRemito.length} obra${soloRemito.length !== 1 ? 's' : ''} con remitos en el mes sin certificado en obras activas
     </td></tr>`);
     soloRemito.forEach(k => filas.push(buildFilaObra({
-      cod_obra: tnDisplayName[k] || k,
-      nombre: 'Con salida de asfalto (Remitos)',
+      cod_obra: tnDisplayName[k] || salidaDisplay[k] || k,
+      nombre: 'Con salida en Remitos',
       aCobrar: 0,
     })));
   }

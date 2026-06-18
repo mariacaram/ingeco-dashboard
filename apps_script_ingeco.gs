@@ -1279,24 +1279,9 @@ function leerRemitosAsfalto() {
       for (let i = hdrIdx + 1; i < rows.length; i++) {
         const row = rows[i];
 
-        // Validar unidad: si la columna existe debe ser TN; si no existe, filtrar por descripción
-        if (iUD >= 0) {
-          const ud = String(row[iUD] || '').toUpperCase().trim();
-          if (ud !== 'TN') continue;
-        }
-
-        const desc = String(iDesc >= 0 ? row[iDesc] || '' : '').toUpperCase().trim();
-        if (!desc.includes('ASFALTO')) continue;
-
-        const cant = typeof row[iCant] === 'number' ? row[iCant]
-                   : parseFloat(String(row[iCant] || '').replace(',', '.')) || 0;
-        if (cant <= 0) continue;
-
-        const tipo = desc.includes('CALIENTE') ? 'caliente'
-                   : (desc.includes('FRI') || desc.includes('FRÍO')) ? 'frio' : null;
         const obra = iObra >= 0 ? String(row[iObra] || '').trim() : '';
 
-        // ── Fecha exacta (columna FECHA, formato mm/dd/aaaa) ──────────────────
+        // ── Fecha exacta (columna FECHA) — se calcula para CUALQUIER remito ──
         var fechaObj = null;
         if (iFecha >= 0 && row[iFecha] !== '' && row[iFecha] != null) {
           var rawF = row[iFecha];
@@ -1318,8 +1303,6 @@ function leerRemitosAsfalto() {
         if (fechaObj && !isNaN(fechaObj.getTime())) {
           mesNum  = fechaObj.getUTCMonth() + 1;
           anioNum = fechaObj.getUTCFullYear();
-          // Guardar en detalle con objeto Date real
-          detalle.push({ fecha: fechaObj, fechaStr: Utilities.formatDate(fechaObj, TZ, 'dd/MM/yyyy'), tipo: tipo, cant: Math.round(cant * 10) / 10, obra: obra });
         } else {
           // Fallback: columnas MES / AÑO
           var mesRaw  = row[iMes],  anioRaw = row[iAnio];
@@ -1332,7 +1315,29 @@ function leerRemitosAsfalto() {
         const mesKey = MES_MAP[mesNum];
         if (!mesKey) continue;
 
-        if (!resultado[mesKey]) resultado[mesKey] = { caliente: 0, frio: 0, total: 0, porObra: {} };
+        if (!resultado[mesKey]) resultado[mesKey] = { caliente: 0, frio: 0, total: 0, porObra: {}, obrasSalida: {} };
+        if (!resultado[mesKey].obrasSalida) resultado[mesKey].obrasSalida = {};
+
+        // ── Registrar la obra de CUALQUIER salida (piedra, escombro, base, asfalto, etc.) ──
+        if (obra) resultado[mesKey].obrasSalida[obra] = (resultado[mesKey].obrasSalida[obra] || 0) + 1;
+
+        // ── De acá en adelante: solo asfalto en TN (para tn y prorrateo de MO) ──
+        if (iUD >= 0) {
+          const ud = String(row[iUD] || '').toUpperCase().trim();
+          if (ud !== 'TN') continue;
+        }
+        const desc = String(iDesc >= 0 ? row[iDesc] || '' : '').toUpperCase().trim();
+        if (!desc.includes('ASFALTO')) continue;
+        const cant = typeof row[iCant] === 'number' ? row[iCant]
+                   : parseFloat(String(row[iCant] || '').replace(',', '.')) || 0;
+        if (cant <= 0) continue;
+        const tipo = desc.includes('CALIENTE') ? 'caliente'
+                   : (desc.includes('FRI') || desc.includes('FRÍO')) ? 'frio' : null;
+
+        if (fechaObj && !isNaN(fechaObj.getTime())) {
+          detalle.push({ fecha: fechaObj, fechaStr: Utilities.formatDate(fechaObj, TZ, 'dd/MM/yyyy'), tipo: tipo, cant: Math.round(cant * 10) / 10, obra: obra });
+        }
+
         if (tipo === 'caliente') {
           resultado[mesKey].caliente += cant;
           if (obra) {
