@@ -3737,10 +3737,7 @@ function openOCPlantaPanel() {
 
   const mesLabel = MES[mesActual] || mesActual;
   const ocMes = OC_INSUMOS[mesActual];
-  const items = ocMes && ocMes.items ? ocMes.items.filter(i => {
-    const txt = ((i.obra || '') + ' ' + (i.codigo || '')).toUpperCase();
-    return txt.includes('PLANTA') || txt.includes('ASFALTO') || txt.includes('WARNES');
-  }) : [];
+  const items = ocMes && ocMes.items ? ocMes.items.slice() : [];
 
   let html = '';
   if (items.length === 0) {
@@ -4392,15 +4389,13 @@ function openOCPanel(obraName) {
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwXe_MLjncMNA4-v8GLfmvhQFZG0cuMeXzSHIBccBIUUTTpXEvJuLhek-mC_S4twVCu9A/exec';
 
 function getOCPlanta(mes) {
+  // OC Insumos Planta = TODO el archivo de OC de Guillermo del mes (sin filtrar)
   const ocMes = OC_INSUMOS[mes || mesActual];
-  if (!ocMes || !ocMes.items) return null;
-  const items = ocMes.items.filter(i => {
-    // Mira tanto la columna OBRA como el CÓDIGO OBRA (ej. INT-SMT-ASFALTO)
-    const txt = ((i.obra || '') + ' ' + (i.codigo || '')).toUpperCase();
-    return txt.includes('PLANTA') || txt.includes('ASFALTO') || txt.includes('WARNES');
-  });
-  if (items.length === 0) return null;
-  return { total: items.reduce((s, i) => s + i.monto, 0), nOC: items.reduce((s, i) => s + i.nOC, 0) };
+  if (!ocMes || !ocMes.items || ocMes.items.length === 0) return null;
+  return {
+    total: ocMes.total != null ? ocMes.total : ocMes.items.reduce((s, i) => s + i.monto, 0),
+    nOC:   ocMes.nOC   != null ? ocMes.nOC   : ocMes.items.reduce((s, i) => s + i.nOC,   0),
+  };
 }
 
 function renderStockDisplay() {
