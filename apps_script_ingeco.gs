@@ -738,9 +738,12 @@ function leerGeneradoFernando() {
           nombre = tabNombre;
         }
 
+        // Estado del certificado (col E "Estado$" en Municipio): "A Cobrar" / "Cobrada"
+        const estado = cfg.iEstado !== null ? String(row[cfg.iEstado] || '').trim() : '';
+
         // Período → clave de mes
         const mesKey = _parseMesKey(row[cfg.iPeriodo], curYear);
-        const item = { nombre: nombre || cod, codigo: cod, monto: Math.round(monto) };
+        const item = { nombre: nombre || cod, codigo: cod, monto: Math.round(monto), estado: estado };
 
         if (mesKey) {
           if (!aCobrarPorMes[mesKey]) aCobrarPorMes[mesKey] = {};
