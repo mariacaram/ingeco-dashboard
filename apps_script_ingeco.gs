@@ -29,7 +29,7 @@ const FILE_IDS = {
   equiposFlota: '1PEcPzwrQ8kE2evmUlrFq9wPbgWOR92MPl3LEqcSYbIk',  // Equipos + PF mensual (Adrián)
   usageEquipos:     '1e_emRVEUxTaNtLxeC0wXIWKzcKuoulZkFSS9O1e0XHo',  // Partes diarios — hoja única (Nico)
   repuestosEquipos: '1JpXjGTJwlvMuEI-rFTd4KeKvzd708-yuSLAhIRuCFC0',  // Compra de repuestos — hoja ENTREGAS (Nico)
-  remitosAsfalto:   '1_B5RF4l5Jti15Ha0KV7S5u1It_Z4DxJSpxq8ylWH2ns',  // REMITOS OFICIALES (Roberto)
+  remitosAsfalto:   '1_c6El5XDWoy84J7UAe8xlA1WC03IdklQyraMZEbQiEs',  // REMITOS OFICIALES (Roberto)
   ajusteStock:    '1yZArsIKYMfq9UPUXyiASXtDNXyubTjFx3PPW2VjG-uA',  // Formulario Ingreso Asfalto Agustín
   precioAsfalto:  '1lqKTXtDLT2FxyXurxjU1uE4epDOKs5SP8AXu5wAUsJ4',  // Precio de mercado asfalto $/tn por mes
 };
