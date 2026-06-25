@@ -720,9 +720,9 @@ function leerGeneradoFernando() {
           if (!allowed.includes(estado)) continue;
         }
 
-        // Monto fijo por columna; si es 0, usa Monto Total como estimado del contrato
+        // Monto: SOLO la columna "Monto" (G para Municipio) — el certificado a cobrar.
+        // No se usa el Monto Total (col F) como fallback: si G está vacío/0, suma 0.
         let monto = parsearMonto(row[cfg.iMonto]);
-        if (monto === 0 && cfg.iMontoFallback !== null) monto = parsearMonto(row[cfg.iMontoFallback]);
         if (monto < 0) continue;
 
         // Código/nombre — MUNICIPIO usa detección dinámica; VIALIDAD1/OTROS usan iCod/iNom fijos
