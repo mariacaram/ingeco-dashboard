@@ -2145,18 +2145,19 @@ function renderResumenObra() {
     const nomEsc  = (o.nombre  || '').replace(/'/g, "\\'");
     const cellStyle = 'cursor:pointer;transition:background 0.15s;';
     const hoverTip  = 'title="Click para ver detalle"';
-    return `<tr>
+    const html = `<tr>
       <td><code style="font-size:11px;background:#f1f5f9;padding:2px 5px;border-radius:3px;">${o.cod_obra}</code><br><small style="color:var(--muted);font-size:10px;">${o.nombre}</small></td>
       <td class="num" style="${cellStyle}" ${hoverTip} onclick="openDetalleCelda('acobrar','${codEsc2}','${nomEsc}')">${aCobrar > 0 ? `<strong class="pos-val" style="text-decoration:underline dotted;">${fmt(aCobrar)}</strong>` : '<span class="nd">—</span>'}</td>
       <td class="num" style="${cellStyle}" ${hoverTip} onclick="openDetalleCelda('insumos','${codEsc2}','${nomEsc}')">${insumos  > 0 ? `<span class="neg-val" style="text-decoration:underline dotted;">${fmt(insumos)}</span>`  : '<span class="nd">—</span>'}</td>
       <td class="num" style="${cellStyle}" ${hoverTip} onclick="openDetalleCelda('mo','${codEsc2}','${nomEsc}')">${moCell}</td>
       <td class="num" style="${cellStyle}" ${hoverTip} onclick="openDetalleCelda('tn','${codEsc2}','${nomEsc}')">${tnCell}</td>
       <td class="num" style="${cellStyle}" ${hoverTip} onclick="openDetalleCelda('alquiler','${codEsc2}','${nomEsc}')">${alquiler > 0 ? `<span class="neg-val" style="text-decoration:underline dotted;">${fmt(alquiler)}</span>` : '<span class="nd">—</span>'}</td>
-      <td class="num"><strong class="${mgColor}">${fmt(margen)}</strong></td>
+      <td class="num" style="background:${margen > 0 ? '#f0fdf4' : margen < 0 ? '#fef2f2' : 'transparent'};"><strong class="${mgColor}">${fmt(margen)}</strong></td>
     </tr>`;
+    return { html, margen };
   };
 
-  const filas = obras.map(buildFilaObra);
+  const filas = obras.map(buildFilaObra).sort((a, b) => b.margen - a.margen).map(r => r.html);
 
   // Sección "Con gasto/salida del mes" — obras que NO están certificadas en obras
   // activas (Fernando) pero tienen actividad: salida en Remitos u OC de insumos.
@@ -2201,7 +2202,7 @@ function renderResumenObra() {
       cod_obra: c.cod || c.nombre,
       nombre: c.nombre || _lblOrigen[c.origen] || 'Con gasto del mes',
       aCobrar: 0,
-    }));
+    }).html);
     if (ck) consumido.add(ck);
     if (nk) consumido.add(nk);
   });
