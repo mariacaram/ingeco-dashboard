@@ -3002,7 +3002,7 @@ function _openTimelinePanel(fechaLabel, grp) {
 // Helper para mostrar millones/miles en el centro del donut
 function fmtM(n) {
   if (!n) return '$0';
-  if (Math.abs(n) >= 1e6) return (n < 0 ? '-' : '') + '$' + (Math.abs(n)/1e6).toFixed(1).replace('.', ',') + 'M';
+  if (Math.abs(n) >= 1e6) return (n < 0 ? '-' : '') + '$' + (Math.abs(n)/1e6).toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + 'M';
   return fmt(n);
 }
 
