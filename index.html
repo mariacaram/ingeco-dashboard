@@ -4344,8 +4344,9 @@ function openMargenPanel() {
   const sinP     = _obrasSinPeriodo();
   const aCobrar  = obrasMes.length > 0 ? obrasMes.reduce((s, o) => s + (o.aCobrar ?? o.generado ?? 0), 0) : null;
 
+  const ocPlantaPnl = getOCPlanta(mesActual);
   const ocObj = OC_INSUMOS[mesActual];
-  const oc    = ocObj ? ocObj.total : null;
+  const oc    = ocPlantaPnl ? ocPlantaPnl.total : null; // solo obras no-INT, igual que la tarjeta
 
   const moArr = getMOObra(mesActual);
   const moReal = moArr.length > 0 ? moArr.reduce((s, r) => s + r.monto, 0) : null;
