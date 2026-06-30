@@ -4129,9 +4129,8 @@ function openOCInsumosPanel() {
   if (!ocMes || !ocMes.items || ocMes.items.length === 0) {
     html = `<p class="nd" style="padding:16px;">Sin órdenes de compra para ${mesLabel}</p>`;
   } else {
-    const esInt = it => (it.codigo || '').toUpperCase().startsWith('INT');
-    const itemsObras = [...ocMes.items].filter(i => !esInt(i)).sort((a, b) => b.monto - a.monto);
-    const itemsInt   = [...ocMes.items].filter(i =>  esInt(i)).sort((a, b) => b.monto - a.monto);
+    const itemsObras = [...ocMes.items].filter(i => !ocEsInt(i)).sort((a, b) => b.monto - a.monto);
+    const itemsInt   = [...ocMes.items].filter(i =>  ocEsInt(i)).sort((a, b) => b.monto - a.monto);
 
     const totalObras = itemsObras.reduce((s, i) => s + i.monto, 0);
     const nOCObras   = itemsObras.reduce((s, i) => s + i.nOC,   0);
@@ -4535,11 +4534,19 @@ function openOCPanel(obraName) {
 // Pegá acá la URL de tu Web App después de hacer el deploy en Apps Script:
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwXe_MLjncMNA4-v8GLfmvhQFZG0cuMeXzSHIBccBIUUTTpXEvJuLhek-mC_S4twVCu9A/exec';
 
+// Un ítem de OC es interno (INT) si el maestro lo marca (CLIENTE == INT).
+// Fallback: prefijo "INT" en el código, por si la data aún no trae esInt.
+function ocEsInt(it) {
+  if (it && typeof it.esInt === 'boolean') return it.esInt;
+  return (it && (it.codigo || '')).toUpperCase().startsWith('INT');
+}
+
 function getOCPlanta(mes) {
   const ocMes = OC_INSUMOS[mes || mesActual];
   if (!ocMes || !ocMes.items || ocMes.items.length === 0) return null;
-  // Solo suma ítems que NO son internos (INT): los gastos INT no se imputan a obras
-  const esInt = it => (it.codigo || '').toUpperCase().startsWith('INT');
+  // Solo suma ítems que NO son internos (INT): los gastos INT no se imputan a obras.
+  // esInt viene marcado desde el maestro de obras (CLIENTE == INT).
+  const esInt = ocEsInt;
   const obras = ocMes.items.filter(i => !esInt(i));
   if (obras.length === 0) return null;
   const totalInt = ocMes.items.filter(i => esInt(i)).reduce((s, i) => s + i.monto, 0);

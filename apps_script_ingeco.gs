@@ -404,6 +404,37 @@ function leerOCInsumos() {
 
     if (rows.length < 2) return null;
 
+    // Maestro de obras → set de obras INTERNAS (CLIENTE == "INT" en col D).
+    // El cruce es por NOMBRE DE OBRA (col B del maestro = OBRA GENERAL / col H de las órdenes).
+    const intSet = {};
+    try {
+      let maestro = null;
+      ss.getSheets().forEach(sh => {
+        if (!maestro && sh.getName().toLowerCase().includes('maestro')) maestro = sh;
+      });
+      if (maestro) {
+        const mrows = maestro.getDataRange().getValues();
+        let mh = 0;
+        for (let i = 0; i < Math.min(5, mrows.length); i++) {
+          const s = mrows[i].map(c => String(c).toLowerCase()).join('|');
+          if (s.includes('nombre de obra') || s.includes('cliente')) { mh = i; break; }
+        }
+        const mheaders = mrows[mh].map(h => String(h).toLowerCase().trim());
+        const cNom = _findCol(mheaders, ['nombre de obra', 'nombre']) ?? 1;
+        const cCli = _findCol(mheaders, ['cliente']) ?? 3;
+        for (let i = mh + 1; i < mrows.length; i++) {
+          const nom = String(mrows[i][cNom] || '').trim();
+          const cli = String(mrows[i][cCli] || '').trim().toUpperCase();
+          if (nom && cli === 'INT') intSet[_normObra(nom)] = true;
+        }
+        Logger.log('OC Insumos — obras INT desde maestro: ' + Object.keys(intSet).length);
+      } else {
+        Logger.log('OC Insumos — no se encontró pestaña Maestro de obras');
+      }
+    } catch (e) {
+      Logger.log('OC Insumos — error leyendo maestro: ' + e);
+    }
+
     // Detectar fila de encabezados (busca "fecha" o "monto" en alguna celda)
     let hdrIdx = 0;
     for (let i = 0; i < Math.min(5, rows.length); i++) {
@@ -478,6 +509,8 @@ function leerOCInsumos() {
             codigo: v.codigo || '',
             monto: Math.round(v.monto),
             nOC: v.nOC,
+            // Interno si la OBRA GENERAL figura como CLIENTE=INT en el maestro
+            esInt: !!intSet[_normObra(v.codigo || key)],
             aceptadas: v.aceptadas,
             pendientes: v.pendientes,
             proveedores: Object.entries(v.proveedores)
@@ -507,6 +540,16 @@ function _findCol(headers, keywords) {
     if (idx >= 0) return idx;
   }
   return null;
+}
+
+// Normaliza un nombre de obra para hacer matching robusto entre planillas:
+// minúsculas, sin acentos, espacios colapsados.
+function _normObra(s) {
+  return String(s || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '') // saca acentos
+    .replace(/\s+/g, ' ');
 }
 
 function parsearMes(fechaRaw) {
