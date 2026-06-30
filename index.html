@@ -2153,15 +2153,13 @@ function renderResumenObra() {
 
   const filas = obras.map(buildFilaObra);
 
-  // Las obras "sin período asignado" NO se muestran en esta tabla (pedido del usuario),
-  // pero se usan para deduplicar contra las obras con salida en Remitos.
-  const obrasSinP = _obrasSinPeriodo();
-
   // Sección "Con gasto/salida del mes" — obras que NO están certificadas en obras
   // activas (Fernando) pero tienen actividad: salida en Remitos u OC de insumos.
-  // Claves ya representadas (Fernando con y sin período) para no duplicar.
+  // Deduplicamos SOLO contra las obras visibles del mes. Las obras sin período NO
+  // entran al set: si una de ellas tiene OC/alquiler/remito del mes (ej. Canal Roca),
+  // debe aparecer acá para que el total de insumos coincida con la tarjeta de OC.
   const consumido = new Set();
-  [...obras, ...obrasSinP].forEach(o => {
+  obras.forEach(o => {
     const ck = (o.cod_obra || '').toLowerCase().trim();
     const nk = (o.nombre   || '').toLowerCase().trim();
     if (ck) consumido.add(ck);
