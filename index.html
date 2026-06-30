@@ -4129,23 +4129,47 @@ function openOCInsumosPanel() {
   if (!ocMes || !ocMes.items || ocMes.items.length === 0) {
     html = `<p class="nd" style="padding:16px;">Sin órdenes de compra para ${mesLabel}</p>`;
   } else {
-    const items = [...ocMes.items].sort((a, b) => b.monto - a.monto);
+    const esInt = it => (it.codigo || '').toUpperCase().startsWith('INT');
+    const itemsObras = [...ocMes.items].filter(i => !esInt(i)).sort((a, b) => b.monto - a.monto);
+    const itemsInt   = [...ocMes.items].filter(i =>  esInt(i)).sort((a, b) => b.monto - a.monto);
+
+    const totalObras = itemsObras.reduce((s, i) => s + i.monto, 0);
+    const nOCObras   = itemsObras.reduce((s, i) => s + i.nOC,   0);
+    const totalInt   = itemsInt.reduce((s, i) => s + i.monto, 0);
+    const nOCInt     = itemsInt.reduce((s, i) => s + i.nOC,   0);
+
     const thead = `<thead><tr style="background:#f8fafc;border-bottom:2px solid var(--border);">
-      <th style="text-align:left;padding:8px 10px;font-size:11px;color:var(--muted);font-weight:600;">OBRA / PROVEEDOR</th>
+      <th style="text-align:left;padding:8px 10px;font-size:11px;color:var(--muted);font-weight:600;">CÓDIGO OBRA / PROVEEDOR</th>
       <th style="text-align:right;padding:8px 10px;font-size:11px;color:var(--muted);font-weight:600;">MONTO</th>
     </tr></thead>`;
 
-    const filas = items.map(item => {
-      const provs = [...(item.proveedores || [])].sort((a, b) => b.monto - a.monto);
+    const estadoBadges = (ac, pe) => {
+      let b = '';
+      if (ac > 0) b += `<span style="font-size:10px;background:#dcfce7;color:#166534;border-radius:4px;padding:1px 6px;margin-left:4px;">${ac} Aceptada${ac > 1 ? 's' : ''}</span>`;
+      if (pe > 0) b += `<span style="font-size:10px;background:#fef3c7;color:#92400e;border-radius:4px;padding:1px 6px;margin-left:4px;">${pe} Pendiente${pe > 1 ? 's' : ''}</span>`;
+      return b;
+    };
+
+    const renderItems = (items, bgRow, bgFoot) => items.map(item => {
+      const label    = item.codigo || item.obra || '—';
+      const sublabel = item.codigo && item.obra && item.obra !== item.codigo
+        ? `<span style="font-size:10px;color:var(--muted);display:block;margin-top:1px;">${item.obra}</span>` : '';
+      const provs    = [...(item.proveedores || [])].sort((a, b) => b.monto - a.monto);
       const detalles = provs.map(p => `
         <tr style="border-top:1px solid var(--border);background:#fafafa;">
-          <td style="padding:4px 10px 4px 24px;font-size:11px;color:var(--text);">${p.proveedor} <span style="color:var(--muted);font-size:10px;">(${p.nOC} OC)</span></td>
+          <td style="padding:4px 10px 4px 24px;font-size:11px;color:var(--text);">
+            ${p.proveedor}
+            <span style="color:var(--muted);font-size:10px;">(${p.nOC} OC)</span>
+            ${estadoBadges(p.aceptadas || 0, p.pendientes || 0)}
+          </td>
           <td style="text-align:right;padding:4px 10px;font-size:11px;white-space:nowrap;" class="neg-val">${fmt(p.monto)}</td>
         </tr>`).join('');
-      return `<tr style="border-top:2px solid var(--border);background:#fef2f2;">
+      return `<tr style="border-top:2px solid var(--border);background:${bgRow};">
         <td style="padding:9px 10px;">
-          <strong style="font-size:13px;color:var(--primary);">${item.obra}</strong>
-          <span style="font-size:10px;color:var(--muted);margin-left:8px;">${item.nOC} OC</span>
+          <strong style="font-size:13px;color:var(--primary);">${label}</strong>
+          ${sublabel}
+          <span style="font-size:10px;color:var(--muted);margin-left:4px;">${item.nOC} OC</span>
+          ${estadoBadges(item.aceptadas || 0, item.pendientes || 0)}
         </td>
         <td style="text-align:right;padding:9px 10px;white-space:nowrap;" class="neg-val">
           <strong style="font-size:14px;">${fmt(item.monto)}</strong>
@@ -4153,13 +4177,46 @@ function openOCInsumosPanel() {
       </tr>${detalles}`;
     }).join('');
 
-    html = `<table style="width:100%;border-collapse:collapse;">${thead}<tbody>
-      ${filas}
-      <tr style="background:#fef2f2;border-top:3px solid #fca5a5;font-weight:700;">
-        <td style="padding:9px 10px;font-size:12px;">TOTAL · ${ocMes.nOC} órdenes de compra</td>
-        <td style="text-align:right;padding:9px 10px;font-size:14px;" class="neg-val">${fmt(ocMes.total)}</td>
-      </tr>
-    </tbody></table>`;
+    // Tabla principal: sólo obras (no INT)
+    let mainTable = itemsObras.length > 0
+      ? `<table style="width:100%;border-collapse:collapse;">${thead}<tbody>
+          ${renderItems(itemsObras, '#fef2f2')}
+          <tr style="background:#fef2f2;border-top:3px solid #fca5a5;font-weight:700;">
+            <td style="padding:9px 10px;font-size:12px;">TOTAL OBRAS · ${nOCObras} órdenes de compra</td>
+            <td style="text-align:right;padding:9px 10px;font-size:14px;" class="neg-val">${fmt(totalObras)}</td>
+          </tr>
+        </tbody></table>`
+      : `<p class="nd" style="padding:16px;">Sin OC imputadas a obras para ${mesLabel}</p>`;
+
+    // Sección INT al final (colapsable)
+    let intSection = '';
+    if (itemsInt.length > 0) {
+      intSection = `
+        <div style="margin-top:20px;">
+          <button onclick="(function(b){var s=document.getElementById('oc-int-rows');var open=s.style.display!=='none';s.style.display=open?'none':'block';b.querySelector('.oc-arr').textContent=open?'▶':'▼';})(this)"
+            style="width:100%;text-align:left;background:#f1f5f9;border:1px solid var(--border);border-radius:8px;padding:10px 14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;font-family:inherit;">
+            <span>
+              <strong style="font-size:12px;color:var(--muted);">GASTOS INTERNOS (INT)</strong>
+              <span style="font-size:11px;color:var(--muted);margin-left:8px;">no imputados a obras · ${nOCInt} OC</span>
+            </span>
+            <span style="display:flex;align-items:center;gap:10px;">
+              <span style="font-size:13px;font-weight:700;color:var(--muted);">${fmt(totalInt)}</span>
+              <span class="oc-arr" style="font-size:11px;color:var(--muted);">▶</span>
+            </span>
+          </button>
+          <div id="oc-int-rows" style="display:none;">
+            <table style="width:100%;border-collapse:collapse;margin-top:4px;">${thead}<tbody>
+              ${renderItems(itemsInt, '#f8fafc')}
+              <tr style="background:#f1f5f9;border-top:2px solid var(--border);font-weight:700;">
+                <td style="padding:9px 10px;font-size:12px;color:var(--muted);">TOTAL INTERNOS · ${nOCInt} OC</td>
+                <td style="text-align:right;padding:9px 10px;font-size:14px;color:var(--muted);">${fmt(totalInt)}</td>
+              </tr>
+            </tbody></table>
+          </div>
+        </div>`;
+    }
+
+    html = mainTable + intSection;
   }
 
   content.innerHTML = `

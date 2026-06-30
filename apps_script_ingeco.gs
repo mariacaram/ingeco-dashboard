@@ -418,14 +418,15 @@ function leerOCInsumos() {
     Logger.log('OC Insumos — headers detectados: ' + headers.join(' | '));
 
     // Estructura nueva (Guillermo):
-    //  A Nº ORDEN · B PROVEEDOR · C FECHA · D DESCRIPCIÓN · E MONTO · F OBRA · G CÓDIGO OBRA · H ESTADO
-    const COL_FECHA = _findCol(headers, ['fecha']) ?? 2;
-    const COL_MONTO = _findCol(headers, ['monto', 'importe', 'total']) ?? 4;
-    const COL_PROV  = _findCol(headers, ['proveedor', 'prov']) ?? 1;
-    const COL_COD   = _findCol(headers, ['código obra', 'codigo obra', 'cod obra', 'cod_obra']) ?? 6;
-    const COL_OBRA  = _findCol(headers, ['obra']) ?? 5; // primer header que contiene "obra" → columna OBRA (nombre)
+    //  A Nº ORDEN · B PROVEEDOR · C FECHA · D DESCRIPCIÓN · E MONTO · F OBRA · G ESTADO · H CÓDIGO OBRA
+    const COL_FECHA  = _findCol(headers, ['fecha']) ?? 2;
+    const COL_MONTO  = _findCol(headers, ['monto', 'importe', 'total']) ?? 4;
+    const COL_PROV   = _findCol(headers, ['proveedor', 'prov']) ?? 1;
+    const COL_COD    = _findCol(headers, ['código obra', 'codigo obra', 'cod obra', 'cod_obra']) ?? 7;
+    const COL_OBRA   = _findCol(headers, ['obra']) ?? 5;
+    const COL_ESTADO = _findCol(headers, ['estado', 'status']) ?? 6;
 
-    Logger.log('OC Insumos — cols: fecha=' + COL_FECHA + ' monto=' + COL_MONTO + ' obra=' + COL_OBRA + ' cod=' + COL_COD + ' prov=' + COL_PROV);
+    Logger.log('OC Insumos — cols: fecha=' + COL_FECHA + ' monto=' + COL_MONTO + ' obra=' + COL_OBRA + ' cod=' + COL_COD + ' prov=' + COL_PROV + ' estado=' + COL_ESTADO);
 
     const acum = {};
 
@@ -441,17 +442,23 @@ function leerOCInsumos() {
       const obraNom = String(row[COL_OBRA] || '').trim();
       const codigo  = String(COL_COD !== null ? row[COL_COD] || '' : '').trim();
       const obra    = obraNom || codigo || 'Sin clasificar';
-      // Clave de agrupación: código de obra si existe (cruza con el Maestro), si no el nombre
+      // Clave de agrupación: código de obra (col H), si no el nombre
       const key     = codigo || obraNom || 'Sin clasificar';
 
       const proveedorRaw = String(row[COL_PROV] || '').trim();
       const proveedor = proveedorRaw || 'Sin especificar';
 
+      const estadoRaw  = String(row[COL_ESTADO] || '').trim();
+      const esAceptada = estadoRaw.toLowerCase().includes('acept');
+      const esPendiente = estadoRaw.toLowerCase().includes('pend');
+
       if (!acum[mes]) acum[mes] = { items: {}, total: 0, nOC: 0 };
-      if (!acum[mes].items[key]) acum[mes].items[key] = { obra: obra, codigo: codigo, monto: 0, nOC: 0, proveedores: {} };
-      if (!acum[mes].items[key].proveedores[proveedor]) acum[mes].items[key].proveedores[proveedor] = { monto: 0, nOC: 0 };
+      if (!acum[mes].items[key]) acum[mes].items[key] = { obra: obra, codigo: codigo, monto: 0, nOC: 0, aceptadas: 0, pendientes: 0, proveedores: {} };
+      if (!acum[mes].items[key].proveedores[proveedor]) acum[mes].items[key].proveedores[proveedor] = { monto: 0, nOC: 0, aceptadas: 0, pendientes: 0 };
       acum[mes].items[key].proveedores[proveedor].monto += monto;
       acum[mes].items[key].proveedores[proveedor].nOC  += 1;
+      if (esAceptada)  { acum[mes].items[key].proveedores[proveedor].aceptadas += 1; acum[mes].items[key].aceptadas += 1; }
+      if (esPendiente) { acum[mes].items[key].proveedores[proveedor].pendientes += 1; acum[mes].items[key].pendientes += 1; }
       acum[mes].items[key].monto += monto;
       acum[mes].items[key].nOC  += 1;
       acum[mes].total += monto;
@@ -471,8 +478,10 @@ function leerOCInsumos() {
             codigo: v.codigo || '',
             monto: Math.round(v.monto),
             nOC: v.nOC,
+            aceptadas: v.aceptadas,
+            pendientes: v.pendientes,
             proveedores: Object.entries(v.proveedores)
-              .map(([proveedor, pv]) => ({ proveedor, monto: Math.round(pv.monto), nOC: pv.nOC }))
+              .map(([proveedor, pv]) => ({ proveedor, monto: Math.round(pv.monto), nOC: pv.nOC, aceptadas: pv.aceptadas, pendientes: pv.pendientes }))
               .sort((a, b) => b.monto - a.monto)
           }))
           .sort((a, b) => b.monto - a.monto)
