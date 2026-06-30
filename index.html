@@ -1934,8 +1934,8 @@ function renderMargen() {
     const subEl = document.getElementById('kpi-margen-sub');
     if (totalACobrar != null && totalEgresosConAlq != null) {
       const margenVal = totalACobrar - totalEgresosConAlq;
-      const pct = ((margenVal / totalACobrar) * 100).toFixed(1);
-      kpiMg.textContent = (moEsEstimado ? '~' : '') + fmtM(margenVal) + ' (' + pct + '%)';
+      const pct = ((margenVal / totalACobrar) * 100).toFixed(1).replace('.', ',');
+      kpiMg.textContent = (moEsEstimado ? '~' : '') + fmtM(margenVal) + ' (' + pct + '% sobre A Cobrar)';
       kpiMg.className   = 'kpi-value ' + (margenVal >= 0 ? 'pos-val' : 'neg-val');
       if (subEl) {
         if (moEsEstimado) {
@@ -3043,7 +3043,7 @@ function _openTimelinePanel(fechaLabel, grp) {
 // Helper para mostrar millones/miles en el centro del donut
 function fmtM(n) {
   if (!n) return '$0';
-  if (Math.abs(n) >= 1e6) return (n < 0 ? '-' : '') + '$' + Math.round(Math.abs(n)/1e6).toLocaleString('es-AR') + 'M';
+  if (Math.abs(n) >= 1e6) return (n < 0 ? '-' : '') + '$' + (Math.abs(n)/1e6).toFixed(1).replace('.', ',') + 'M';
   return fmt(n);
 }
 
