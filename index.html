@@ -1867,7 +1867,9 @@ function renderMargen() {
   if (mesLabel) mesLabel.textContent = MES[mesActual];
 
   // Calcular totales de egresos para el mes seleccionado
-  const ocMes     = OC_INSUMOS[mesActual] ? OC_INSUMOS[mesActual].total : null;
+  // OC: solo obras no-INT (getOCPlanta filtra usando esInt del maestro)
+  const ocPlantaObj = getOCPlanta(mesActual);
+  const ocMes       = ocPlantaObj ? ocPlantaObj.total : null;
   const moArr     = getMOObra(mesActual);
   const moMensual = moArr.length > 0 ? moArr.reduce((s, r) => s + r.monto, 0) : null;
   // MO efectiva para el cálculo: real si existe, si no la estimada
@@ -1883,7 +1885,7 @@ function renderMargen() {
     if (ocMes != null) {
       kpiOC.textContent = fmt(ocMes);
       kpiOC.className   = 'kpi-value neg-val';
-      document.getElementById('kpi-oc-insumos-sub').textContent = 'Real — ' + (OC_INSUMOS[mesActual] ? OC_INSUMOS[mesActual].nOC + ' OC del mes' : 'del mes');
+      document.getElementById('kpi-oc-insumos-sub').textContent = 'Real — ' + (ocPlantaObj ? ocPlantaObj.nOC + ' OC del mes' : 'del mes');
     } else {
       kpiOC.textContent = 'sin dato';
       kpiOC.className   = 'kpi-value nd';
