@@ -2069,12 +2069,12 @@ function renderResumenObra() {
     });
   }
 
-  // Alquiler del mes: mapa por nombre de obra (lowercase) + display original, excluye INT
+  // Alquiler del mes: mapa por nombre de obra (lowercase) + display original.
+  // No se filtra por INT: el costo de alquiler aplica a todas las obras, incluso internas.
   const alqPorNombre = {};
   const alqDisplay = {};
   if (ALQUILER_EQUIPOS && ALQUILER_EQUIPOS[mesActual] && ALQUILER_EQUIPOS[mesActual].porObra) {
     ALQUILER_EQUIPOS[mesActual].porObra.forEach(item => {
-      if (esObraInt(item.obra)) return; // excluir obras internas
       const k = (item.obra || '').toLowerCase().trim();
       if (k) {
         alqPorNombre[k] = (alqPorNombre[k] || 0) + item.costoArs;
