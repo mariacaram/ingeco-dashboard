@@ -2145,6 +2145,7 @@ function renderResumenObra() {
     const nomEsc  = (o.nombre  || '').replace(/'/g, "\\'");
     const cellStyle = 'cursor:pointer;transition:background 0.15s;';
     const hoverTip  = 'title="Click para ver detalle"';
+    const hasData = aCobrar > 0 || insumos > 0 || alquiler > 0 || tnObraTotal > 0 || moObra != null;
     const html = `<tr>
       <td><code style="font-size:11px;background:#f1f5f9;padding:2px 5px;border-radius:3px;">${o.cod_obra}</code><br><small style="color:var(--muted);font-size:10px;">${o.nombre}</small></td>
       <td class="num" style="${cellStyle}" ${hoverTip} onclick="openDetalleCelda('acobrar','${codEsc2}','${nomEsc}')">${aCobrar > 0 ? `<strong class="pos-val" style="text-decoration:underline dotted;">${fmt(aCobrar)}</strong>` : '<span class="nd">—</span>'}</td>
@@ -2154,7 +2155,7 @@ function renderResumenObra() {
       <td class="num" style="${cellStyle}" ${hoverTip} onclick="openDetalleCelda('alquiler','${codEsc2}','${nomEsc}')">${alquiler > 0 ? `<span class="neg-val" style="text-decoration:underline dotted;">${fmt(alquiler)}</span>` : '<span class="nd">—</span>'}</td>
       <td class="num" style="background:${margen > 0 ? '#f0fdf4' : margen < 0 ? '#fef2f2' : 'transparent'};"><strong class="${mgColor}">${fmt(margen)}</strong></td>
     </tr>`;
-    return { html, margen };
+    return { html, margen, hasData };
   };
 
   const filas = obras.map(buildFilaObra).sort((a, b) => b.margen - a.margen).map(r => r.html);
@@ -2198,11 +2199,8 @@ function renderResumenObra() {
     const nk = (c.nombre || '').toLowerCase().trim();
     if ((ck && consumido.has(ck)) || (nk && consumido.has(nk))) return;
     const _lblOrigen = { 'OC': 'Con OC de insumos', 'Remito': 'Con salida en Remitos', 'Alquiler': 'Con alquiler de maquinaria' };
-    filasExtra.push(buildFilaObra({
-      cod_obra: c.cod || c.nombre,
-      nombre: c.nombre || _lblOrigen[c.origen] || 'Con gasto del mes',
-      aCobrar: 0,
-    }).html);
+    const r = buildFilaObra({ cod_obra: c.cod || c.nombre, nombre: c.nombre || _lblOrigen[c.origen] || 'Con gasto del mes', aCobrar: 0 });
+    if (r.hasData) filasExtra.push(r.html);
     if (ck) consumido.add(ck);
     if (nk) consumido.add(nk);
   });
