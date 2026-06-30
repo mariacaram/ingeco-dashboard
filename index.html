@@ -613,9 +613,7 @@
     <div class="section" style="flex:0 0 30%;min-width:0;padding:16px 20px;border-right:1px solid var(--border);">
       <div class="section-title">Distribución · <span class="cobros-mes-lbl">—</span></div>
       <div id="cobros-chart-wrap" style="display:none;">
-        <div style="display:flex;justify-content:center;">
-          <canvas id="cobros-donut" style="display:block;"></canvas>
-        </div>
+        <div id="cobros-donut"></div>
       </div>
       <div id="cobros-chart-empty" style="color:var(--muted);font-size:13px;padding:8px 0;">Sin datos para el mes seleccionado</div>
     </div>
@@ -2373,83 +2371,44 @@ function renderCobrosReal() {
 
     const total = segmentos.reduce((s, x) => s + x.valor, 0);
 
-    if (canvas) {
-      // Layout: donut a la izquierda + leyenda vertical a la derecha
-      const W   = Math.max(260, canvas.parentElement.offsetWidth || 420);
-      const H   = 210;
-      const dpr = window.devicePixelRatio || 1;
-      canvas.style.width  = W + 'px';
-      canvas.style.height = H + 'px';
-      canvas.width  = Math.round(W * dpr);
-      canvas.height = Math.round(H * dpr);
-      const ctx = canvas.getContext('2d');
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.clearRect(0, 0, W, H);
+    const donutEl = document.getElementById('cobros-donut');
+    if (donutEl) {
+      const CX = 80, CY = 80, R = 58, SW = 26, SIZE = 160;
+      const C = 2 * Math.PI * R;
+      let cumPct = 0;
+      const arcs = segmentos.map(seg => {
+        const pct    = seg.valor / total;
+        const arcLen = pct * C;
+        const deg    = cumPct * 360 - 90;
+        cumPct += pct;
+        return `<circle cx="${CX}" cy="${CY}" r="${R}" fill="none"
+          stroke="${seg.color}" stroke-width="${SW}"
+          stroke-dasharray="${arcLen} ${C - arcLen}"
+          stroke-dashoffset="0"
+          transform="rotate(${deg} ${CX} ${CY})"
+          stroke-linecap="butt"/>`;
+      }).join('');
 
-      // Donut: radio fijo, posicionado a la izquierda
-      const r = 72, ri = 44;
-      const cx = r + 10, cy = H / 2;
+      const svg = `<svg width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}" xmlns="http://www.w3.org/2000/svg" style="display:block;flex-shrink:0;">
+        <circle cx="${CX}" cy="${CY}" r="${R}" fill="none" stroke="#f1f5f9" stroke-width="${SW}"/>
+        ${arcs}
+        <text x="${CX}" y="${CY - 8}" text-anchor="middle" font-size="13" font-weight="700" fill="#1e293b" font-family="inherit">${fmtM(total)}</text>
+        <text x="${CX}" y="${CY + 9}" text-anchor="middle" font-size="9" fill="#94a3b8" font-family="inherit">total</text>
+      </svg>`;
 
-      let angle = -Math.PI / 2;
-      const slicesInfo = [];
-      segmentos.forEach(seg => {
-        const slice = (seg.valor / total) * Math.PI * 2;
-        ctx.beginPath();
-        ctx.moveTo(cx, cy);
-        ctx.arc(cx, cy, r, angle, angle + slice);
-        ctx.closePath();
-        ctx.fillStyle = seg.color;
-        ctx.fill();
-        slicesInfo.push({ seg, pct: Math.round(seg.valor / total * 100) });
-        angle += slice;
-      });
-
-      // Hueco
-      ctx.beginPath();
-      ctx.arc(cx, cy, ri, 0, Math.PI * 2);
-      ctx.fillStyle = '#fff';
-      ctx.fill();
-
-      // Total en el centro del donut
-      ctx.fillStyle = '#1e293b';
-      ctx.font = 'bold 13px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(fmtM(total), cx, cy - 7);
-      ctx.font = '9px sans-serif';
-      ctx.fillStyle = '#64748b';
-      ctx.fillText('total', cx, cy + 8);
-
-      // Leyenda vertical a la derecha del donut
-      const legX  = cx + r + 18;
-      const rowH  = (H - 8) / slicesInfo.length;
-
-      slicesInfo.forEach(({ seg, pct }, i) => {
-        const y = 4 + i * rowH;
-
-        // Cuadrado de color
-        ctx.fillStyle = seg.color;
-        ctx.fillRect(legX, y + 3, 9, 9);
-
-        // Porcentaje en color del segmento
-        ctx.fillStyle = seg.color;
-        ctx.font = 'bold 12px sans-serif';
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'top';
-        ctx.fillText(`${pct}%`, legX + 14, y + 1);
-
-        // Etiqueta (sin emoji) en gris oscuro, con gap después del %
-        ctx.fillStyle = '#334155';
-        ctx.font = '11px sans-serif';
-        const pctW = ctx.measureText(`${pct}%`).width;
+      const leyenda = segmentos.map(seg => {
+        const pct = (seg.valor / total * 100).toFixed(1).replace('.', ',');
         const label = seg.short.replace(/^\S+\s/, '');
-        ctx.fillText(label, legX + 14 + pctW + 6, y + 2);
+        return `<div style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);">
+          <div style="width:10px;height:10px;border-radius:2px;background:${seg.color};flex-shrink:0;margin-top:3px;"></div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:12px;font-weight:700;color:${seg.color};">${pct}% <span style="color:var(--text);font-weight:600;">${label}</span></div>
+            <div style="font-size:10px;color:var(--muted);">${fmtM(seg.valor)} · ${seg.n} ítem${seg.n !== 1 ? 's' : ''}</div>
+          </div>
+        </div>`;
+      }).join('');
 
-        // Monto y count en muted
-        ctx.fillStyle = '#94a3b8';
-        ctx.font = '10px sans-serif';
-        ctx.fillText(`${fmt(seg.valor)} · ${seg.n} ítem${seg.n !== 1 ? 's' : ''}`, legX + 14, y + 16);
-      });
+      donutEl.innerHTML = `<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">${svg}<div style="flex:1;min-width:120px;">${leyenda}</div></div>`;
     }
   } else {
     if (chartWrap)  chartWrap.style.display  = 'none';
