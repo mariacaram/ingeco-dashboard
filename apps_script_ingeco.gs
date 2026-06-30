@@ -405,32 +405,34 @@ function leerOCInsumos() {
     if (rows.length < 2) return null;
 
     // Maestro de obras → set de obras INTERNAS (CLIENTE == "INT" en col D).
-    // El cruce es por NOMBRE DE OBRA (col B del maestro = OBRA GENERAL / col H de las órdenes).
+    // Abre el archivo separado del maestro directamente por su ID.
     const intSet = {};
     try {
-      let maestro = null;
-      ss.getSheets().forEach(sh => {
-        if (!maestro && sh.getName().toLowerCase().includes('maestro')) maestro = sh;
+      const ssMaestro = SpreadsheetApp.openById(FILE_IDS.maestroObras);
+      // La primera pestaña tiene la tabla con CODIGO|NOMBRE DE OBRA|N° DE OBRA|CLIENTE|...
+      let sheetMaestro = null;
+      ssMaestro.getSheets().forEach(sh => {
+        if (!sheetMaestro) {
+          const n = sh.getName().toLowerCase();
+          if (n.includes('maestro') || n.includes('obra')) sheetMaestro = sh;
+        }
       });
-      if (maestro) {
-        const mrows = maestro.getDataRange().getValues();
-        let mh = 0;
-        for (let i = 0; i < Math.min(5, mrows.length); i++) {
-          const s = mrows[i].map(c => String(c).toLowerCase()).join('|');
-          if (s.includes('nombre de obra') || s.includes('cliente')) { mh = i; break; }
-        }
-        const mheaders = mrows[mh].map(h => String(h).toLowerCase().trim());
-        const cNom = _findCol(mheaders, ['nombre de obra', 'nombre']) ?? 1;
-        const cCli = _findCol(mheaders, ['cliente']) ?? 3;
-        for (let i = mh + 1; i < mrows.length; i++) {
-          const nom = String(mrows[i][cNom] || '').trim();
-          const cli = String(mrows[i][cCli] || '').trim().toUpperCase();
-          if (nom && cli === 'INT') intSet[_normObra(nom)] = true;
-        }
-        Logger.log('OC Insumos — obras INT desde maestro: ' + Object.keys(intSet).length);
-      } else {
-        Logger.log('OC Insumos — no se encontró pestaña Maestro de obras');
+      if (!sheetMaestro) sheetMaestro = ssMaestro.getSheets()[0];
+      const mrows = sheetMaestro.getDataRange().getValues();
+      let mh = 0;
+      for (let i = 0; i < Math.min(5, mrows.length); i++) {
+        const s = mrows[i].map(c => String(c).toLowerCase()).join('|');
+        if (s.includes('nombre de obra') || s.includes('cliente')) { mh = i; break; }
       }
+      const mheaders = mrows[mh].map(h => String(h).toLowerCase().trim());
+      const cNom = _findCol(mheaders, ['nombre de obra', 'nombre']) ?? 1;
+      const cCli = _findCol(mheaders, ['cliente']) ?? 3;
+      for (let i = mh + 1; i < mrows.length; i++) {
+        const nom = String(mrows[i][cNom] || '').trim();
+        const cli = String(mrows[i][cCli] || '').trim().toUpperCase();
+        if (nom && cli === 'INT') intSet[nom.toLowerCase()] = true;
+      }
+      Logger.log('OC Insumos — obras INT desde maestro: ' + JSON.stringify(Object.keys(intSet)));
     } catch (e) {
       Logger.log('OC Insumos — error leyendo maestro: ' + e);
     }
@@ -510,7 +512,7 @@ function leerOCInsumos() {
             monto: Math.round(v.monto),
             nOC: v.nOC,
             // Interno si la OBRA GENERAL figura como CLIENTE=INT en el maestro
-            esInt: !!intSet[_normObra(v.codigo || key)],
+            esInt: !!intSet[(v.codigo || key).toLowerCase()],
             aceptadas: v.aceptadas,
             pendientes: v.pendientes,
             proveedores: Object.entries(v.proveedores)
