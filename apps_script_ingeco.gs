@@ -1045,7 +1045,7 @@ function leerAlquilerEquipos() {
     if (Object.keys(precios).length === 0) return null;
 
     // 2. Leer partes diarios — hoja única "PARTES DIARIOS"
-    // Col A(0)=Fecha, B(1)=Equipo, C(2)=Código equipo, F(5)=Obra, I(8)=Total horas, Q(16)=Código obra
+    // Col A(0)=Fecha B(1)=Equipo C(2)=Código equipo F(5)=Obra Particular I(8)=Total horas P(15)=Obra General
     const ssUso  = SpreadsheetApp.openById(FILE_IDS.usageEquipos);
     // Buscar la hoja de partes diarios por nombre (flexible) o por contenido
     let sheetPD = null;
@@ -1059,9 +1059,9 @@ function leerAlquilerEquipos() {
 
     const COL_FECHA_PD    = 0;  // A: Fecha
     const COL_COD_EQ      = 2;  // C: Código de equipo
-    const COL_OBRA_PD     = 5;  // F: Nombre de obra
+    const COL_OBRA_PD     = 5;  // F: Obra Particular (fallback)
     const COL_HORAS_PD    = 8;  // I: Total de horas
-    const COL_COD_OBRA_PD = 17; // R: Código de obra (preferido para agrupar — confirmado por usuario)
+    const COL_COD_OBRA_PD = 15; // P: Obra General (preferido para agrupar)
 
     let hdrPD = 0;
     for (let i = 0; i < Math.min(5, rowsPD.length); i++) {
