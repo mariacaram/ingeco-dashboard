@@ -2083,14 +2083,17 @@ function renderResumenObra() {
     });
   }
 
-  // MO total mensual — solo clasificacion "Obra"
-  const moArr2  = getMOObra(mesActual);
-  const moTotal = moArr2.length > 0 ? moArr2.reduce((s, r) => s + r.monto, 0) : null;
+  // MO total mensual — usa dato real si existe, estimado si no
+  const moArr2    = getMOObra(mesActual);
+  const moReal    = moArr2.length > 0 ? moArr2.reduce((s, r) => s + r.monto, 0) : null;
+  const moEstim   = moReal == null ? getMOEstimado(mesActual) : null;
+  const moTotal   = moReal ?? moEstim; // null si no hay dato ni estimado
+  const moEsEstim = moReal == null && moEstim != null;
 
   // Tn caliente/frío por obra desde remitos — base para prorratear MO y costo asfalto
   const remitosMes = REMITOS_ASFALTO[mesActual];
   const tnPorObraKey = {}, tnFrioPorObraKey = {}, tnDisplayName = {};
-  let tnCalTotal = 0;
+  let tnTotalGlobal = 0; // caliente + frío — denominador del prorrateo de MO
   if (remitosMes && remitosMes.porObra) {
     Object.entries(remitosMes.porObra).forEach(([obra, v]) => {
       const k = obra.toLowerCase().trim();
@@ -2098,7 +2101,7 @@ function renderResumenObra() {
       tnPorObraKey[k]     = (tnPorObraKey[k]     || 0) + (v.caliente || 0);
       tnFrioPorObraKey[k] = (tnFrioPorObraKey[k] || 0) + (v.frio     || 0);
       if (!tnDisplayName[k]) tnDisplayName[k] = obra.trim();
-      tnCalTotal += (v.caliente || 0);
+      tnTotalGlobal += (v.caliente || 0) + (v.frio || 0);
     });
   }
   const precioMesResumen = PRECIO_ASFALTO[mesActual] || null;
@@ -2114,8 +2117,9 @@ function renderResumenObra() {
     const alquiler = alqPorNombre[ck] || alqPorNombre[nk] || 0;
     const tnObra     = tnPorObraKey[ck]     || tnPorObraKey[nk]     || 0;
     const tnFrioObra = tnFrioPorObraKey[ck] || tnFrioPorObraKey[nk] || 0;
-    const moObra = (moTotal != null && tnCalTotal > 0 && tnObra > 0)
-      ? Math.round(moTotal * (tnObra / tnCalTotal)) : null;
+    const tnObraTotal = tnObra + tnFrioObra;
+    const moObra = (moTotal != null && tnTotalGlobal > 0 && tnObraTotal > 0)
+      ? Math.round(moTotal * (tnObraTotal / tnTotalGlobal)) : null;
     const costoAsfObra = (precioMesResumen != null && (tnObra > 0 || tnFrioObra > 0))
       ? Math.round((tnObra * (precioMesResumen.caliente || 0)) + (tnFrioObra * (precioMesResumen.frio || 0)))
       : null;
@@ -2134,7 +2138,7 @@ function renderResumenObra() {
       ? `<span style="font-size:12px;" title="${tnLabel}${costoAsfObra != null ? ' → ' + fmt(costoAsfObra) : ''}">${tnLabel}${costoAsfObra != null ? '<br><small class="neg-val" style="font-size:10px;">' + fmt(costoAsfObra) + '</small>' : ''}</span>`
       : '<span class="nd">—</span>';
     const moCell = moObra != null
-      ? `<span class="neg-val" title="MO total × ${fmtTn(tnObra)}tn / ${fmtTn(tnCalTotal)}tn total">${fmt(moObra)}</span>`
+      ? `<span class="neg-val" title="${moEsEstim ? 'MO estimada' : 'MO real'} × ${fmtTn(tnObraTotal)}tn / ${fmtTn(tnTotalGlobal)}tn total">${moEsEstim ? '~' : ''}${fmt(moObra)}</span>`
       : '<span class="nd" title="Sin dato MO o sin tn">—</span>';
     const codEsc2 = (o.cod_obra || '').replace(/'/g, "\\'");
     const nomEsc  = (o.nombre  || '').replace(/'/g, "\\'");
@@ -2210,7 +2214,7 @@ function renderResumenObra() {
 
   // Fila total
   const moCellTotal = moTotal != null
-    ? `<span class="neg-val">${fmt(moTotal)}</span>`
+    ? `<span class="neg-val" title="${moEsEstim ? 'Estimado — MO real no cargada aún' : 'MO real del mes'}">${moEsEstim ? '~' : ''}${fmt(moTotal)}</span>`
     : '<span class="nd">sin dato</span>';
   const tnTotalCell = sumaTn > 0
     ? `<span style="font-size:12px;color:var(--muted);">${fmtTn(sumaTn)} tn</span>`
