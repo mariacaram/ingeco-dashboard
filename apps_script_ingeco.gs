@@ -1330,25 +1330,29 @@ function leerRemitosAsfalto() {
       let hdrIdx = -1, iCant = -1, iUD = -1, iDesc = -1, iMes = -1, iAnio = -1, iFecha = -1, iObra = -1;
       for (let i = 0; i < Math.min(20, rows.length); i++) {
         const cells = rows[i].map(c => String(c).toUpperCase().trim());
-        // Acepta CANT.+U.D. (formato clásico) O DESCRIPCION+MES (formato nuevo Roberto)
-        const iC = cells.findIndex(c => c === 'CANT.' || c === 'CANT' || c === 'CANTIDAD' || c === 'TOTAL');
+        const iC = cells.findIndex(c => c === 'CANT.' || c === 'CANT' || c === 'CANTIDAD' || c === 'TOTAL' || c === 'TN' || c === 'TONELADAS');
         const iU = cells.findIndex(c => c === 'U.D.' || c === 'U.M.' || c === 'UD' || c === 'UI' || c === 'U.I.' || c === 'UNIDAD' || c === 'I');
-        const iDt = cells.findIndex(c => c === 'DESCRIPCION' || c === 'DESCRIPCIÓN');
+        const iDt = cells.findIndex(c => c === 'DESCRIPCION' || c === 'DESCRIPCIÓN' || c === 'DESCRIPCION' || c === 'PRODUCTO' || c === 'ARTICULO' || c === 'ARTÍCULO' || c === 'MATERIAL' || c === 'ITEM');
         const iMt = cells.findIndex(c => c === 'MES');
-        // Header válido si: CANT+unidad (clásico) · DESCRIPCION+MES (Roberto) · CANT+DESCRIPCION (planilla nueva con FECHA)
-        if ((iC >= 0 && iU >= 0) || (iDt >= 0 && iMt >= 0) || (iC >= 0 && iDt >= 0)) {
+        const iOb = cells.findIndex(c => c === 'OBRA' || c === 'DESTINO' || c === 'CLIENTE');
+        const iFe = cells.findIndex(c => c === 'FECHA');
+        if ((iC >= 0 && iU >= 0) || (iDt >= 0 && iMt >= 0) || (iC >= 0 && iDt >= 0) || (iDt >= 0 && iOb >= 0) || (iC >= 0 && iOb >= 0)) {
           hdrIdx = i;
-          iCant  = iC >= 0 ? iC : (iDt >= 0 ? iDt - 2 : -1); // CANT suele estar 2 cols antes de DESCRIPCION
-          iUD    = iU >= 0 ? iU : (iDt >= 0 ? iDt - 1 : -1); // U.D. suele estar 1 col antes
-          iDesc  = iDt >= 0 ? iDt : cells.findIndex(c => c === 'DESCRIPCION' || c === 'DESCRIPCIÓN');
+          iCant  = iC >= 0 ? iC : (iDt >= 0 ? iDt - 2 : -1);
+          iUD    = iU >= 0 ? iU : -1;
+          iDesc  = iDt >= 0 ? iDt : -1;
           iMes   = iMt >= 0 ? iMt : cells.findIndex(c => c === 'MES');
           iAnio  = cells.findIndex(c => c === 'AÑO' || c === 'ANO');
-          iFecha = cells.findIndex(c => c === 'FECHA');
-          iObra  = cells.findIndex(c => c === 'OBRA');
+          iFecha = iFe >= 0 ? iFe : cells.findIndex(c => c === 'FECHA');
+          iObra  = iOb >= 0 ? iOb : cells.findIndex(c => c === 'OBRA');
           break;
         }
       }
-      if (hdrIdx < 0) continue;
+      // Fallback para planilla General (Roberto): col A=Fecha, B=TN, E=Descripción, K=Obra
+      if (hdrIdx < 0) {
+        Logger.log('Remitos [' + sheet.getName() + ']: sin header reconocido — aplicando fallback B=TN, E=Desc, K=Obra');
+        hdrIdx = 0; iCant = 1; iUD = -1; iDesc = 4; iMes = -1; iAnio = -1; iFecha = 0; iObra = 10;
+      }
       Logger.log('Remitos [' + sheet.getName() + ']: hdr=' + hdrIdx + ' iCant=' + iCant + ' iUD=' + iUD + ' iDesc=' + iDesc + ' iMes=' + iMes + ' iAnio=' + iAnio + ' iObra=' + iObra);
 
       for (let i = hdrIdx + 1; i < rows.length; i++) {
