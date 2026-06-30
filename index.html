@@ -5117,9 +5117,13 @@ function renderEgresosChart() {
   if (!container) return;
   if (mesLbl) mesLbl.textContent = MES[mesActual] || mesActual;
 
-  const ocMes  = OC_INSUMOS[mesActual]       ? OC_INSUMOS[mesActual].total         : null;
+  const ocPlantaEgr = getOCPlanta(mesActual);
+  const ocMes  = ocPlantaEgr ? ocPlantaEgr.total : null; // solo obras no-INT, igual que la tarjeta
   const moArr  = getMOObra(mesActual);
-  const moMes  = moArr.length > 0            ? moArr.reduce((s,r) => s+r.monto, 0) : null;
+  const moReal = moArr.length > 0 ? moArr.reduce((s,r) => s+r.monto, 0) : null;
+  const moEstimEgr = moReal == null ? getMOEstimado(mesActual) : null;
+  const moMes  = moReal ?? (moEstimEgr ? moEstimEgr.monto : null);
+  const moEsEstimEgr = moReal == null && moMes != null;
   const alqMes = ALQUILER_EQUIPOS[mesActual] ? ALQUILER_EQUIPOS[mesActual].totalArs : null;
 
   if (ocMes == null && moMes == null && alqMes == null) {
@@ -5130,7 +5134,7 @@ function renderEgresosChart() {
   const total = (ocMes || 0) + (moMes || 0) + (alqMes || 0);
   const items = [
     { label: 'OC Insumos',       valor: ocMes  || 0, color: '#f59e0b' },
-    { label: 'Mano de Obra de Obras', valor: moMes  || 0, color: '#ef4444' },
+    { label: (moEsEstimEgr ? '~' : '') + 'Mano de Obra de Obras', valor: moMes  || 0, color: '#ef4444' },
     { label: 'Alquiler Equipos', valor: alqMes || 0, color: '#3b82f6' },
   ].filter(i => i.valor > 0);
 
