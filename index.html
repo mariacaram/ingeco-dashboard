@@ -2125,7 +2125,7 @@ function renderResumenObra() {
     sumaInsumos += insumos;
     sumaAlquiler += alquiler;
     if (moObra) sumaMO += moObra;
-    sumaTn += tnObra;
+    sumaTn += tnObra + tnFrioObra;
     const _tnPartes = [];
     if (tnObra > 0)     _tnPartes.push(fmtTn(tnObra) + ' tn');
     if (tnFrioObra > 0) _tnPartes.push(fmtTn(tnFrioObra) + ' frío');
