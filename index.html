@@ -4192,12 +4192,15 @@ function openOCInsumosPanel() {
     let intSection = '';
     if (itemsInt.length > 0) {
       intSection = `
-        <div style="margin-top:20px;">
+        <div style="margin-top:16px;padding:10px 12px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;font-size:11px;color:var(--muted);line-height:1.5;">
+          ℹ️ Hay <strong>${nOCInt} OC adicionales</strong> por <strong>${fmt(totalInt)}</strong> con código <strong>INT</strong> que corresponden a gastos internos de la empresa y <strong>no se imputan a obras</strong>. No están incluidas en el total de arriba.
+        </div>
+        <div style="margin-top:10px;">
           <button onclick="(function(b){var s=document.getElementById('oc-int-rows');var open=s.style.display!=='none';s.style.display=open?'none':'block';b.querySelector('.oc-arr').textContent=open?'▶':'▼';})(this)"
             style="width:100%;text-align:left;background:#f1f5f9;border:1px solid var(--border);border-radius:8px;padding:10px 14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;font-family:inherit;">
             <span>
-              <strong style="font-size:12px;color:var(--muted);">GASTOS INTERNOS (INT)</strong>
-              <span style="font-size:11px;color:var(--muted);margin-left:8px;">no imputados a obras · ${nOCInt} OC</span>
+              <strong style="font-size:12px;color:var(--muted);">VER GASTOS INTERNOS (INT)</strong>
+              <span style="font-size:11px;color:var(--muted);margin-left:8px;">${nOCInt} OC · no imputadas a obras</span>
             </span>
             <span style="display:flex;align-items:center;gap:10px;">
               <span style="font-size:13px;font-weight:700;color:var(--muted);">${fmt(totalInt)}</span>
@@ -4533,12 +4536,18 @@ function openOCPanel(obraName) {
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwXe_MLjncMNA4-v8GLfmvhQFZG0cuMeXzSHIBccBIUUTTpXEvJuLhek-mC_S4twVCu9A/exec';
 
 function getOCPlanta(mes) {
-  // OC Insumos Planta = TODO el archivo de OC de Guillermo del mes (sin filtrar)
   const ocMes = OC_INSUMOS[mes || mesActual];
   if (!ocMes || !ocMes.items || ocMes.items.length === 0) return null;
+  // Solo suma ítems que NO son internos (INT): los gastos INT no se imputan a obras
+  const esInt = it => (it.codigo || '').toUpperCase().startsWith('INT');
+  const obras = ocMes.items.filter(i => !esInt(i));
+  if (obras.length === 0) return null;
+  const totalInt = ocMes.items.filter(i => esInt(i)).reduce((s, i) => s + i.monto, 0);
+  const nOCInt   = ocMes.items.filter(i => esInt(i)).reduce((s, i) => s + i.nOC,   0);
   return {
-    total: ocMes.total != null ? ocMes.total : ocMes.items.reduce((s, i) => s + i.monto, 0),
-    nOC:   ocMes.nOC   != null ? ocMes.nOC   : ocMes.items.reduce((s, i) => s + i.nOC,   0),
+    total:    obras.reduce((s, i) => s + i.monto, 0),
+    nOC:      obras.reduce((s, i) => s + i.nOC,   0),
+    totalInt, nOCInt,
   };
 }
 
