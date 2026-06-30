@@ -1314,8 +1314,13 @@ function leerRepuestosEquipos() {
 function leerRemitosAsfalto() {
   try {
     const ss     = SpreadsheetApp.openById(FILE_IDS.remitosAsfalto);
-    // Solo la hoja "General" (las demás —Bateas, Gasoil, etc.— no son remitos de asfalto)
-    const sheetGeneral = ss.getSheetByName('General') || ss.getSheetByName('GENERAL');
+    // Hoja de remitos: "REMITOS" (nombre actual) o "General" (nombre viejo).
+    // Se evita "Maestro de obras" y similares.
+    let sheetGeneral = ss.getSheetByName('REMITOS') || ss.getSheetByName('Remitos')
+                    || ss.getSheetByName('General') || ss.getSheetByName('GENERAL');
+    if (!sheetGeneral) {
+      sheetGeneral = ss.getSheets().find(sh => !/maestro/i.test(sh.getName())) || ss.getSheets()[0];
+    }
     const sheets = sheetGeneral ? [sheetGeneral] : [];
     const TZ = 'America/Argentina/Buenos_Aires';
     const MES_MAP = { 1:'ene', 2:'feb', 3:'mar', 4:'abr', 5:'may', 6:'jun',
@@ -1334,7 +1339,9 @@ function leerRemitosAsfalto() {
         const iU = cells.findIndex(c => c === 'U.D.' || c === 'U.M.' || c === 'UD' || c === 'UI' || c === 'U.I.' || c === 'UNIDAD' || c === 'I');
         const iDt = cells.findIndex(c => c === 'DESCRIPCION' || c === 'DESCRIPCIÓN' || c === 'DESCRIPCION' || c === 'PRODUCTO' || c === 'ARTICULO' || c === 'ARTÍCULO' || c === 'MATERIAL' || c === 'ITEM');
         const iMt = cells.findIndex(c => c === 'MES');
-        const iOb = cells.findIndex(c => c === 'OBRA' || c === 'DESTINO' || c === 'CLIENTE');
+        // Obra: preferir OBRA GENERAL (col K). Fallback a OBRA / OBRA PARTICULAR / DESTINO.
+        let iOb = cells.findIndex(c => c === 'OBRA GENERAL');
+        if (iOb < 0) iOb = cells.findIndex(c => c === 'OBRA' || c === 'OBRA PARTICULAR' || c === 'DESTINO' || c === 'CLIENTE');
         const iFe = cells.findIndex(c => c === 'FECHA');
         if ((iC >= 0 && iU >= 0) || (iDt >= 0 && iMt >= 0) || (iC >= 0 && iDt >= 0) || (iDt >= 0 && iOb >= 0) || (iC >= 0 && iOb >= 0)) {
           hdrIdx = i;
@@ -1344,7 +1351,7 @@ function leerRemitosAsfalto() {
           iMes   = iMt >= 0 ? iMt : cells.findIndex(c => c === 'MES');
           iAnio  = cells.findIndex(c => c === 'AÑO' || c === 'ANO');
           iFecha = iFe >= 0 ? iFe : cells.findIndex(c => c === 'FECHA');
-          iObra  = iOb >= 0 ? iOb : cells.findIndex(c => c === 'OBRA');
+          iObra  = iOb;
           break;
         }
       }
@@ -1400,10 +1407,10 @@ function leerRemitosAsfalto() {
         // ── Registrar la obra de CUALQUIER salida (piedra, escombro, base, asfalto, etc.) ──
         if (obra) resultado[mesKey].obrasSalida[obra] = (resultado[mesKey].obrasSalida[obra] || 0) + 1;
 
-        // ── De acá en adelante: solo asfalto en TN (para tn y prorrateo de MO) ──
+        // ── De acá en adelante: solo asfalto en toneladas (para tn y prorrateo de MO) ──
         if (iUD >= 0) {
           const ud = String(row[iUD] || '').toUpperCase().trim();
-          if (ud !== 'TN') continue;
+          if (ud !== 'TN' && ud !== 'TON' && ud !== 'TONS' && ud !== 'TM' && ud !== 'TONELADAS') continue;
         }
         const desc = String(iDesc >= 0 ? row[iDesc] || '' : '').toUpperCase().trim();
         if (!desc.includes('ASFALTO')) continue;
