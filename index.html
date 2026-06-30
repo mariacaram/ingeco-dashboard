@@ -558,6 +558,9 @@
       <div class="nota-fuente" style="margin-top:6px;">⚖️ <strong>MO prorrateada:</strong> MO total Obras (TANGO) × (tn caliente de la obra / tn caliente total del mes) — fuente tn: Remitos Oficiales columna OBRA</div>
     </div>
     <div class="nota-fuente">A Cobrar: Fernando Solís · Insumos: OC Guillermo Konicek · Alquiler: Partes diarios Adrián Caram · MO: TANGO (total mensual estimado, no atribuible por obra)</div>
+
+    <!-- Gráficos de barras por categoría -->
+    <div id="charts-por-obra" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:20px;"></div>
   </div>
 
   <div id="alert-periodos-pendientes" style="display:none;"></div>
@@ -2109,6 +2112,9 @@ function renderResumenObra() {
 
   let sumaCobrar = 0, sumaInsumos = 0, sumaAlquiler = 0, sumaMO = 0, sumaTn = 0;
 
+  // Datos para los gráficos de barras por categoría
+  const chartData = { insumos: [], mo: [], alquiler: [], tn: [] };
+
   // Helper: renderiza una fila de obra y acumula en los totales
   const buildFilaObra = o => {
     const aCobrar = o.aCobrar ?? o.generado ?? 0;
@@ -2146,6 +2152,11 @@ function renderResumenObra() {
     const cellStyle = 'cursor:pointer;transition:background 0.15s;';
     const hoverTip  = 'title="Click para ver detalle"';
     const hasData = aCobrar > 0 || insumos > 0 || alquiler > 0 || tnObraTotal > 0 || moObra != null;
+    const label = (o.cod_obra || o.nombre || '').trim();
+    if (insumos  > 0) chartData.insumos.push({ label, valor: insumos });
+    if (moObra   > 0) chartData.mo.push({ label, valor: moObra, estim: moEsEstim });
+    if (alquiler > 0) chartData.alquiler.push({ label, valor: alquiler });
+    if (tnObraTotal > 0) chartData.tn.push({ label, caliente: tnObra, frio: tnFrioObra, total: tnObraTotal });
     const html = `<tr>
       <td><code style="font-size:11px;background:#f1f5f9;padding:2px 5px;border-radius:3px;">${o.cod_obra}</code><br><small style="color:var(--muted);font-size:10px;">${o.nombre}</small></td>
       <td class="num" style="${cellStyle}" ${hoverTip} onclick="openDetalleCelda('acobrar','${codEsc2}','${nomEsc}')">${aCobrar > 0 ? `<strong class="pos-val" style="text-decoration:underline dotted;">${fmt(aCobrar)}</strong>` : '<span class="nd">—</span>'}</td>
@@ -2234,6 +2245,78 @@ function renderResumenObra() {
   </tr>`);
 
   tbody.innerHTML = filas.join('');
+  renderChartsObra(chartData);
+}
+
+function renderChartsObra(data) {
+  const container = document.getElementById('charts-por-obra');
+  if (!container) return;
+
+  const makeBarChart = (title, items, color, fmtVal, subtitle) => {
+    if (!items || items.length === 0) return '';
+    const sorted = [...items].sort((a, b) => b.valor - a.valor);
+    const max = sorted[0].valor;
+    const bars = sorted.map(item => {
+      const pct = Math.round((item.valor / max) * 100);
+      const prefix = item.estim ? '~' : '';
+      return `
+        <div style="display:grid;grid-template-columns:1fr auto;align-items:center;gap:8px;margin-bottom:6px;">
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${item.label}">${item.label}</div>
+            <div style="height:8px;border-radius:4px;background:#f1f5f9;overflow:hidden;">
+              <div style="height:100%;width:${pct}%;background:${color};border-radius:4px;transition:width .3s;"></div>
+            </div>
+          </div>
+          <div style="font-size:12px;font-weight:700;color:${color};white-space:nowrap;">${prefix}${fmtVal(item.valor)}</div>
+        </div>`;
+    }).join('');
+    return `
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;">
+        <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px;">${title}</div>
+        ${subtitle ? `<div style="font-size:11px;color:var(--muted);margin-bottom:10px;">${subtitle}</div>` : '<div style="margin-bottom:10px;"></div>'}
+        ${bars}
+      </div>`;
+  };
+
+  const makeTnChart = items => {
+    if (!items || items.length === 0) return '';
+    const sorted = [...items].sort((a, b) => b.total - a.total);
+    const max = sorted[0].total;
+    const bars = sorted.map(item => {
+      const pctCal = Math.round((item.caliente / max) * 100);
+      const pctFrio = Math.round((item.frio / max) * 100);
+      const parts = [];
+      if (item.caliente > 0) parts.push(`${fmtTn(item.caliente)} tn cal.`);
+      if (item.frio > 0) parts.push(`${fmtTn(item.frio)} tn frío`);
+      return `
+        <div style="display:grid;grid-template-columns:1fr auto;align-items:center;gap:8px;margin-bottom:6px;">
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${item.label}">${item.label}</div>
+            <div style="height:8px;border-radius:4px;background:#f1f5f9;overflow:hidden;display:flex;">
+              <div style="height:100%;width:${pctCal}%;background:#f59e0b;border-radius:4px 0 0 4px;"></div>
+              <div style="height:100%;width:${pctFrio}%;background:#60a5fa;border-radius:0 4px 4px 0;"></div>
+            </div>
+          </div>
+          <div style="font-size:12px;font-weight:700;color:var(--muted);white-space:nowrap;">${parts.join(' + ')}</div>
+        </div>`;
+    }).join('');
+    return `
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;">
+        <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px;">Asfalto (tn)</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">
+          <span style="display:inline-block;width:10px;height:10px;background:#f59e0b;border-radius:2px;margin-right:4px;"></span>Caliente
+          <span style="display:inline-block;width:10px;height:10px;background:#60a5fa;border-radius:2px;margin:0 4px 0 10px;"></span>Frío
+        </div>
+        ${bars}
+      </div>`;
+  };
+
+  container.innerHTML = [
+    makeBarChart('OC Insumos', data.insumos, '#f59e0b', fmtM),
+    makeBarChart('MO Prorrateada', data.mo, '#ef4444', fmtM, data.mo.some(i => i.estim) ? '~ estimado' : ''),
+    makeBarChart('Alquiler de Equipos', data.alquiler, '#3b82f6', fmtM),
+    makeTnChart(data.tn),
+  ].filter(Boolean).join('');
 }
 
 function renderCobrosReal() {
