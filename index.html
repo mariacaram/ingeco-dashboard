@@ -5141,17 +5141,20 @@ function renderEgresosChart() {
   // ── Donut chart SVG ──────────────────────────────────────────
   const SIZE = 200, CX = 100, CY = 100, R = 72, SW = 32;
   const C = 2 * Math.PI * R;
-  const GAP = 0;
 
-  let accLen = 0;
+  // Posicionamos cada segmento con rotate() para garantizar que el anillo cierre.
+  // Cada círculo empieza en 3 o'clock; rotamos -90 + acumulado para arrancar desde las 12.
+  let cumPct = 0;
   const arcs = items.map(item => {
-    const dash   = (item.valor / total) * C - GAP;
-    const offset = C / 4 - accLen;
-    accLen += (item.valor / total) * C;
+    const pct    = item.valor / total;
+    const arcLen = pct * C;
+    const deg    = cumPct * 360 - 90;
+    cumPct += pct;
     return `<circle cx="${CX}" cy="${CY}" r="${R}" fill="none"
       stroke="${item.color}" stroke-width="${SW}"
-      stroke-dasharray="${Math.max(0, dash)} ${C}"
-      stroke-dashoffset="${offset}"
+      stroke-dasharray="${arcLen} ${C - arcLen}"
+      stroke-dashoffset="0"
+      transform="rotate(${deg} ${CX} ${CY})"
       stroke-linecap="butt"/>`;
   }).join('');
 
