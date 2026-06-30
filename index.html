@@ -3043,8 +3043,7 @@ function _openTimelinePanel(fechaLabel, grp) {
 // Helper para mostrar millones/miles en el centro del donut
 function fmtM(n) {
   if (!n) return '$0';
-  // Siempre en millones (M), nunca billones (B)
-  if (n >= 1e6) return '$' + Math.round(n/1e6).toLocaleString('es-AR') + 'M';
+  if (Math.abs(n) >= 1e6) return (n < 0 ? '-' : '') + '$' + Math.round(Math.abs(n)/1e6).toLocaleString('es-AR') + 'M';
   return fmt(n);
 }
 
