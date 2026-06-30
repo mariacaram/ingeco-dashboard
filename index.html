@@ -2038,11 +2038,26 @@ function renderResumenObra() {
     return;
   }
 
-  // OC Insumos del mes: mapa por nombre Y por código de obra (lowercase)
+  // Set de nombres de obras INT (CLIENTE=INT en maestro) — construido desde items OC que traen esInt:true.
+  // Se usa para excluir obras internas de la tabla de contribución marginal.
+  const intNombres = new Set();
+  Object.values(OC_INSUMOS).forEach(ocM => {
+    if (!ocM || !ocM.items) return;
+    ocM.items.forEach(item => {
+      if (ocEsInt(item)) {
+        if (item.codigo) intNombres.add(item.codigo.toLowerCase().trim());
+        if (item.obra)   intNombres.add(item.obra.toLowerCase().trim());
+      }
+    });
+  });
+  const esObraInt = nombre => intNombres.has((nombre || '').toLowerCase().trim());
+
+  // OC Insumos del mes: mapa por nombre Y por código de obra (lowercase), excluye INT
   const ocPorNombre = {};
   const ocObras = {}; // canonKey → { cod, nombre } — para listar obras con OC sin certificado
   if (OC_INSUMOS && OC_INSUMOS[mesActual] && OC_INSUMOS[mesActual].items) {
     OC_INSUMOS[mesActual].items.forEach(item => {
+      if (ocEsInt(item)) return; // excluir obras internas
       const nameK = (item.obra   || '').toLowerCase().trim();
       const codeK = (item.codigo || '').toLowerCase().trim();
       if (nameK)                 ocPorNombre[nameK] = (ocPorNombre[nameK] || 0) + item.monto;
@@ -2054,11 +2069,12 @@ function renderResumenObra() {
     });
   }
 
-  // Alquiler del mes: mapa por nombre de obra (lowercase) + display original
+  // Alquiler del mes: mapa por nombre de obra (lowercase) + display original, excluye INT
   const alqPorNombre = {};
   const alqDisplay = {};
   if (ALQUILER_EQUIPOS && ALQUILER_EQUIPOS[mesActual] && ALQUILER_EQUIPOS[mesActual].porObra) {
     ALQUILER_EQUIPOS[mesActual].porObra.forEach(item => {
+      if (esObraInt(item.obra)) return; // excluir obras internas
       const k = (item.obra || '').toLowerCase().trim();
       if (k) {
         alqPorNombre[k] = (alqPorNombre[k] || 0) + item.costoArs;
