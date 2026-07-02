@@ -4596,9 +4596,12 @@ function openOCPanel(obraName) {
 // Pegá acá la URL de tu Web App después de hacer el deploy en Apps Script:
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwXe_MLjncMNA4-v8GLfmvhQFZG0cuMeXzSHIBccBIUUTTpXEvJuLhek-mC_S4twVCu9A/exec';
 
-// Un ítem de OC es interno (INT) si el maestro lo marca (CLIENTE == INT).
+// Un ítem de OC es interno (INT) si el maestro lo marca (CLIENTE == INT),
+// o si la obra es una de las que imputan a la planta en sí (aunque el maestro no la tenga cargada).
 // Fallback: prefijo "INT" en el código, por si la data aún no trae esInt.
 function ocEsInt(it) {
+  const obra = (it && (it.obra || '')).toLowerCase().trim();
+  if (obra && OBRAS_PLANTA_INTERNA.some(n => obra === n || obra.includes(n) || n.includes(obra))) return true;
   if (it && typeof it.esInt === 'boolean') return it.esInt;
   return (it && (it.codigo || '')).toUpperCase().startsWith('INT');
 }
