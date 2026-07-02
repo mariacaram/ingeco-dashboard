@@ -5066,7 +5066,7 @@ function renderStockDisplay() {
     ' tn frío terminado = <strong>' + totalStr + ' tn total entregable</strong>. Las salidas caliente descuentan asfalto; las de frío, el frío terminado.';
 }
 
-function ajustarStock(tipo) {
+async function ajustarStock(tipo) {
   tipo = (tipo === 'frio') ? 'frio' : 'asfalto';
   const esFrio = tipo === 'frio';
   const input = document.getElementById(esFrio ? 'ajuste-frio-input'    : 'ajuste-input');
@@ -5092,73 +5092,64 @@ function ajustarStock(tipo) {
   btn.style.opacity = '.7';
   fb.textContent   = '';
 
-  const cbName = 'ajusteCb_' + Date.now();
-  const script = document.createElement('script');
-
-  const tid = setTimeout(() => {
-    delete window[cbName];
-    if (document.body.contains(script)) document.body.removeChild(script);
-    fb.textContent = '⚠ Sin respuesta del servidor. Verificá tu conexión.';
-    fb.style.color = 'var(--neg)';
-    btn.disabled   = false; btn.textContent = 'Guardar ajuste'; btn.style.opacity = '1';
-  }, 12000);
-
-  window[cbName] = function(data) {
-    clearTimeout(tid);
-    delete window[cbName];
-    if (document.body.contains(script)) document.body.removeChild(script);
-
-    if (data.status === 'ok') {
-      const now = new Date();
-      const dd  = String(now.getDate()).padStart(2, '0');
-      const mm  = String(now.getMonth() + 1).padStart(2, '0');
-      const aaaa = now.getFullYear();
-      const hoy = dd + '/' + mm + '/' + aaaa;
-
-      // Después de un ajuste manual, el checkpoint de ESE tipo es el nuevo valor
-      // (ingresos y consumo de ese tipo se reinician desde ahora).
-      if (esFrio) {
-        frioTerminado = nuevoValor;
-        stockData.frioBase = nuevoValor; stockData.frioActual = nuevoValor;
-        stockData.frioFechaBase = hoy;   stockData.frioUsuarioBase = 'Agustín';
-        stockData.frioConsumo = 0;       stockData.frioConsumoDetalle = []; stockData.frioExcess = 0;
-      } else {
-        stockAsfalto = nuevoValor;
-        stockFecha   = hoy; stockUsuario = 'Agustín';
-        stockData.valor = nuevoValor; stockData.stockBase = nuevoValor;
-        stockData.ingresos = 0; stockData.consumo = 0;
-        stockData.fechaBase = hoy; stockData.usuarioBase = 'Agustín';
-        stockData.ingresosDetalle = []; stockData.consumoDetalle = [];
-      }
-
-      renderStockDisplay();
-      input.value  = '';
-      fb.innerHTML = '✅ ' + (esFrio ? 'Frío terminado' : 'Stock') + ' actualizado: <strong>' + fmtTn(nuevoValor) + ' tn</strong> (antes: ' + fmtTn(stockAntes) + ' tn)';
-      fb.style.color = 'var(--pos)';
-      btn.textContent  = '✓ Guardado';
-      btn.style.opacity = '1';
-      setTimeout(() => {
-        btn.disabled    = false;
-        btn.textContent = 'Guardar ajuste';
-        fb.textContent  = '';
-      }, 5000);
-    } else {
-      fb.textContent = '⚠ Error: ' + (data.message || 'respuesta inesperada del servidor');
-      fb.style.color = 'var(--neg)';
-      btn.disabled   = false; btn.textContent = 'Guardar ajuste'; btn.style.opacity = '1';
-    }
-  };
-
   const params = new URLSearchParams({
     action:     'ajusteStock',
     tipo:       tipo,
     stockAntes: stockAntes,
     stockNuevo: nuevoValor,
     usuario:    'Agustín',
-    callback:   cbName,
   });
-  script.src = APPS_SCRIPT_URL + '?' + params.toString();
-  document.body.appendChild(script);
+  const url = APPS_SCRIPT_URL + '?' + params.toString();
+
+  let data;
+  try {
+    data = await fetchJSONP(url);
+  } catch (err) {
+    fb.textContent = '⚠ Sin respuesta del servidor. Verificá tu conexión.';
+    fb.style.color = 'var(--neg)';
+    btn.disabled   = false; btn.textContent = 'Guardar ajuste'; btn.style.opacity = '1';
+    return;
+  }
+
+  if (data.status === 'ok') {
+    const now = new Date();
+    const dd  = String(now.getDate()).padStart(2, '0');
+    const mm  = String(now.getMonth() + 1).padStart(2, '0');
+    const aaaa = now.getFullYear();
+    const hoy = dd + '/' + mm + '/' + aaaa;
+
+    // Después de un ajuste manual, el checkpoint de ESE tipo es el nuevo valor
+    // (ingresos y consumo de ese tipo se reinician desde ahora).
+    if (esFrio) {
+      frioTerminado = nuevoValor;
+      stockData.frioBase = nuevoValor; stockData.frioActual = nuevoValor;
+      stockData.frioFechaBase = hoy;   stockData.frioUsuarioBase = 'Agustín';
+      stockData.frioConsumo = 0;       stockData.frioConsumoDetalle = []; stockData.frioExcess = 0;
+    } else {
+      stockAsfalto = nuevoValor;
+      stockFecha   = hoy; stockUsuario = 'Agustín';
+      stockData.valor = nuevoValor; stockData.stockBase = nuevoValor;
+      stockData.ingresos = 0; stockData.consumo = 0;
+      stockData.fechaBase = hoy; stockData.usuarioBase = 'Agustín';
+      stockData.ingresosDetalle = []; stockData.consumoDetalle = [];
+    }
+
+    renderStockDisplay();
+    input.value  = '';
+    fb.innerHTML = '✅ ' + (esFrio ? 'Frío terminado' : 'Stock') + ' actualizado: <strong>' + fmtTn(nuevoValor) + ' tn</strong> (antes: ' + fmtTn(stockAntes) + ' tn)';
+    fb.style.color = 'var(--pos)';
+    btn.textContent  = '✓ Guardado';
+    btn.style.opacity = '1';
+    setTimeout(() => {
+      btn.disabled    = false;
+      btn.textContent = 'Guardar ajuste';
+      fb.textContent  = '';
+    }, 5000);
+  } else {
+    fb.textContent = '⚠ Error: ' + (data.message || 'respuesta inesperada del servidor');
+    fb.style.color = 'var(--neg)';
+    btn.disabled   = false; btn.textContent = 'Guardar ajuste'; btn.style.opacity = '1';
+  }
 }
 
 function renderRemitosPorObra() {
