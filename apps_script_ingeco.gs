@@ -456,7 +456,7 @@ function leerOCInsumos() {
     const COL_MONTO  = _findCol(headers, ['monto', 'importe', 'total']) ?? 4;
     const COL_PROV   = _findCol(headers, ['proveedor', 'prov']) ?? 1;
     const COL_COD    = _findCol(headers, ['código obra', 'codigo obra', 'cod obra', 'cod_obra']) ?? 7;
-    const COL_OBRA   = _findCol(headers, ['obra']) ?? 5;
+    const COL_OBRA   = _findCol(headers, ['obra general', 'obra']) ?? 5;
     const COL_ESTADO = _findCol(headers, ['estado', 'status']) ?? 6;
 
     Logger.log('OC Insumos — cols: fecha=' + COL_FECHA + ' monto=' + COL_MONTO + ' obra=' + COL_OBRA + ' cod=' + COL_COD + ' prov=' + COL_PROV + ' estado=' + COL_ESTADO);
