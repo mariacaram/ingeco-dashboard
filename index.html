@@ -473,7 +473,6 @@
   <button class="tab-btn" onclick="openTab('cobros')">Estado financiero</button>
   <button class="tab-btn" onclick="openTab('planta')">Planta de Asfalto</button>
   <button class="tab-btn" data-restrict="sueldos" onclick="openTab('taller')">Taller Mecánico</button>
-  <button class="tab-btn" onclick="openTab('flujo')">Flujo de Fondos</button>
   <button class="tab-btn" onclick="openTab('estructura')">Organigrama y datos</button>
   <button class="tab-btn" onclick="openTab('manual')">Manual de tareas/instructivos</button>
   <button class="tab-btn" onclick="openTab('fuentes')">Fuentes de Datos</button>
@@ -1010,77 +1009,6 @@
             <tbody id="tbody-tipo-equipo"></tbody>
           </table>
         </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ================================================================ -->
-<!-- TAB 5: FLUJO DE FONDOS -->
-<!-- ================================================================ -->
-<div class="tab-panel" id="tab-flujo">
-  <div class="kpi-grid">
-    <div class="kpi-card neg">
-      <div class="kpi-label">Egresos estimados/quincena</div>
-      <div class="kpi-value neg-val">$430M</div>
-      <div class="kpi-sub">Referencia operativa</div>
-      <div class="fuente">Regla de negocio — Adrián Caram — confirmado en conversación 12/05/2026</div>
-    </div>
-    <div class="kpi-card pos">
-      <div class="kpi-label">Pipeline Mayo confirmado</div>
-      <div class="kpi-value pos-val">$2,80B</div>
-      <div class="kpi-sub">7 ítems con fecha estimada</div>
-      <div class="fuente">Cobros Ingeco Feb-Mar-Abr 2026.xlsx — Esteban — ID Drive: 1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY — Leído: 12/05/2026 — hoja Pipeline</div>
-    </div>
-    <div class="kpi-card pos">
-      <div class="kpi-label">Ingresos 1° quinc Mayo</div>
-      <div class="kpi-value pos-val">$1,93B</div>
-      <div class="kpi-sub">5 ítems est. 1–15 mayo</div>
-      <div class="fuente">Cobros Ingeco Feb-Mar-Abr 2026.xlsx — Esteban — ítems con fecha estimada entre 01/05 y 15/05</div>
-    </div>
-    <div class="kpi-card pos">
-      <div class="kpi-label">Balance 30 días</div>
-      <div class="kpi-value pos-val">+$1,93B</div>
-      <div class="kpi-sub">Ingresos >> egresos — VERDE</div>
-      <div class="fuente">Calculado: Pipeline 1° quinc ($1,93B) − egresos estimados ($430M) — base: Cobros + regla Adrián</div>
-    </div>
-  </div>
-
-  <div class="section">
-    <div class="section-title">Proyección Quincenal — 90 días</div>
-    <div class="flujo-period-card">
-      <div class="flujo-row" style="border-bottom:1px solid var(--border)">
-        <div class="flujo-header">Período</div>
-        <div class="flujo-header">Ingresos esperados</div>
-        <div class="flujo-header">Egresos estimados</div>
-        <div class="flujo-header">Neto</div>
-        <div class="flujo-header">Estado</div>
-      </div>
-      <div id="flujo-rows"></div>
-    </div>
-    <div class="nota-fuente"><strong>Ingresos:</strong> <a href="https://drive.google.com/file/d/1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY/view" target="_blank">Cobros Ingeco Feb-Mar-Abr 2026.xlsx (Esteban)</a> — Leído: 12/05/2026 — hoja Pipeline, columnas: Obra, Monto, Fecha estimada cobro — <strong>Egresos:</strong> $430M/quinc — regla de negocio Adrián — Semáforo: verde = ingresos > egresos, rojo = alerta déficit, gris = sin datos</div>
-  </div>
-
-  <div class="section">
-    <div class="section-title">Canal 82008 — Dato real confirmado</div>
-    <div class="kpi-grid">
-      <div class="kpi-card pos">
-        <div class="kpi-label">Monto real percibido</div>
-        <div class="kpi-value">$109,27M</div>
-        <div class="kpi-sub">Devengado Marzo 2026</div>
-        <div class="fuente">Cobros Ingeco Feb-Mar-Abr 2026.xlsx — Esteban — ID Drive: 1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY — Leído: 12/05/2026 — fila: Canal 82008, col Monto = $109.271.297,44</div>
-      </div>
-      <div class="kpi-card accent">
-        <div class="kpi-label">Percibido</div>
-        <div class="kpi-value">14/04/2026</div>
-        <div class="kpi-sub">1 mes de demora</div>
-        <div class="fuente">Cobros Ingeco Feb-Mar-Abr 2026.xlsx — Esteban — col Fecha cobro = 14/04/2026 — devengado: Marzo 2026</div>
-      </div>
-      <div class="kpi-card neg">
-        <div class="kpi-label">Costo financiero</div>
-        <div class="kpi-value neg-val">$5,46M</div>
-        <div class="kpi-sub">$109,27M × 5% × 1 mes</div>
-        <div class="fuente">Calculado: $109.271.297 × 5%/mes × 1 mes demora — tasa: regla de negocio Adrián (5%/mes)</div>
       </div>
     </div>
   </div>
@@ -3592,6 +3520,7 @@ function renderFlujo() {
   ];
 
   const container = document.getElementById('flujo-rows');
+  if (!container) return; // pestaña Flujo de Fondos eliminada
   container.innerHTML = periodos.map(p => {
     const neto = p.ingresos != null ? p.ingresos - p.egresos : null;
     const semaforo = neto == null ? 'y' : neto >= 0 ? 'g' : 'r';
