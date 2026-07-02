@@ -1691,7 +1691,7 @@ let stockUsuario  = 'Agustín';
 // Objeto completo con desglose (se carga desde Apps Script)
 let stockData = { valor: 700, stockBase: 700, ingresos: 0, consumo: 0,
                   fechaBase: '07/05/2026', usuarioBase: 'Agustín',
-                  frioBase: 35, frioActual: 35, frioFechaBase: '07/05/2026', frioUsuarioBase: 'Agustín', frioConsumo: 0 };
+                  frioBase: 35, frioActual: 35, frioFechaBase: '07/05/2026', frioUsuarioBase: 'Agustín', frioConsumo: 0, frioExcess: 0 };
 
 // Centros de costo MO por mes — cargado desde la carpeta TANGO de Mauro (Apps Script)
 // { ene: [{centro, monto, clasificacion}], ... }  clasificacion: "Obra" | "Taller" | "Pta. Asfalto"
@@ -4291,12 +4291,14 @@ function openStockDetallePanel() {
   const fb     = stockData.fechaBase || stockFecha;
   const usr    = stockData.usuarioBase || stockUsuario;
   const actual = stockAsfalto;
-  // ── Frío terminado ──
+  // ── Frío terminado (buffer) ──
   const frioBase   = stockData.frioBase   != null ? stockData.frioBase   : frioTerminado;
   const frioCons   = stockData.frioConsumo != null ? stockData.frioConsumo : 0;
-  const frioActual = frioTerminado;
+  const frioActual = Math.max(0, frioTerminado);
   const frioFb     = stockData.frioFechaBase   || fb;
   const frioUsr    = stockData.frioUsuarioBase || 'Agustín';
+  const frioExcess = stockData.frioExcess != null ? stockData.frioExcess : Math.max(0, frioCons - frioBase);
+  const frioFromStock = Math.min(frioBase, frioCons); // servido del buffer
 
   const cd     = stockData.consumoDetalle  || [];
   const id     = stockData.ingresosDetalle || [];
@@ -4305,8 +4307,10 @@ function openStockDetallePanel() {
   const producible = Math.round(actual * RATIO);
   const total      = producible + Math.round(frioActual);
 
-  // Mezcla caliente despachada (para explicar el cálculo inverso del asfalto)
+  // Mezcla caliente despachada + asfalto consumido por cada vía (para el cálculo inverso)
   const calMezcla = cd.reduce((s, r) => s + (r.caliente || 0), 0);
+  const calAsf    = calMezcla  / RATIO;   // asfalto por producción caliente
+  const frioAsf   = frioExcess / RATIO;   // asfalto por frío sin buffer
 
   const linea = (label, valor, color, sub) =>
     '<div style="display:flex;justify-content:space-between;align-items:baseline;padding:7px 0;border-bottom:1px solid var(--border);">' +
@@ -4321,30 +4325,34 @@ function openStockDetallePanel() {
       <div style="font-size:11px;color:var(--muted);margin-top:4px;">${producible.toLocaleString('es-AR')} tn caliente producible + ${fmtTn(frioActual)} tn frío terminado</div>
     </div>
 
-    <div style="font-size:11px;font-weight:700;color:#b45309;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">🛢️ Asfalto (materia prima) → mezcla caliente</div>
+    <div style="font-size:11px;font-weight:700;color:#b45309;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">🛢️ Asfalto (materia prima)</div>
     <div style="background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:6px 14px;margin-bottom:10px;">
       ${linea('🏁 Punto de partida (último ajuste)', fmtTn(base) + ' tn', 'var(--text)', usr + ' · ' + fb)}
       ${linea('➕ Ingresos de asfalto (formulario)', (ing > 0 ? '+' + fmtTn(ing) + ' tn' : 'sin ingresos'), (ing > 0 ? '#16a34a' : 'var(--muted)'), 'cargas posteriores al ' + fb)}
-      ${linea('➖ Consumo por salidas CALIENTE', (cons > 0 ? '−' + fmtTn(cons) + ' tn' : 'sin consumo'), (cons > 0 ? '#ef4444' : 'var(--muted)'), 'caliente ÷ ' + RATIO + ', desde el ' + fb)}
+      ${linea('➖ Consumo producción (caliente + frío)', (cons > 0 ? '−' + fmtTn(cons) + ' tn' : 'sin consumo'), (cons > 0 ? '#ef4444' : 'var(--muted)'), 'mezcla producida ÷ ' + RATIO + ', desde el ' + fb)}
       <div style="display:flex;justify-content:space-between;align-items:baseline;padding:10px 0 4px;">
         <span style="font-size:13px;font-weight:700;">= Asfalto actual</span>
         <span style="font-size:17px;font-weight:800;color:#16a34a;">${fmtTn(actual)} tn</span>
       </div>
     </div>
     <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#92400e;line-height:1.6;">
-      🔄 Cada tn de mezcla <strong>caliente</strong> despachada consumió <strong>1/${RATIO}</strong> tn de asfalto.
-      ${calMezcla > 0 ? 'Se despacharon <strong>' + fmtTn(calMezcla) + ' tn</strong> caliente ÷ ' + RATIO + ' = <strong>' + fmtTn(cons) + ' tn</strong> de asfalto.' : 'Sin salidas caliente desde el ajuste.'}
+      🔄 Producir mezcla (caliente o frío) consume <strong>1/${RATIO}</strong> tn de asfalto por tn de mezcla.
+      ${cons > 0
+        ? 'Caliente: <strong>' + fmtTn(calMezcla) + ' tn</strong> ÷ ' + RATIO + ' = ' + fmtTn(calAsf) + ' tn' +
+          (frioExcess > 0 ? '. Frío sin buffer: <strong>' + fmtTn(frioExcess) + ' tn</strong> ÷ ' + RATIO + ' = ' + fmtTn(frioAsf) + ' tn' : '') +
+          '. Total asfalto: <strong>' + fmtTn(cons) + ' tn</strong>.'
+        : 'Sin salidas que produzcan mezcla desde el ajuste.'}
     </div>
 
-    <div style="font-size:11px;font-weight:700;color:#0369a1;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">❄ Frío terminado (predio)</div>
+    <div style="font-size:11px;font-weight:700;color:#0369a1;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">❄ Frío terminado (buffer en predio)</div>
     <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:6px 14px;margin-bottom:16px;">
       ${linea('🏁 Punto de partida (último ajuste)', fmtTn(frioBase) + ' tn', 'var(--text)', frioUsr + ' · ' + frioFb)}
-      ${linea('➖ Salidas FRÍO (remitos)', (frioCons > 0 ? '−' + fmtTn(frioCons) + ' tn' : 'sin salidas'), (frioCons > 0 ? '#ef4444' : 'var(--muted)'), 'tn a tn, desde el ' + frioFb)}
+      ${linea('➖ Salidas frío servidas del buffer', (frioFromStock > 0 ? '−' + fmtTn(frioFromStock) + ' tn' : 'sin salidas'), (frioFromStock > 0 ? '#ef4444' : 'var(--muted)'), 'desde el ' + frioFb)}
       <div style="display:flex;justify-content:space-between;align-items:baseline;padding:10px 0 4px;">
         <span style="font-size:13px;font-weight:700;">= Frío terminado actual</span>
-        <span style="font-size:17px;font-weight:800;color:${frioActual < 0 ? '#ef4444' : '#0369a1'};">${fmtTn(frioActual)} tn</span>
+        <span style="font-size:17px;font-weight:800;color:#0369a1;">${fmtTn(frioActual)} tn</span>
       </div>
-      ${frioActual < 0 ? '<div style="font-size:11px;color:#ef4444;padding-bottom:8px;">⚠ Salió más frío del registrado como base. Ajustá el frío terminado con el valor real del predio.</div>' : ''}
+      ${frioExcess > 0 ? '<div style="font-size:11px;color:#b45309;padding-bottom:8px;line-height:1.5;">⚠ Se despacharon ' + fmtTn(frioCons) + ' tn de frío, más que el buffer. Las <strong>' + fmtTn(frioExcess) + ' tn</strong> excedentes se produjeron desde asfalto (ya descontadas arriba: −' + fmtTn(frioAsf) + ' tn asfalto). El buffer quedó en 0 — ajustalo con el valor real del predio.</div>' : ''}
     </div>
 
     <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:6px 14px;margin-bottom:16px;">
@@ -4357,7 +4365,7 @@ function openStockDetallePanel() {
     </div>
 
     <div style="background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:11px 14px;margin-bottom:14px;font-size:12px;color:var(--muted);line-height:1.6;">
-      ✏️ Cada stock se ajusta por separado (Agustín) y se recalcula desde su propia fecha de ajuste: las salidas <strong>caliente</strong> descuentan asfalto, las de <strong>frío</strong> descuentan el frío terminado. Al reajustar, ese valor y su fecha pasan a ser el nuevo punto de partida.
+      ✏️ Cada stock se ajusta por separado (Agustín) y se recalcula desde su propia fecha de ajuste. Producir mezcla —caliente o frío— consume asfalto (÷${RATIO}). Las salidas de frío se sirven primero del buffer del predio; lo que exceda el buffer se produce en el momento y también descuenta asfalto. Al reajustar, ese valor y su fecha pasan a ser el nuevo punto de partida.
     </div>
 
     ${nMov > 0
@@ -5184,7 +5192,7 @@ function ajustarStock(tipo) {
         frioTerminado = nuevoValor;
         stockData.frioBase = nuevoValor; stockData.frioActual = nuevoValor;
         stockData.frioFechaBase = hoy;   stockData.frioUsuarioBase = 'Agustín';
-        stockData.frioConsumo = 0;       stockData.frioConsumoDetalle = [];
+        stockData.frioConsumo = 0;       stockData.frioConsumoDetalle = []; stockData.frioExcess = 0;
       } else {
         stockAsfalto = nuevoValor;
         stockFecha   = hoy; stockUsuario = 'Agustín';

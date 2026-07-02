@@ -2025,41 +2025,51 @@ function leerStockAsfalto(remitosData) {
       }
     }
 
-    // ── 3. Consumo desde REMITOS, separado por tipo ──────────────────────────
-    // Caliente: se produce del asfalto → consume asfalto = tn mezcla / 20 (desde fechaBase).
-    // Frío: producto ya terminado en el predio → se descuenta tn por tn del frío (desde frioFecha).
+    // ── 3. Consumo desde REMITOS ─────────────────────────────────────────────
+    // Tanto caliente como frío se PRODUCEN consumiendo asfalto (tn asfalto = tn mezcla / 20).
+    // El frío terminado (predio) es un buffer: las salidas frío se sirven primero de ese
+    // buffer; lo que exceda el buffer se produce en el momento y también descuenta asfalto.
     const RATIO = 20;
-    let consumo     = 0;   // asfalto materia prima consumido (solo caliente / 20)
-    let frioConsumo = 0;   // frío terminado despachado (tn, desde frioFecha)
+    let consumo     = 0;   // asfalto materia prima consumido (caliente + frío excedente) / 20
+    let frioConsumo = 0;   // total frío despachado (tn, desde frioFecha)
+    let frioExcess  = 0;   // frío producido desde asfalto por falta de buffer (tn de mezcla)
+    let frioActual  = frioBase;
     const consumoDetalle     = []; // todas las salidas (para el detalle de movimientos)
-    const frioConsumoDetalle = []; // solo salidas frío posteriores al ajuste de frío
+    const frioConsumoDetalle = []; // salidas frío posteriores al ajuste de frío
     const remitos = remitosData || {};
 
     if (remitos._detalle && remitos._detalle.length > 0) {
-      for (var f = 0; f < remitos._detalle.length; f++) {
-        var r = remitos._detalle[f];
-        var esFrio = (r.tipo === 'frio');
-        var incluir = esFrio ? (r.fecha >= frioFecha) : (r.fecha >= fechaBase);
-        if (!incluir) continue;
-
-        if (esFrio) {
+      // Procesar cronológicamente para ir vaciando el buffer de frío en orden.
+      var salidas = remitos._detalle.slice().sort(function(a, b) { return a.fecha - b.fecha; });
+      var pile = frioBase;
+      for (var f = 0; f < salidas.length; f++) {
+        var r = salidas[f];
+        if (r.tipo === 'frio') {
+          if (r.fecha < frioFecha) continue;
           frioConsumo += r.cant;
-          frioConsumoDetalle.push({ fecha: r.fechaStr, tnMezcla: r.cant });
+          var fromPile = Math.min(pile, r.cant);
+          pile -= fromPile;
+          var excess = r.cant - fromPile;
+          var asfExcess = 0;
+          if (excess > 0 && r.fecha >= fechaBase) {  // el excedente se produce desde asfalto
+            asfExcess   = excess / RATIO;
+            consumo    += asfExcess;
+            frioExcess += excess;
+          }
+          frioConsumoDetalle.push({ fecha: r.fechaStr, tnMezcla: r.cant,
+                                    desdeStock: Math.round(fromPile * 10) / 10,
+                                    desdeAsfalto: Math.round(excess * 10) / 10 });
+          consumoDetalle.push({ fecha: r.fechaStr, tipo: 'frio', caliente: 0, frio: r.cant,
+                                tnMezcla: r.cant, tnAsfalto: Math.round(asfExcess * 10) / 10, exacto: true });
         } else {
-          consumo += r.cant / RATIO;  // caliente (o sin tipo) → materia prima
+          if (r.fecha < fechaBase) continue;
+          consumo += r.cant / RATIO;
+          consumoDetalle.push({ fecha: r.fechaStr, tipo: r.tipo, caliente: r.cant, frio: 0,
+                                tnMezcla: r.cant, tnAsfalto: Math.round((r.cant / RATIO) * 10) / 10, exacto: true });
         }
-
-        consumoDetalle.push({
-          fecha:     r.fechaStr,
-          tipo:      r.tipo,
-          caliente:  r.tipo === 'caliente' ? r.cant : 0,
-          frio:      esFrio ? r.cant : 0,
-          tnMezcla:  r.cant,
-          tnAsfalto: esFrio ? 0 : Math.round((r.cant / RATIO) * 10) / 10,
-          exacto:    true,
-        });
       }
-      Logger.log('StockAsfalto — detalle exacto: ' + consumoDetalle.length + ' salidas (frío: ' + frioConsumoDetalle.length + ')');
+      frioActual = pile;  // nunca baja de 0
+      Logger.log('StockAsfalto — salidas: ' + consumoDetalle.length + ' (frío: ' + frioConsumoDetalle.length + ', excedente frío→asfalto: ' + frioExcess + ' tn)');
     } else {
       // ── Fallback: pro-rateo mensual si no hay fechas exactas ────────────────
       const MES_NUM = { ene:1, feb:2, mar:3, abr:4, may:5, jun:6,
@@ -2072,7 +2082,6 @@ function leerStockAsfalto(remitosData) {
         var calMes    = remitos[mes].caliente || 0;
         var frioMes   = remitos[mes].frio     || 0;
 
-        // Caliente → asfalto materia prima (desde fechaBase)
         if (finMes >= fechaBase) {
           var fracCal = 1;
           if (inicioMes < fechaBase && fechaBase <= finMes) {
@@ -2080,7 +2089,6 @@ function leerStockAsfalto(remitosData) {
           }
           consumo += (calMes * fracCal) / RATIO;
         }
-        // Frío → frío terminado (desde frioFecha)
         if (finMes >= frioFecha) {
           var fracFrio = 1;
           if (inicioMes < frioFecha && frioFecha <= finMes) {
@@ -2097,12 +2105,15 @@ function leerStockAsfalto(remitosData) {
           pct:       100,
         });
       }
+      // Buffer de frío a nivel agregado: lo que exceda el buffer se produce desde asfalto
+      frioActual = Math.max(0, frioBase - frioConsumo);
+      frioExcess = Math.max(0, frioConsumo - frioBase);
+      consumo   += frioExcess / RATIO;
     }
 
     const stockActual = stockBase + ingresos - consumo;
-    const frioActual  = frioBase - frioConsumo;
     Logger.log('StockAsfalto: base=' + stockBase + ' + ing=' + ingresos + ' - cons=' + consumo + ' = ' + stockActual +
-               ' | frío base=' + frioBase + ' - ' + frioConsumo + ' = ' + frioActual);
+               ' | frío base=' + frioBase + ' - out=' + frioConsumo + ' (exc→asfalto=' + frioExcess + ') = ' + frioActual);
 
     return {
       valor:           Math.round(stockActual * 10) / 10,
@@ -2113,12 +2124,13 @@ function leerStockAsfalto(remitosData) {
       consumo:         Math.round(consumo * 10) / 10,
       ingresosDetalle: ingresosDetalle,
       consumoDetalle:  consumoDetalle,
-      // ── Frío terminado (stock aparte) ──
+      // ── Frío terminado (buffer aparte; producir frío consume asfalto) ──
       frioBase:           frioBase,
       frioFechaBase:      Utilities.formatDate(frioFecha, TZ, 'dd/MM/yyyy'),
       frioUsuarioBase:    frioUsuario,
       frioConsumo:        Math.round(frioConsumo * 10) / 10,
       frioActual:         Math.round(frioActual * 10) / 10,
+      frioExcess:         Math.round(frioExcess * 10) / 10,
       frioConsumoDetalle: frioConsumoDetalle,
     };
 
@@ -2129,6 +2141,6 @@ function leerStockAsfalto(remitosData) {
              usuarioBase: BASE_USUARIO, ingresosDetalle: [], consumoDetalle: [],
              frioBase: BASE_FRIO, frioActual: BASE_FRIO,
              frioFechaBase: Utilities.formatDate(BASE_FECHA, 'America/Argentina/Buenos_Aires', 'dd/MM/yyyy'),
-             frioUsuarioBase: BASE_USUARIO, frioConsumo: 0, frioConsumoDetalle: [] };
+             frioUsuarioBase: BASE_USUARIO, frioConsumo: 0, frioExcess: 0, frioConsumoDetalle: [] };
   }
 }
