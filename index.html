@@ -776,7 +776,7 @@
     <div id="salidas-post-corte" class="clickable-panel" style="display:none;margin-top:10px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px 16px;font-size:12px;"></div>
 
     <div class="clickable-panel" onclick="openStockDetallePanel()" title="Ver cómo se forma el stock" style="cursor:pointer;margin-top:10px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:14px 16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;" id="stock-total-row">
-      <span style="font-size:13px;color:var(--text);">14.000 tn producible &nbsp;+&nbsp; 35 tn frío terminado <span style="color:var(--muted);font-size:12px;">(❄ reserva Agustín)</span> &nbsp;=&nbsp;</span>
+      <span style="font-size:13px;color:var(--text);" id="stock-total-desc">14.000 tn producible &nbsp;+&nbsp; 35 tn frío terminado <span style="color:var(--muted);font-size:12px;">(❄ ajustable)</span> &nbsp;=&nbsp;</span>
       <span style="font-size:20px;font-weight:800;color:#16a34a;" id="stock-total-valor">14.035 tn</span>
       <span style="margin-left:auto;font-size:11px;font-weight:700;color:#16a34a;background:#dcfce7;border:1px solid #86efac;border-radius:5px;padding:3px 8px;">Stock total disponible →</span>
     </div>
@@ -794,28 +794,51 @@
       <div style="font-size:15px;font-weight:700;color:var(--text);">✏️ Ajuste de stock</div>
       <span style="font-size:11px;font-weight:700;background:#fef3c7;color:#92400e;border:1px solid #fde68a;border-radius:12px;padding:2px 10px;">Agustín</span>
     </div>
+    <!-- Ajuste 1: Asfalto materia prima -->
     <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
-      <!-- Stock actual display -->
       <div style="background:var(--card);border:1.5px solid #86efac;border-radius:10px;padding:12px 20px;text-align:center;min-width:130px;">
-        <div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.06em;margin-bottom:6px;">STOCK ACTUAL</div>
+        <div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.06em;margin-bottom:6px;">🛢️ ASFALTO (MATERIA PRIMA)</div>
         <div style="font-size:26px;font-weight:800;color:#16a34a;" id="ajuste-stock-actual">700 tn</div>
         <div style="font-size:10px;color:#16a34a;margin-top:4px;" id="ajuste-stock-fecha">Agustín · 07/05/2026</div>
       </div>
       <div style="font-size:24px;color:var(--muted);">→</div>
-      <!-- Input form -->
       <div style="display:flex;flex-direction:column;gap:8px;">
-        <label style="font-size:12px;font-weight:600;color:var(--text);">Ingresá el nuevo valor de stock:</label>
+        <label style="font-size:12px;font-weight:600;color:var(--text);">Nuevo stock de asfalto:</label>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
           <input type="number" id="ajuste-input" min="0" step="0.5" placeholder="ej: 680"
             style="width:110px;padding:8px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:15px;font-weight:700;color:var(--text);outline:none;"
-            onkeydown="if(event.key==='Enter') ajustarStock()">
+            onkeydown="if(event.key==='Enter') ajustarStock('asfalto')">
           <span style="font-size:13px;color:var(--muted);font-weight:600;">tn</span>
-          <button onclick="ajustarStock()" id="ajuste-btn"
+          <button onclick="ajustarStock('asfalto')" id="ajuste-btn"
             style="padding:8px 18px;background:var(--accent);border:none;border-radius:7px;color:#fff;font-weight:700;cursor:pointer;font-size:13px;transition:opacity .2s;">
             Guardar ajuste
           </button>
         </div>
         <div id="ajuste-feedback" style="font-size:12px;min-height:16px;"></div>
+      </div>
+    </div>
+
+    <!-- Ajuste 2: Frío terminado -->
+    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-top:14px;padding-top:14px;border-top:1px dashed #fde68a;">
+      <div style="background:var(--card);border:1.5px solid #93c5fd;border-radius:10px;padding:12px 20px;text-align:center;min-width:130px;">
+        <div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.06em;margin-bottom:6px;">❄ FRÍO TERMINADO (PREDIO)</div>
+        <div style="font-size:26px;font-weight:800;color:#0369a1;" id="ajuste-frio-actual">35 tn</div>
+        <div style="font-size:10px;color:#0369a1;margin-top:4px;" id="ajuste-frio-fecha">Agustín · 07/05/2026</div>
+      </div>
+      <div style="font-size:24px;color:var(--muted);">→</div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <label style="font-size:12px;font-weight:600;color:var(--text);">Nuevo stock de frío terminado:</label>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <input type="number" id="ajuste-frio-input" min="0" step="0.5" placeholder="ej: 400"
+            style="width:110px;padding:8px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:15px;font-weight:700;color:var(--text);outline:none;"
+            onkeydown="if(event.key==='Enter') ajustarStock('frio')">
+          <span style="font-size:13px;color:var(--muted);font-weight:600;">tn</span>
+          <button onclick="ajustarStock('frio')" id="ajuste-frio-btn"
+            style="padding:8px 18px;background:#0369a1;border:none;border-radius:7px;color:#fff;font-weight:700;cursor:pointer;font-size:13px;transition:opacity .2s;">
+            Guardar ajuste
+          </button>
+        </div>
+        <div id="ajuste-frio-feedback" style="font-size:12px;min-height:16px;"></div>
       </div>
     </div>
     <div class="nota-fuente" style="margin-top:12px;">
@@ -1661,12 +1684,14 @@ let INGRESOS_PLANTA = (function() {
   catch(e) { return {}; }
 })();
 
-let stockAsfalto = 700;
-let stockFecha   = '07/05/2026';
-let stockUsuario = 'Agustín';
+let stockAsfalto  = 700;
+let frioTerminado = 35;   // frío terminado en predio (ajustable por Agustín, viene de stockData.frioActual)
+let stockFecha    = '07/05/2026';
+let stockUsuario  = 'Agustín';
 // Objeto completo con desglose (se carga desde Apps Script)
 let stockData = { valor: 700, stockBase: 700, ingresos: 0, consumo: 0,
-                  fechaBase: '07/05/2026', usuarioBase: 'Agustín' };
+                  fechaBase: '07/05/2026', usuarioBase: 'Agustín',
+                  frioBase: 35, frioActual: 35, frioFechaBase: '07/05/2026', frioUsuarioBase: 'Agustín', frioConsumo: 0 };
 
 // Centros de costo MO por mes — cargado desde la carpeta TANGO de Mauro (Apps Script)
 // { ene: [{centro, monto, clasificacion}], ... }  clasificacion: "Obra" | "Taller" | "Pta. Asfalto"
@@ -4258,22 +4283,30 @@ function openStockDetallePanel() {
   const content = document.getElementById('panelContent');
   if (!panel) return;
 
-  const FRIO_FIJO = 35, RATIO = 20;
+  const RATIO = 20;
+  // ── Asfalto (materia prima) ──
   const base   = stockData.stockBase != null ? stockData.stockBase : stockAsfalto;
   const ing    = stockData.ingresos  != null ? stockData.ingresos  : 0;
   const cons   = stockData.consumo   != null ? stockData.consumo   : 0;
   const fb     = stockData.fechaBase || stockFecha;
   const usr    = stockData.usuarioBase || stockUsuario;
   const actual = stockAsfalto;
+  // ── Frío terminado ──
+  const frioBase   = stockData.frioBase   != null ? stockData.frioBase   : frioTerminado;
+  const frioCons   = stockData.frioConsumo != null ? stockData.frioConsumo : 0;
+  const frioActual = frioTerminado;
+  const frioFb     = stockData.frioFechaBase   || fb;
+  const frioUsr    = stockData.frioUsuarioBase || 'Agustín';
+
   const cd     = stockData.consumoDetalle  || [];
   const id     = stockData.ingresosDetalle || [];
   const nMov   = cd.length + id.length;
 
   const producible = Math.round(actual * RATIO);
-  const total      = producible + FRIO_FIJO;
+  const total      = producible + Math.round(frioActual);
 
-  // Total de mezcla despachada (para explicar el cálculo inverso)
-  const mezclaTotal = cd.reduce((s, r) => s + (r.tnMezcla || 0), 0);
+  // Mezcla caliente despachada (para explicar el cálculo inverso del asfalto)
+  const calMezcla = cd.reduce((s, r) => s + (r.caliente || 0), 0);
 
   const linea = (label, valor, color, sub) =>
     '<div style="display:flex;justify-content:space-between;align-items:baseline;padding:7px 0;border-bottom:1px solid var(--border);">' +
@@ -4283,37 +4316,48 @@ function openStockDetallePanel() {
 
   const html = `
     <div style="text-align:center;padding:14px 0 18px;">
-      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">Stock de asfalto (materia prima) · hoy</div>
-      <div style="font-size:34px;font-weight:800;color:#16a34a;margin-top:6px;">${fmtTn(actual)} tn</div>
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">Stock total entregable · hoy</div>
+      <div style="font-size:34px;font-weight:800;color:#16a34a;margin-top:6px;">${total.toLocaleString('es-AR')} tn</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px;">${producible.toLocaleString('es-AR')} tn caliente producible + ${fmtTn(frioActual)} tn frío terminado</div>
     </div>
 
-    <div style="background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:6px 14px;margin-bottom:14px;">
+    <div style="font-size:11px;font-weight:700;color:#b45309;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">🛢️ Asfalto (materia prima) → mezcla caliente</div>
+    <div style="background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:6px 14px;margin-bottom:10px;">
       ${linea('🏁 Punto de partida (último ajuste)', fmtTn(base) + ' tn', 'var(--text)', usr + ' · ' + fb)}
       ${linea('➕ Ingresos de asfalto (formulario)', (ing > 0 ? '+' + fmtTn(ing) + ' tn' : 'sin ingresos'), (ing > 0 ? '#16a34a' : 'var(--muted)'), 'cargas posteriores al ' + fb)}
-      ${linea('➖ Consumo (remitos de salida)', (cons > 0 ? '−' + fmtTn(cons) + ' tn' : 'sin consumo'), (cons > 0 ? '#ef4444' : 'var(--muted)'), 'salidas desde el ' + fb)}
+      ${linea('➖ Consumo por salidas CALIENTE', (cons > 0 ? '−' + fmtTn(cons) + ' tn' : 'sin consumo'), (cons > 0 ? '#ef4444' : 'var(--muted)'), 'caliente ÷ ' + RATIO + ', desde el ' + fb)}
       <div style="display:flex;justify-content:space-between;align-items:baseline;padding:10px 0 4px;">
-        <span style="font-size:13px;font-weight:700;">= Stock actual</span>
+        <span style="font-size:13px;font-weight:700;">= Asfalto actual</span>
         <span style="font-size:17px;font-weight:800;color:#16a34a;">${fmtTn(actual)} tn</span>
       </div>
     </div>
-
-    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:11px 14px;margin-bottom:14px;font-size:12px;color:#92400e;line-height:1.6;">
-      🔄 <strong>Cálculo inverso del consumo:</strong> cada tonelada de mezcla despachada (remitos) consumió <strong>1/${RATIO}</strong> de tonelada de asfalto.
-      ${mezclaTotal > 0 ? 'Se despacharon <strong>' + fmtTn(mezclaTotal) + ' tn</strong> de mezcla ÷ ' + RATIO + ' = <strong>' + fmtTn(cons) + ' tn</strong> de asfalto consumido.' : 'Todavía no hay salidas registradas desde el ajuste.'}
+    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#92400e;line-height:1.6;">
+      🔄 Cada tn de mezcla <strong>caliente</strong> despachada consumió <strong>1/${RATIO}</strong> tn de asfalto.
+      ${calMezcla > 0 ? 'Se despacharon <strong>' + fmtTn(calMezcla) + ' tn</strong> caliente ÷ ' + RATIO + ' = <strong>' + fmtTn(cons) + ' tn</strong> de asfalto.' : 'Sin salidas caliente desde el ajuste.'}
     </div>
 
-    <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:6px 14px;margin-bottom:14px;">
-      ${linea('Stock actual × ' + RATIO, fmtTn(producible) + ' tn', 'var(--text)', 'mezcla producible (caliente o frío)')}
-      ${linea('+ Frío ya terminado', '+' + FRIO_FIJO + ' tn', '#0369a1', '❄ reserva Agustín')}
+    <div style="font-size:11px;font-weight:700;color:#0369a1;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">❄ Frío terminado (predio)</div>
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:6px 14px;margin-bottom:16px;">
+      ${linea('🏁 Punto de partida (último ajuste)', fmtTn(frioBase) + ' tn', 'var(--text)', frioUsr + ' · ' + frioFb)}
+      ${linea('➖ Salidas FRÍO (remitos)', (frioCons > 0 ? '−' + fmtTn(frioCons) + ' tn' : 'sin salidas'), (frioCons > 0 ? '#ef4444' : 'var(--muted)'), 'tn a tn, desde el ' + frioFb)}
       <div style="display:flex;justify-content:space-between;align-items:baseline;padding:10px 0 4px;">
-        <span style="font-size:13px;font-weight:700;">= Stock total disponible</span>
+        <span style="font-size:13px;font-weight:700;">= Frío terminado actual</span>
+        <span style="font-size:17px;font-weight:800;color:${frioActual < 0 ? '#ef4444' : '#0369a1'};">${fmtTn(frioActual)} tn</span>
+      </div>
+      ${frioActual < 0 ? '<div style="font-size:11px;color:#ef4444;padding-bottom:8px;">⚠ Salió más frío del registrado como base. Ajustá el frío terminado con el valor real del predio.</div>' : ''}
+    </div>
+
+    <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:6px 14px;margin-bottom:16px;">
+      ${linea('Asfalto × ' + RATIO, producible.toLocaleString('es-AR') + ' tn', 'var(--text)', 'mezcla caliente producible')}
+      ${linea('+ Frío terminado', '+' + fmtTn(frioActual) + ' tn', '#0369a1', 'listo en el predio')}
+      <div style="display:flex;justify-content:space-between;align-items:baseline;padding:10px 0 4px;">
+        <span style="font-size:13px;font-weight:700;">= Total entregable</span>
         <span style="font-size:17px;font-weight:800;color:#16a34a;">${total.toLocaleString('es-AR')} tn</span>
       </div>
     </div>
 
-    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:11px 14px;margin-bottom:14px;font-size:12px;color:#1e3a8a;line-height:1.6;">
-      ✏️ <strong>Último ajuste:</strong> ${usr} fijó el stock en <strong>${fmtTn(base)} tn</strong> el <strong>${fb}</strong>.
-      Desde esa fecha el número se recalcula solo: <strong>+</strong> ingresos del formulario y <strong>−</strong> salidas de remitos posteriores. Si Agustín vuelve a ajustarlo, ese nuevo valor y su fecha pasan a ser el nuevo punto de partida.
+    <div style="background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:11px 14px;margin-bottom:14px;font-size:12px;color:var(--muted);line-height:1.6;">
+      ✏️ Cada stock se ajusta por separado (Agustín) y se recalcula desde su propia fecha de ajuste: las salidas <strong>caliente</strong> descuentan asfalto, las de <strong>frío</strong> descuentan el frío terminado. Al reajustar, ese valor y su fecha pasan a ser el nuevo punto de partida.
     </div>
 
     ${nMov > 0
@@ -4322,7 +4366,7 @@ function openStockDetallePanel() {
 
   content.innerHTML = `
     <div class="panel-title">¿Cómo se forma el stock?</div>
-    <div class="panel-sub">Base ${fb} · recalculado con ingresos y salidas</div>
+    <div class="panel-sub">Asfalto y frío se recalculan con ingresos y salidas</div>
     <div style="margin-top:14px;">${html}</div>`;
   panel.classList.add('open');
   overlay.classList.add('open');
@@ -4987,10 +5031,11 @@ function getOCPlantaInterna(mes) {
 }
 
 function renderStockDisplay() {
-  const FRIO_FIJO  = 35;
   const producible = Math.round(stockAsfalto * 20);
-  const total      = producible + FRIO_FIJO;
+  const frio       = Math.round(frioTerminado);
+  const total      = producible + frio;
   const stockStr   = fmtTn(stockAsfalto);
+  const frioStr    = fmtTn(frioTerminado);
   const prodStr    = producible.toLocaleString('es-AR');
   const totalStr   = total.toLocaleString('es-AR');
   const fechaCorta = (stockData.fechaBase || stockFecha).substring(0, 5);
@@ -5001,9 +5046,12 @@ function renderStockDisplay() {
     prodValor:    document.getElementById('stock-producible-valor'),
     prodSub:      document.getElementById('stock-producible-sub'),
     totalValor:   document.getElementById('stock-total-valor'),
+    totalDesc:    document.getElementById('stock-total-desc'),
     formulaNota:  document.getElementById('stock-formula-nota'),
     ajusteActual: document.getElementById('ajuste-stock-actual'),
     ajusteFecha:  document.getElementById('ajuste-stock-fecha'),
+    frioActual:   document.getElementById('ajuste-frio-actual'),
+    frioFecha:    document.getElementById('ajuste-frio-fecha'),
     stockFormula: document.getElementById('stock-formula-desglose'),
   };
 
@@ -5012,6 +5060,11 @@ function renderStockDisplay() {
   if (el.prodValor)  el.prodValor.textContent = prodStr + ' tn';
   if (el.prodSub)    el.prodSub.textContent   = stockStr + ' tn × 20';
   if (el.totalValor) el.totalValor.textContent = totalStr + ' tn';
+  if (el.totalDesc)  el.totalDesc.innerHTML   = prodStr + ' tn producible &nbsp;+&nbsp; ' + frioStr + ' tn frío terminado <span style="color:var(--muted);font-size:12px;">(❄ ajustable)</span> &nbsp;=&nbsp;';
+  if (el.ajusteActual) el.ajusteActual.textContent = stockStr + ' tn';
+  if (el.ajusteFecha)  el.ajusteFecha.textContent  = (stockData.usuarioBase || stockUsuario) + ' · ' + (stockData.fechaBase || stockFecha);
+  if (el.frioActual)   el.frioActual.textContent   = frioStr + ' tn';
+  if (el.frioFecha)    el.frioFecha.textContent    = (stockData.frioUsuarioBase || 'Agustín') + ' · ' + (stockData.frioFechaBase || stockFecha);
 
   // Desglose de la fórmula
   if (el.stockFormula) {
@@ -5072,16 +5125,16 @@ function renderStockDisplay() {
 
   if (el.formulaNota) el.formulaNota.innerHTML =
     '📐 <strong>Fórmula:</strong> 25 tn asfalto (1 camión) → 500 tn mezcla. Ratio ×20. Con ' + stockStr +
-    ' tn stock → <strong>' + prodStr + ' tn mezcla producible</strong> (caliente o frío) + ' + FRIO_FIJO +
-    ' tn frío ya terminadas = <strong>' + totalStr + ' tn total</strong>.';
-  if (el.ajusteActual) el.ajusteActual.textContent = stockStr + ' tn';
-  if (el.ajusteFecha)  el.ajusteFecha.textContent  = (stockData.usuarioBase || stockUsuario) + ' · ' + (stockData.fechaBase || stockFecha);
+    ' tn stock → <strong>' + prodStr + ' tn mezcla caliente producible</strong> + ' + frioStr +
+    ' tn frío terminado = <strong>' + totalStr + ' tn total entregable</strong>. Las salidas caliente descuentan asfalto; las de frío, el frío terminado.';
 }
 
-function ajustarStock() {
-  const input = document.getElementById('ajuste-input');
-  const btn   = document.getElementById('ajuste-btn');
-  const fb    = document.getElementById('ajuste-feedback');
+function ajustarStock(tipo) {
+  tipo = (tipo === 'frio') ? 'frio' : 'asfalto';
+  const esFrio = tipo === 'frio';
+  const input = document.getElementById(esFrio ? 'ajuste-frio-input'    : 'ajuste-input');
+  const btn   = document.getElementById(esFrio ? 'ajuste-frio-btn'      : 'ajuste-btn');
+  const fb    = document.getElementById(esFrio ? 'ajuste-frio-feedback' : 'ajuste-feedback');
   if (!input || !btn || !fb) return;
 
   const nuevoValor = parseFloat(input.value);
@@ -5096,7 +5149,7 @@ function ajustarStock() {
     return;
   }
 
-  const stockAntes = stockAsfalto;
+  const stockAntes = esFrio ? frioTerminado : stockAsfalto;
   btn.disabled     = true;
   btn.textContent  = '⏳ Guardando...';
   btn.style.opacity = '.7';
@@ -5123,18 +5176,27 @@ function ajustarStock() {
       const dd  = String(now.getDate()).padStart(2, '0');
       const mm  = String(now.getMonth() + 1).padStart(2, '0');
       const aaaa = now.getFullYear();
+      const hoy = dd + '/' + mm + '/' + aaaa;
 
-      stockAsfalto = nuevoValor;
-      stockFecha   = dd + '/' + mm + '/' + aaaa;
-      stockUsuario = 'Agustín';
-      // Después de un ajuste manual, el checkpoint es el nuevo valor (ingresos y consumo se reinician desde ahora)
-      stockData = { valor: nuevoValor, stockBase: nuevoValor, ingresos: 0, consumo: 0,
-                    fechaBase: dd + '/' + mm + '/' + aaaa, usuarioBase: 'Agustín',
-                    ingresosDetalle: [], consumoDetalle: [] };
+      // Después de un ajuste manual, el checkpoint de ESE tipo es el nuevo valor
+      // (ingresos y consumo de ese tipo se reinician desde ahora).
+      if (esFrio) {
+        frioTerminado = nuevoValor;
+        stockData.frioBase = nuevoValor; stockData.frioActual = nuevoValor;
+        stockData.frioFechaBase = hoy;   stockData.frioUsuarioBase = 'Agustín';
+        stockData.frioConsumo = 0;       stockData.frioConsumoDetalle = [];
+      } else {
+        stockAsfalto = nuevoValor;
+        stockFecha   = hoy; stockUsuario = 'Agustín';
+        stockData.valor = nuevoValor; stockData.stockBase = nuevoValor;
+        stockData.ingresos = 0; stockData.consumo = 0;
+        stockData.fechaBase = hoy; stockData.usuarioBase = 'Agustín';
+        stockData.ingresosDetalle = []; stockData.consumoDetalle = [];
+      }
 
       renderStockDisplay();
       input.value  = '';
-      fb.innerHTML = '✅ Stock actualizado: <strong>' + fmtTn(nuevoValor) + ' tn</strong> (antes: ' + fmtTn(stockAntes) + ' tn)';
+      fb.innerHTML = '✅ ' + (esFrio ? 'Frío terminado' : 'Stock') + ' actualizado: <strong>' + fmtTn(nuevoValor) + ' tn</strong> (antes: ' + fmtTn(stockAntes) + ' tn)';
       fb.style.color = 'var(--pos)';
       btn.textContent  = '✓ Guardado';
       btn.style.opacity = '1';
@@ -5152,6 +5214,7 @@ function ajustarStock() {
 
   const params = new URLSearchParams({
     action:     'ajusteStock',
+    tipo:       tipo,
     stockAntes: stockAntes,
     stockNuevo: nuevoValor,
     usuario:    'Agustín',
@@ -5707,6 +5770,7 @@ async function refreshData() {
         stockAsfalto = data.stockAsfalto.valor;
         stockFecha   = data.stockAsfalto.fechaBase || stockFecha;
         stockUsuario = data.stockAsfalto.usuarioBase || stockUsuario;
+        if (data.stockAsfalto.frioActual != null) frioTerminado = data.stockAsfalto.frioActual;
       }
       renderAll();
       updateTimestamp(data.timestamp);
@@ -5896,6 +5960,7 @@ if (APPS_SCRIPT_URL) {
           stockAsfalto = data.stockAsfalto.valor;
           stockFecha   = data.stockAsfalto.fechaBase || stockFecha;
           stockUsuario = data.stockAsfalto.usuarioBase || stockUsuario;
+          if (data.stockAsfalto.frioActual != null) frioTerminado = data.stockAsfalto.frioActual;
         }
         renderAll();
         updateTimestamp(data.timestamp);

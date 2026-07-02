@@ -55,7 +55,8 @@ function doGet(e) {
       const stockAntes = parseFloat((e.parameter.stockAntes || '0').replace(',', '.'));
       const stockNuevo = parseFloat((e.parameter.stockNuevo || '0').replace(',', '.'));
       const usuario    = e.parameter.usuario || 'Agustín';
-      const resultado  = guardarAjusteStock(stockAntes, stockNuevo, usuario);
+      const tipo       = e.parameter.tipo || 'asfalto';
+      const resultado  = guardarAjusteStock(stockAntes, stockNuevo, usuario, tipo);
       const json       = JSON.stringify(resultado);
       if (callback) {
         return ContentService.createTextOutput(callback + '(' + json + ')')
@@ -1921,7 +1922,7 @@ function diagnosticoEquipos() {
 // AJUSTE DE STOCK DE ASFALTO
 // ============================================================
 
-function guardarAjusteStock(stockAntes, stockNuevo, usuario) {
+function guardarAjusteStock(stockAntes, stockNuevo, usuario, tipo) {
   try {
     const ss    = SpreadsheetApp.openById(FILE_IDS.ajusteStock);
     const sheet = ss.getSheetByName('Ajuste de stock');
@@ -1932,9 +1933,11 @@ function guardarAjusteStock(stockAntes, stockNuevo, usuario) {
     const now   = new Date();
     const fecha = Utilities.formatDate(now, tz, 'dd/MM/yyyy');
     const hora  = Utilities.formatDate(now, tz, 'HH:mm:ss');
-    sheet.appendRow([fecha, hora, usuario, stockAntes, stockNuevo]);
-    Logger.log('Ajuste de stock guardado: ' + stockAntes + ' → ' + stockNuevo + ' (' + usuario + ')');
-    return { status: 'ok', stockNuevo: stockNuevo, timestamp: now.toISOString() };
+    const tipoN = (String(tipo || 'asfalto').toLowerCase().trim() === 'frio') ? 'frio' : 'asfalto';
+    // Col F = tipo ('asfalto' | 'frio'). Filas viejas sin col F se leen como 'asfalto'.
+    sheet.appendRow([fecha, hora, usuario, stockAntes, stockNuevo, tipoN]);
+    Logger.log('Ajuste de stock (' + tipoN + ') guardado: ' + stockAntes + ' → ' + stockNuevo + ' (' + usuario + ')');
+    return { status: 'ok', stockNuevo: stockNuevo, tipo: tipoN, timestamp: now.toISOString() };
   } catch (err) {
     Logger.log('guardarAjusteStock error: ' + err.toString());
     return { status: 'error', message: err.toString() };
@@ -1946,29 +1949,39 @@ function leerStockAsfalto(remitosData) {
   const TZ = 'America/Argentina/Buenos_Aires';
   // Punto de partida fijo (corte real confirmado por Agustín)
   const BASE_STOCK  = 700;
+  const BASE_FRIO   = 35;   // frío terminado por defecto (hasta que Agustín lo ajuste)
   const BASE_FECHA  = new Date(2026, 4, 7, 0, 0, 0); // 07/05/2026
   const BASE_USUARIO = 'Agustín';
 
   try {
     const ss = SpreadsheetApp.openById(FILE_IDS.ajusteStock);
 
-    // ── 1. Checkpoint: último ajuste manual ──────────────────────
+    // ── 1. Checkpoints: último ajuste manual de cada tipo (asfalto / frío) ──
+    // Hoja "Ajuste de stock": A fecha · B hora · C usuario · D antes · E nuevo · F tipo
+    // Filas viejas sin col F = 'asfalto'. Gana la última fila de cada tipo.
     let stockBase   = BASE_STOCK;
     let fechaBase   = BASE_FECHA;
     let usuarioBase = BASE_USUARIO;
+    let frioBase    = BASE_FRIO;
+    let frioFecha   = BASE_FECHA;
+    let frioUsuario = BASE_USUARIO;
 
     const sheetAjuste = ss.getSheetByName('Ajuste de stock');
     if (sheetAjuste && sheetAjuste.getLastRow() >= 2) {
-      const lastRow = sheetAjuste.getLastRow();
-      const row = sheetAjuste.getRange(lastRow, 1, 1, 5).getValues()[0];
-      const nuevoStock = Number(row[4]);
-      if (!isNaN(nuevoStock) && nuevoStock >= 0) {
-        stockBase = nuevoStock;
-        const parts = String(row[0] || '').split('/');
-        if (parts.length === 3) {
-          fechaBase = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+      const rowsAj = sheetAjuste.getDataRange().getValues();
+      for (var a = 1; a < rowsAj.length; a++) {
+        var valAj = Number(rowsAj[a][4]);
+        if (isNaN(valAj) || valAj < 0) continue;
+        var tipoAj = String(rowsAj[a][5] || 'asfalto').toLowerCase().trim();
+        var partsAj = String(rowsAj[a][0] || '').split('/');
+        var fAj = null;
+        if (partsAj.length === 3) fAj = new Date(parseInt(partsAj[2]), parseInt(partsAj[1]) - 1, parseInt(partsAj[0]));
+        var usrAj = String(rowsAj[a][2] || BASE_USUARIO);
+        if (tipoAj === 'frio' || tipoAj === 'frío') {
+          frioBase = valAj; if (fAj) frioFecha = fAj; frioUsuario = usrAj;
+        } else {
+          stockBase = valAj; if (fAj) fechaBase = fAj; usuarioBase = usrAj;
         }
-        usuarioBase = String(row[2] || BASE_USUARIO);
       }
     }
 
@@ -2012,33 +2025,41 @@ function leerStockAsfalto(remitosData) {
       }
     }
 
-    // ── 3. Consumo desde REMITOS ─────────────────────────────────────────────
-    // 500 tn mezcla requieren 25 tn asfalto → tn asfalto = tn mezcla / 20
+    // ── 3. Consumo desde REMITOS, separado por tipo ──────────────────────────
+    // Caliente: se produce del asfalto → consume asfalto = tn mezcla / 20 (desde fechaBase).
+    // Frío: producto ya terminado en el predio → se descuenta tn por tn del frío (desde frioFecha).
     const RATIO = 20;
-    let consumo = 0;
-    const consumoDetalle = [];
+    let consumo     = 0;   // asfalto materia prima consumido (solo caliente / 20)
+    let frioConsumo = 0;   // frío terminado despachado (tn, desde frioFecha)
+    const consumoDetalle     = []; // todas las salidas (para el detalle de movimientos)
+    const frioConsumoDetalle = []; // solo salidas frío posteriores al ajuste de frío
     const remitos = remitosData || {};
 
     if (remitos._detalle && remitos._detalle.length > 0) {
-      // ── Modo exacto: fecha por fila, incluir si fecha >= fechaBase ──────────
-      // Se usa >= para incluir remitos cargados el mismo día del ajuste de stock
-      var filasFiltradas = remitos._detalle.filter(function(r) { return r.fecha >= fechaBase; });
-      Logger.log('StockAsfalto — detalle exacto: ' + filasFiltradas.length + ' filas >= ' + Utilities.formatDate(fechaBase, TZ, 'dd/MM/yyyy'));
+      for (var f = 0; f < remitos._detalle.length; f++) {
+        var r = remitos._detalle[f];
+        var esFrio = (r.tipo === 'frio');
+        var incluir = esFrio ? (r.fecha >= frioFecha) : (r.fecha >= fechaBase);
+        if (!incluir) continue;
 
-      for (var f = 0; f < filasFiltradas.length; f++) {
-        var r = filasFiltradas[f];
-        var tnAsfalto = r.cant / RATIO;
-        consumo += tnAsfalto;
+        if (esFrio) {
+          frioConsumo += r.cant;
+          frioConsumoDetalle.push({ fecha: r.fechaStr, tnMezcla: r.cant });
+        } else {
+          consumo += r.cant / RATIO;  // caliente (o sin tipo) → materia prima
+        }
+
         consumoDetalle.push({
           fecha:     r.fechaStr,
           tipo:      r.tipo,
           caliente:  r.tipo === 'caliente' ? r.cant : 0,
-          frio:      r.tipo === 'frio'     ? r.cant : 0,
+          frio:      esFrio ? r.cant : 0,
           tnMezcla:  r.cant,
-          tnAsfalto: Math.round(tnAsfalto * 10) / 10,
+          tnAsfalto: esFrio ? 0 : Math.round((r.cant / RATIO) * 10) / 10,
           exacto:    true,
         });
       }
+      Logger.log('StockAsfalto — detalle exacto: ' + consumoDetalle.length + ' salidas (frío: ' + frioConsumoDetalle.length + ')');
     } else {
       // ── Fallback: pro-rateo mensual si no hay fechas exactas ────────────────
       const MES_NUM = { ene:1, feb:2, mar:3, abr:4, may:5, jun:6,
@@ -2048,30 +2069,40 @@ function leerStockAsfalto(remitosData) {
         if (!numMes) continue;
         var inicioMes = new Date(2026, numMes - 1, 1);
         var finMes    = new Date(2026, numMes, 0);
-        if (finMes < fechaBase) continue;
+        var calMes    = remitos[mes].caliente || 0;
+        var frioMes   = remitos[mes].frio     || 0;
 
-        var tnMezcla = remitos[mes].total || 0;
-        var fraccion = 1;
-        if (inicioMes < fechaBase && fechaBase <= finMes) {
-          var diasMes       = finMes.getDate();
-          var diasRestantes = Math.max(0, diasMes - fechaBase.getDate());
-          fraccion          = diasRestantes / diasMes;
+        // Caliente → asfalto materia prima (desde fechaBase)
+        if (finMes >= fechaBase) {
+          var fracCal = 1;
+          if (inicioMes < fechaBase && fechaBase <= finMes) {
+            fracCal = Math.max(0, finMes.getDate() - fechaBase.getDate()) / finMes.getDate();
+          }
+          consumo += (calMes * fracCal) / RATIO;
         }
-        var tnAsfaltoM = (tnMezcla * fraccion) / RATIO;
-        consumo += tnAsfaltoM;
+        // Frío → frío terminado (desde frioFecha)
+        if (finMes >= frioFecha) {
+          var fracFrio = 1;
+          if (inicioMes < frioFecha && frioFecha <= finMes) {
+            fracFrio = Math.max(0, finMes.getDate() - frioFecha.getDate()) / finMes.getDate();
+          }
+          frioConsumo += frioMes * fracFrio;
+        }
         consumoDetalle.push({
           mes:       mes,
-          tnMezcla:  Math.round(tnMezcla * fraccion * 10) / 10,
-          tnAsfalto: Math.round(tnAsfaltoM * 10) / 10,
-          pct:       Math.round(fraccion * 100),
-          caliente:  Math.round((remitos[mes].caliente || 0) * fraccion * 10) / 10,
-          frio:      Math.round((remitos[mes].frio     || 0) * fraccion * 10) / 10,
+          tnMezcla:  Math.round((calMes + frioMes) * 10) / 10,
+          tnAsfalto: Math.round((calMes / RATIO) * 10) / 10,
+          caliente:  Math.round(calMes  * 10) / 10,
+          frio:      Math.round(frioMes * 10) / 10,
+          pct:       100,
         });
       }
     }
 
     const stockActual = stockBase + ingresos - consumo;
-    Logger.log('StockAsfalto: base=' + stockBase + ' + ing=' + ingresos + ' - cons=' + consumo + ' = ' + stockActual);
+    const frioActual  = frioBase - frioConsumo;
+    Logger.log('StockAsfalto: base=' + stockBase + ' + ing=' + ingresos + ' - cons=' + consumo + ' = ' + stockActual +
+               ' | frío base=' + frioBase + ' - ' + frioConsumo + ' = ' + frioActual);
 
     return {
       valor:           Math.round(stockActual * 10) / 10,
@@ -2082,12 +2113,22 @@ function leerStockAsfalto(remitosData) {
       consumo:         Math.round(consumo * 10) / 10,
       ingresosDetalle: ingresosDetalle,
       consumoDetalle:  consumoDetalle,
+      // ── Frío terminado (stock aparte) ──
+      frioBase:           frioBase,
+      frioFechaBase:      Utilities.formatDate(frioFecha, TZ, 'dd/MM/yyyy'),
+      frioUsuarioBase:    frioUsuario,
+      frioConsumo:        Math.round(frioConsumo * 10) / 10,
+      frioActual:         Math.round(frioActual * 10) / 10,
+      frioConsumoDetalle: frioConsumoDetalle,
     };
 
   } catch (err) {
     Logger.log('leerStockAsfalto error: ' + err.toString());
     return { valor: BASE_STOCK, stockBase: BASE_STOCK, ingresos: 0, consumo: 0,
              fechaBase: Utilities.formatDate(BASE_FECHA, 'America/Argentina/Buenos_Aires', 'dd/MM/yyyy'),
-             usuarioBase: BASE_USUARIO, ingresosDetalle: [], consumoDetalle: [] };
+             usuarioBase: BASE_USUARIO, ingresosDetalle: [], consumoDetalle: [],
+             frioBase: BASE_FRIO, frioActual: BASE_FRIO,
+             frioFechaBase: Utilities.formatDate(BASE_FECHA, 'America/Argentina/Buenos_Aires', 'dd/MM/yyyy'),
+             frioUsuarioBase: BASE_USUARIO, frioConsumo: 0, frioConsumoDetalle: [] };
   }
 }
