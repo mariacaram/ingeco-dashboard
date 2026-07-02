@@ -3351,7 +3351,7 @@ function renderRentabilidad() {
 
   const alqMes      = ALQUILER_EQUIPOS[mesActual] ? ALQUILER_EQUIPOS[mesActual].totalArs : null;
   const ocTotalMes  = OC_INSUMOS[mesActual] ? OC_INSUMOS[mesActual].total : null;
-  const ocPlantaObj = getOCPlanta(mesActual);
+  const ocPlantaObj = getOCPlantaInterna(mesActual);
   const ocPlanta    = ocPlantaObj ? ocPlantaObj.total : null;
   // OC Obras ≈ total − planta (taller OC aún sin clasificar)
   const ocObras     = (ocTotalMes != null && ocPlanta != null) ? ocTotalMes - ocPlanta
@@ -3896,8 +3896,8 @@ function openOCPlantaPanel() {
   if (!panel) return;
 
   const mesLabel = MES[mesActual] || mesActual;
-  const ocMes = OC_INSUMOS[mesActual];
-  const items = ocMes && ocMes.items ? ocMes.items.slice() : [];
+  const ocPlantaInt = getOCPlantaInterna(mesActual);
+  const items = ocPlantaInt ? ocPlantaInt.items.slice() : [];
 
   let html = '';
   if (items.length === 0) {
@@ -4620,6 +4620,24 @@ function getOCPlanta(mes) {
   };
 }
 
+// Nombres exactos de las obras que imputan a la planta en sí (no a obras externas)
+const OBRAS_PLANTA_INTERNA = ['planta de asfalto', 'planta de trituración', 'predio warnes'];
+
+function getOCPlantaInterna(mes) {
+  const ocMes = OC_INSUMOS[mes || mesActual];
+  if (!ocMes || !ocMes.items || ocMes.items.length === 0) return null;
+  const items = ocMes.items.filter(i => {
+    const obra = (i.obra || '').toLowerCase().trim();
+    return OBRAS_PLANTA_INTERNA.some(n => obra === n || obra.includes(n) || n.includes(obra));
+  });
+  if (items.length === 0) return null;
+  return {
+    total: items.reduce((s, i) => s + i.monto, 0),
+    nOC:   items.reduce((s, i) => s + i.nOC,   0),
+    items,
+  };
+}
+
 function renderStockDisplay() {
   const FRIO_FIJO  = 35;
   const producible = Math.round(stockAsfalto * 20);
@@ -4919,7 +4937,7 @@ function renderPlanta() {
   }
 
   // Cards 2a y 2b — OC Insumos Planta y MO Planta (separadas)
-  const ocPlanta  = getOCPlanta(mesActual);
+  const ocPlanta  = getOCPlantaInterna(mesActual);
   const moPlanta  = getMOPlanta(mesActual);
   const moTotal   = moPlanta.length > 0 ? moPlanta.reduce((s, r) => s + r.monto, 0) : null;
   const ocTotal   = ocPlanta ? ocPlanta.total : null;
@@ -5020,7 +5038,7 @@ function renderPlantaCosto() {
   const tnFrio  = rem && rem.frio     > 0 ? rem.frio     : null;
   const tnTotal = (tnCal != null || tnFrio != null) ? (tnCal || 0) + (tnFrio || 0) : null;
 
-  const ocPlanta = getOCPlanta(mesActual);
+  const ocPlanta = getOCPlantaInterna(mesActual);
   const ocTotal  = ocPlanta ? ocPlanta.total : null;
 
   const moArr   = getMOPlanta(mesActual);
@@ -5125,18 +5143,18 @@ function renderPlantaCharts() {
   // ── Gráfico 2: Insumos planta por mes ──
   const insEl = document.getElementById('planta-chart-insumos');
   if (insEl) {
-    const mesesOC = Object.keys(OC_INSUMOS).filter(m => getOCPlanta(m) != null);
+    const mesesOC = Object.keys(OC_INSUMOS).filter(m => getOCPlantaInterna(m) != null);
     if (mesesOC.length === 0) {
       insEl.innerHTML = '<div class="nd" style="text-align:center;padding:24px;font-size:13px;">Sin datos de OC para la planta</div>';
     } else {
-      const vals   = mesesOC.map(m => getOCPlanta(m).total);
+      const vals   = mesesOC.map(m => getOCPlantaInterna(m).total);
       const maxVal = Math.max(...vals);
       const W = 300, H = 170, YBASE = H - 36, CHARTH = YBASE - 16;
       const BAR_W = Math.min(44, Math.floor((W - 20) / mesesOC.length * 0.55));
       const STEP  = Math.floor((W - 20) / mesesOC.length);
       let bars = '', lbls = '';
       mesesOC.forEach((mes, i) => {
-        const val = getOCPlanta(mes).total;
+        const val = getOCPlantaInterna(mes).total;
         const cx  = 10 + STEP * i + STEP / 2;
         const x   = cx - BAR_W / 2;
         const h   = Math.round(val / maxVal * CHARTH);
