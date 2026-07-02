@@ -151,6 +151,8 @@
   .kpi-card.accent { border-left-color: var(--accent); }
   .kpi-card.pos { border-left-color: var(--pos); }
   .kpi-card.neg { border-left-color: var(--neg); }
+  .clickable-panel { transition: background .15s, border-color .15s; }
+  .clickable-panel:hover { background: #f8fafc; border-color: var(--primary); }
   .kpi-label { font-size: 11px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
   .kpi-value { font-size: 22px; font-weight: 700; color: var(--text); line-height: 1.1; }
   .kpi-value.nd { font-size: 14px; color: var(--nd-text); font-style: italic; font-weight: 400; }
@@ -771,7 +773,7 @@
     </div>
 
     <!-- Tabla de movimientos post-corte: salidas caliente/frío + ingresos -->
-    <div id="salidas-post-corte" style="display:none;margin-top:10px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px 16px;font-size:12px;"></div>
+    <div id="salidas-post-corte" class="clickable-panel" style="display:none;margin-top:10px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px 16px;font-size:12px;"></div>
 
     <div style="margin-top:10px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:14px 16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;" id="stock-total-row">
       <span style="font-size:13px;color:var(--text);">14.000 tn producible &nbsp;+&nbsp; 35 tn frío terminado <span style="color:var(--muted);font-size:12px;">(❄ reserva Agustín)</span> &nbsp;=&nbsp;</span>
@@ -4969,7 +4971,7 @@ function renderStockDisplay() {
 
       let h = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">' +
               '<div style="font-size:12px;font-weight:700;color:var(--muted);">📊 Movimientos post-corte (desde ' + fb + ')</div>' +
-              '<span style="font-size:11px;color:var(--primary);font-weight:600;">Ver detalle →</span></div>';
+              '<span style="font-size:11px;color:#fff;font-weight:700;background:var(--primary);border-radius:12px;padding:4px 10px;white-space:nowrap;">Ver detalle →</span></div>';
 
       h += '<div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:8px;">';
       if (cd.length > 0) {
