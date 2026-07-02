@@ -4143,6 +4143,113 @@ function openMoTnPanel() {
   overlay.classList.add('open');
 }
 
+function openMovimientosPostCortePanel() {
+  const panel   = document.getElementById('sidePanel');
+  const overlay = document.getElementById('overlay');
+  const content = document.getElementById('panelContent');
+  if (!panel) return;
+
+  const cd = stockData.consumoDetalle  || [];
+  const id = stockData.ingresosDetalle || [];
+  const fb = stockData.fechaBase || stockFecha;
+  const MN = { ene:'Ene', feb:'Feb', mar:'Mar', abr:'Abr', may:'May', jun:'Jun',
+               jul:'Jul', ago:'Ago', sep:'Sep', oct:'Oct', nov:'Nov', dic:'Dic' };
+
+  let h = '';
+
+  if (cd.length > 0) {
+    const modoExacto = cd[0].exacto === true;
+    h += '<div style="font-size:11px;font-weight:700;color:#dc2626;margin-bottom:4px;">↘ SALIDAS — mezcla producida (Remitos' + (modoExacto ? ', fecha exacta' : ', pro-rateado') + ')</div>';
+    h += '<table style="width:100%;border-collapse:collapse;font-size:12px;">';
+    if (modoExacto) {
+      h += '<thead><tr style="background:#fef2f2;">' +
+           '<th style="padding:5px 8px;text-align:left;border-bottom:1px solid #fecaca;">Fecha</th>' +
+           '<th style="padding:5px 8px;text-align:right;border-bottom:1px solid #fecaca;">🔥 Cal.</th>' +
+           '<th style="padding:5px 8px;text-align:right;border-bottom:1px solid #fecaca;">❄ Frío</th>' +
+           '<th style="padding:5px 8px;text-align:right;border-bottom:1px solid #fecaca;">Mezcla</th>' +
+           '</tr></thead><tbody>';
+      let sumCal = 0, sumFrio = 0, sumTot = 0;
+      for (const row of cd) {
+        sumCal  += row.caliente || 0;
+        sumFrio += row.frio     || 0;
+        sumTot  += row.tnMezcla || 0;
+        h += '<tr style="border-bottom:1px solid #fee2e2;">' +
+             '<td style="padding:5px 8px;">'                                                         + row.fecha + '</td>' +
+             '<td style="padding:5px 8px;text-align:right;color:#b45309;">' + (row.caliente > 0 ? fmtTn(row.caliente) + ' tn' : '—') + '</td>' +
+             '<td style="padding:5px 8px;text-align:right;color:#0369a1;">' + (row.frio     > 0 ? fmtTn(row.frio)     + ' tn' : '—') + '</td>' +
+             '<td style="padding:5px 8px;text-align:right;font-weight:600;">' + fmtTn(row.tnMezcla) + ' tn</td>' +
+             '</tr>';
+      }
+      if (cd.length > 1) {
+        h += '<tr style="background:#fff5f5;font-weight:700;">' +
+             '<td style="padding:5px 8px;">Total</td>' +
+             '<td style="padding:5px 8px;text-align:right;color:#b45309;">' + fmtTn(sumCal)  + ' tn</td>' +
+             '<td style="padding:5px 8px;text-align:right;color:#0369a1;">' + fmtTn(sumFrio) + ' tn</td>' +
+             '<td style="padding:5px 8px;text-align:right;">'               + fmtTn(sumTot)  + ' tn</td>' +
+             '</tr>';
+      }
+    } else {
+      h += '<thead><tr style="background:#fef2f2;">' +
+           '<th style="padding:5px 8px;text-align:left;border-bottom:1px solid #fecaca;">Mes</th>' +
+           '<th style="padding:5px 8px;text-align:right;border-bottom:1px solid #fecaca;">🔥 Cal.</th>' +
+           '<th style="padding:5px 8px;text-align:right;border-bottom:1px solid #fecaca;">❄ Frío</th>' +
+           '<th style="padding:5px 8px;text-align:right;border-bottom:1px solid #fecaca;">Total mezcla</th>' +
+           '<th style="padding:5px 8px;text-align:right;border-bottom:1px solid #fecaca;">Período</th>' +
+           '</tr></thead><tbody>';
+      let sumCal = 0, sumFrio = 0, sumTot = 0;
+      for (const row of cd) {
+        sumCal  += row.caliente || 0;
+        sumFrio += row.frio     || 0;
+        sumTot  += row.tnMezcla || 0;
+        const per = row.pct < 100 ? row.pct + '% del mes' : 'mes completo';
+        h += '<tr style="border-bottom:1px solid #fee2e2;">' +
+             '<td style="padding:5px 8px;">'                                                          + (MN[row.mes] || row.mes) + '</td>' +
+             '<td style="padding:5px 8px;text-align:right;color:#b45309;">' + (row.caliente > 0 ? fmtTn(row.caliente) + ' tn' : '—') + '</td>' +
+             '<td style="padding:5px 8px;text-align:right;color:#0369a1;">' + (row.frio     > 0 ? fmtTn(row.frio)     + ' tn' : '—') + '</td>' +
+             '<td style="padding:5px 8px;text-align:right;font-weight:600;">' + fmtTn(row.tnMezcla) + ' tn</td>' +
+             '<td style="padding:5px 8px;text-align:right;color:var(--muted);font-size:11px;">' + per + '</td>' +
+             '</tr>';
+      }
+      if (cd.length > 1) {
+        h += '<tr style="background:#fff5f5;font-weight:700;">' +
+             '<td style="padding:5px 8px;">Total</td>' +
+             '<td style="padding:5px 8px;text-align:right;color:#b45309;">' + fmtTn(sumCal)  + ' tn</td>' +
+             '<td style="padding:5px 8px;text-align:right;color:#0369a1;">' + fmtTn(sumFrio) + ' tn</td>' +
+             '<td style="padding:5px 8px;text-align:right;">'               + fmtTn(sumTot)  + ' tn</td>' +
+             '<td></td></tr>';
+      }
+      h += '<div style="font-size:10px;color:var(--muted);margin-top:4px;">⚠ Sin columna FECHA en Remitos — consumo pro-rateado por días desde el corte.</div>';
+    }
+    h += '</tbody></table>';
+    h += '<div style="font-size:10px;color:var(--muted);margin-top:4px;">Mezcla ÷ 20 = asfalto consumido &nbsp;·&nbsp; Total asfalto descontado: <strong>' + fmtTn(stockData.consumo || 0) + ' tn</strong></div>';
+  }
+
+  if (id.length > 0) {
+    h += '<div style="font-size:11px;font-weight:700;color:#16a34a;margin-top:12px;margin-bottom:4px;">↗ INGRESOS — formulario Agustín</div>';
+    h += '<table style="width:100%;border-collapse:collapse;font-size:12px;">';
+    h += '<thead><tr style="background:#f0fdf4;">' +
+         '<th style="padding:5px 8px;text-align:left;border-bottom:1px solid #bbf7d0;">Fecha</th>' +
+         '<th style="padding:5px 8px;text-align:right;border-bottom:1px solid #bbf7d0;">Cantidad</th>' +
+         '</tr></thead><tbody>';
+    for (const row of id) {
+      h += '<tr style="border-bottom:1px solid #dcfce7;">' +
+           '<td style="padding:5px 8px;">' + row.fecha + '</td>' +
+           '<td style="padding:5px 8px;text-align:right;font-weight:600;color:#16a34a;">+' + fmtTn(row.cantidad) + ' tn</td>' +
+           '</tr>';
+    }
+    h += '</tbody></table>';
+  }
+
+  if (!h) h = '<p class="nd" style="padding:16px 0;">Sin movimientos registrados desde el corte.</p>';
+
+  content.innerHTML = `
+    <div class="panel-title">Movimientos post-corte</div>
+    <div class="panel-sub">Desde ${fb}</div>
+    <div style="margin-top:14px;">${h}</div>`;
+  panel.classList.add('open');
+  overlay.classList.add('open');
+}
+
 function openTnPanel() {
   const panel   = document.getElementById('sidePanel');
   const overlay = document.getElementById('overlay');
@@ -4847,7 +4954,7 @@ function renderStockDisplay() {
       ' &nbsp;=&nbsp; <span style="font-size:16px;font-weight:800;color:#16a34a;">' + stockStr + ' tn</span>';
   }
 
-  // Tabla de movimientos post-corte
+  // Resumen de movimientos post-corte (detalle completo en openMovimientosPostCortePanel)
   const elSalidas = document.getElementById('salidas-post-corte');
   if (elSalidas) {
     const cd = stockData.consumoDetalle  || [];
@@ -4855,96 +4962,33 @@ function renderStockDisplay() {
     if (cd.length === 0 && id.length === 0) {
       elSalidas.style.display = 'none';
     } else {
-      const MN = { ene:'Ene', feb:'Feb', mar:'Mar', abr:'Abr', may:'May', jun:'Jun',
-                   jul:'Jul', ago:'Ago', sep:'Sep', oct:'Oct', nov:'Nov', dic:'Dic' };
       const fb = stockData.fechaBase || stockFecha;
-      let h = '<div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:10px;">📊 Movimientos post-corte (desde ' + fb + ')</div>';
+      let sumCal = 0, sumFrio = 0, sumTot = 0;
+      cd.forEach(row => { sumCal += row.caliente || 0; sumFrio += row.frio || 0; sumTot += row.tnMezcla || 0; });
+      const sumIng = id.reduce((s, row) => s + (row.cantidad || 0), 0);
 
+      let h = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">' +
+              '<div style="font-size:12px;font-weight:700;color:var(--muted);">📊 Movimientos post-corte (desde ' + fb + ')</div>' +
+              '<span style="font-size:11px;color:var(--primary);font-weight:600;">Ver detalle →</span></div>';
+
+      h += '<div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:8px;">';
       if (cd.length > 0) {
-        const modoExacto = cd[0].exacto === true;
-        h += '<div style="font-size:11px;font-weight:700;color:#dc2626;margin-bottom:4px;">↘ SALIDAS — mezcla producida (Remitos' + (modoExacto ? ', fecha exacta' : ', pro-rateado') + ')</div>';
-        h += '<table style="width:100%;border-collapse:collapse;font-size:12px;">';
-        if (modoExacto) {
-          h += '<thead><tr style="background:#fef2f2;">' +
-               '<th style="padding:5px 8px;text-align:left;border-bottom:1px solid #fecaca;">Fecha</th>' +
-               '<th style="padding:5px 8px;text-align:right;border-bottom:1px solid #fecaca;">🔥 Cal.</th>' +
-               '<th style="padding:5px 8px;text-align:right;border-bottom:1px solid #fecaca;">❄ Frío</th>' +
-               '<th style="padding:5px 8px;text-align:right;border-bottom:1px solid #fecaca;">Mezcla</th>' +
-               '</tr></thead><tbody>';
-          let sumCal = 0, sumFrio = 0, sumTot = 0;
-          for (const row of cd) {
-            sumCal  += row.caliente || 0;
-            sumFrio += row.frio     || 0;
-            sumTot  += row.tnMezcla || 0;
-            h += '<tr style="border-bottom:1px solid #fee2e2;">' +
-                 '<td style="padding:5px 8px;">'                                                         + row.fecha + '</td>' +
-                 '<td style="padding:5px 8px;text-align:right;color:#b45309;">' + (row.caliente > 0 ? fmtTn(row.caliente) + ' tn' : '—') + '</td>' +
-                 '<td style="padding:5px 8px;text-align:right;color:#0369a1;">' + (row.frio     > 0 ? fmtTn(row.frio)     + ' tn' : '—') + '</td>' +
-                 '<td style="padding:5px 8px;text-align:right;font-weight:600;">' + fmtTn(row.tnMezcla) + ' tn</td>' +
-                 '</tr>';
-          }
-          if (cd.length > 1) {
-            h += '<tr style="background:#fff5f5;font-weight:700;">' +
-                 '<td style="padding:5px 8px;">Total</td>' +
-                 '<td style="padding:5px 8px;text-align:right;color:#b45309;">' + fmtTn(sumCal)  + ' tn</td>' +
-                 '<td style="padding:5px 8px;text-align:right;color:#0369a1;">' + fmtTn(sumFrio) + ' tn</td>' +
-                 '<td style="padding:5px 8px;text-align:right;">'               + fmtTn(sumTot)  + ' tn</td>' +
-                 '</tr>';
-          }
-        } else {
-          h += '<thead><tr style="background:#fef2f2;">' +
-               '<th style="padding:5px 8px;text-align:left;border-bottom:1px solid #fecaca;">Mes</th>' +
-               '<th style="padding:5px 8px;text-align:right;border-bottom:1px solid #fecaca;">🔥 Cal.</th>' +
-               '<th style="padding:5px 8px;text-align:right;border-bottom:1px solid #fecaca;">❄ Frío</th>' +
-               '<th style="padding:5px 8px;text-align:right;border-bottom:1px solid #fecaca;">Total mezcla</th>' +
-               '<th style="padding:5px 8px;text-align:right;border-bottom:1px solid #fecaca;">Período</th>' +
-               '</tr></thead><tbody>';
-          let sumCal = 0, sumFrio = 0, sumTot = 0;
-          for (const row of cd) {
-            sumCal  += row.caliente || 0;
-            sumFrio += row.frio     || 0;
-            sumTot  += row.tnMezcla || 0;
-            const per = row.pct < 100 ? row.pct + '% del mes' : 'mes completo';
-            h += '<tr style="border-bottom:1px solid #fee2e2;">' +
-                 '<td style="padding:5px 8px;">'                                                          + (MN[row.mes] || row.mes) + '</td>' +
-                 '<td style="padding:5px 8px;text-align:right;color:#b45309;">' + (row.caliente > 0 ? fmtTn(row.caliente) + ' tn' : '—') + '</td>' +
-                 '<td style="padding:5px 8px;text-align:right;color:#0369a1;">' + (row.frio     > 0 ? fmtTn(row.frio)     + ' tn' : '—') + '</td>' +
-                 '<td style="padding:5px 8px;text-align:right;font-weight:600;">' + fmtTn(row.tnMezcla) + ' tn</td>' +
-                 '<td style="padding:5px 8px;text-align:right;color:var(--muted);font-size:11px;">' + per + '</td>' +
-                 '</tr>';
-          }
-          if (cd.length > 1) {
-            h += '<tr style="background:#fff5f5;font-weight:700;">' +
-                 '<td style="padding:5px 8px;">Total</td>' +
-                 '<td style="padding:5px 8px;text-align:right;color:#b45309;">' + fmtTn(sumCal)  + ' tn</td>' +
-                 '<td style="padding:5px 8px;text-align:right;color:#0369a1;">' + fmtTn(sumFrio) + ' tn</td>' +
-                 '<td style="padding:5px 8px;text-align:right;">'               + fmtTn(sumTot)  + ' tn</td>' +
-                 '<td></td></tr>';
-          }
-          h += '<div style="font-size:10px;color:var(--muted);margin-top:4px;">⚠ Sin columna FECHA en Remitos — consumo pro-rateado por días desde el corte.</div>';
-        }
-        h += '</tbody></table>';
-        h += '<div style="font-size:10px;color:var(--muted);margin-top:4px;">Mezcla ÷ 20 = asfalto consumido &nbsp;·&nbsp; Total asfalto descontado: <strong>' + fmtTn(stockData.consumo || 0) + ' tn</strong></div>';
+        h += '<div><span style="font-size:11px;color:var(--muted);">↘ Salidas</span><br>' +
+             '<strong style="font-size:14px;">' + cd.length + ' movimiento' + (cd.length !== 1 ? 's' : '') + '</strong></div>' +
+             '<div><span style="font-size:11px;color:#b45309;">🔥 Cal.</span><br><strong style="font-size:14px;color:#b45309;">' + fmtTn(sumCal) + ' tn</strong></div>' +
+             '<div><span style="font-size:11px;color:#0369a1;">❄ Frío</span><br><strong style="font-size:14px;color:#0369a1;">' + fmtTn(sumFrio) + ' tn</strong></div>' +
+             '<div><span style="font-size:11px;color:var(--muted);">Mezcla total</span><br><strong style="font-size:14px;">' + fmtTn(sumTot) + ' tn</strong></div>';
       }
-
       if (id.length > 0) {
-        h += '<div style="font-size:11px;font-weight:700;color:#16a34a;margin-top:12px;margin-bottom:4px;">↗ INGRESOS — formulario Agustín</div>';
-        h += '<table style="width:100%;border-collapse:collapse;font-size:12px;">';
-        h += '<thead><tr style="background:#f0fdf4;">' +
-             '<th style="padding:5px 8px;text-align:left;border-bottom:1px solid #bbf7d0;">Fecha</th>' +
-             '<th style="padding:5px 8px;text-align:right;border-bottom:1px solid #bbf7d0;">Cantidad</th>' +
-             '</tr></thead><tbody>';
-        for (const row of id) {
-          h += '<tr style="border-bottom:1px solid #dcfce7;">' +
-               '<td style="padding:5px 8px;">' + row.fecha + '</td>' +
-               '<td style="padding:5px 8px;text-align:right;font-weight:600;color:#16a34a;">+' + fmtTn(row.cantidad) + ' tn</td>' +
-               '</tr>';
-        }
-        h += '</tbody></table>';
+        h += '<div><span style="font-size:11px;color:#16a34a;">↗ Ingresos</span><br>' +
+             '<strong style="font-size:14px;color:#16a34a;">' + id.length + ' · +' + fmtTn(sumIng) + ' tn</strong></div>';
       }
+      h += '</div>';
 
       elSalidas.innerHTML       = h;
       elSalidas.style.display   = 'block';
+      elSalidas.style.cursor    = 'pointer';
+      elSalidas.onclick         = openMovimientosPostCortePanel;
     }
   }
 
