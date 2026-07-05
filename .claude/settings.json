@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__claude_ai_Google_Drive__search_files",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(Copy-Item \"c:\\\\Users\\\\Maria Caram\\\\COWORK\\\\Ingeco-aplicacion\\\\dashboard_ingeco.html\" \"c:\\\\Users\\\\Maria Caram\\\\COWORK\\\\Ingeco-aplicacion\\\\index.html\" -Force)",
+      "mcp__claude_ai_Google_Drive__read_file_content",
+      "Bash(node -e ' *)"
+    ]
+  }
+}
