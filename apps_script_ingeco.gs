@@ -649,11 +649,12 @@ function leerMaestroObras() {
     const sheet = ss.getSheetByName('Maestro de Obras') || ss.getSheets()[0];
     const rows  = sheet.getDataRange().getValues();
 
-    // Encontrar fila de encabezados (contiene COD_OBRA)
+    // Encontrar fila de encabezados (contiene COD_OBRA, o CODIGO + NOMBRE)
     let hdrIdx = 0;
     for (let i = 0; i < Math.min(5, rows.length); i++) {
       const rowStr = rows[i].map(c => String(c).toUpperCase()).join('|');
-      if (rowStr.includes('COD_OBRA') || rowStr.includes('COD OBRA')) { hdrIdx = i; break; }
+      if (rowStr.includes('COD_OBRA') || rowStr.includes('COD OBRA') ||
+          (rowStr.includes('CODIGO') && rowStr.includes('NOMBRE'))) { hdrIdx = i; break; }
     }
 
     const headers = rows[hdrIdx].map(h => String(h).toLowerCase().trim());
@@ -676,14 +677,22 @@ function leerMaestroObras() {
       const nombre = String(row[iNombre] || '').trim();
       const estado = iEstado !== null ? String(row[iEstado] || '').trim() : 'Activa';
 
-      if (!cod || !nombre || estado !== 'Activa') continue;
+      // Estado vacío = activa (la columna existe pero no siempre se completa)
+      if (!nombre || (estado && estado !== 'Activa')) continue;
 
-      obras[cod] = {
+      const info = {
         nombre:  nombre,
         cliente: iCliente !== null ? String(row[iCliente] || '').trim() : '',
         fuente:  iFuente  !== null ? String(row[iFuente]  || '').trim() : '',
         tipo:    iTipo    !== null ? String(row[iTipo]    || '').trim() : '',
       };
+      // Indexar por código real (si hay) y por nombre en minúsculas — Fernando
+      // usa el nombre de obra (col B del maestro) como código en sus pestañas.
+      if (cod && cod !== '-') {
+        obras[cod] = info;
+        obras[cod.toLowerCase()] = info;
+      }
+      obras[nombre.toLowerCase()] = info;
     }
 
     Logger.log('Maestro de Obras — ' + Object.keys(obras).length + ' obras activas');
@@ -860,7 +869,7 @@ function leerGeneradoPorObra() {
         if (cod === 'SIN-CODIGO') continue;
         var montoRed = Math.round(montoPorCod[cod]);
         if (montoRed < 0) continue;
-        var info = maestro[cod];
+        var info = maestro[cod] || maestro[String(cod).toLowerCase().trim()];
         if (info && info.fuente === 'INTERNO') continue;
         list.push({
           cod_obra: cod,
@@ -911,9 +920,16 @@ function leerGeneradoPorObra() {
       if (list.length > 0) obrasPorMes[mes] = list;
     }
 
+    // Mapa clave (minúsculas) → TIPO_CONTRATO del maestro. Lo usa el dashboard
+    // para clasificar obras que no vienen de Fernando (OC/remitos/alquiler).
+    const tipos = {};
+    Object.keys(maestro).forEach(function(k) {
+      if (maestro[k] && maestro[k].tipo) tipos[k.toLowerCase()] = maestro[k].tipo;
+    });
+
     Logger.log('obrasPorMes — meses: ' + Object.keys(obrasPorMes).join(',') +
                ' | sinPeriodo: ' + obrasSinPeriodo.length);
-    return { obras: obras, obrasPorMes: obrasPorMes, obrasSinPeriodo: obrasSinPeriodo, tabsSinPeriodo: tabsSinPeriodo };
+    return { obras: obras, obrasPorMes: obrasPorMes, obrasSinPeriodo: obrasSinPeriodo, tabsSinPeriodo: tabsSinPeriodo, tipos: tipos };
 
   } catch (err) {
     Logger.log('leerGeneradoPorObra error: ' + err.toString());
