@@ -420,9 +420,9 @@
   /* Oculta la columna "MO (prorrateada)" (4ta) en la tabla de contribución por obra */
   body.role-admin #tabla-resumen-obra th:nth-child(4),
   body.role-admin #tabla-resumen-obra td:nth-child(4):not([colspan]) { display: none !important; }
-  /* Ídem en las tablas por tipo de contratación (MO es la 5ta: hay col. Tipo adelante) */
-  body.role-admin .tabla-margen-tipo th:nth-child(5),
-  body.role-admin .tabla-margen-tipo td:nth-child(5):not([colspan]) { display: none !important; }
+  /* Ídem en las tablas por tipo de contratación (mismas columnas que por obra) */
+  body.role-admin .tabla-margen-tipo th:nth-child(4),
+  body.role-admin .tabla-margen-tipo td:nth-child(4):not([colspan]) { display: none !important; }
 </style>
 </head>
 <body>
@@ -2280,8 +2280,7 @@ function computeMargenFilas() {
 }
 
 // Renderiza la fila <tr> de una obra para las tablas de contribución marginal.
-// tipoLabel: si se pasa, antepone la celda "Tipo de contratación" (pestaña por tipo).
-function _filaMargenHTML(r, moEsEstim, tnTotalGlobal, tipoLabel) {
+function _filaMargenHTML(r, moEsEstim, tnTotalGlobal) {
   const o = r.o;
   const mgColor = r.margen > 0 ? 'pos-val' : r.margen < 0 ? 'neg-val' : '';
   const _tnPartes = [];
@@ -2298,11 +2297,8 @@ function _filaMargenHTML(r, moEsEstim, tnTotalGlobal, tipoLabel) {
   const nomEsc  = (o.nombre  || '').replace(/'/g, "\\'");
   const cellStyle = 'cursor:pointer;transition:background 0.15s;';
   const hoverTip  = 'title="Click para ver detalle"';
-  const tipoCell = tipoLabel != null
-    ? `<td><span style="font-size:11px;color:var(--muted);">${tipoLabel}</span></td>`
-    : '';
   return `<tr>
-      ${tipoCell}<td style="${cellStyle}" title="Ver historial de todos los meses" onclick="openHistorialObra('${codEsc2}','${nomEsc}')"><code style="font-size:11px;background:#f1f5f9;padding:2px 5px;border-radius:3px;text-decoration:underline dotted;">${o.cod_obra}</code><br><small style="color:var(--muted);font-size:10px;">${o.nombre}</small></td>
+      <td style="${cellStyle}" title="Ver historial de todos los meses" onclick="openHistorialObra('${codEsc2}','${nomEsc}')"><code style="font-size:11px;background:#f1f5f9;padding:2px 5px;border-radius:3px;text-decoration:underline dotted;">${o.cod_obra}</code><br><small style="color:var(--muted);font-size:10px;">${o.nombre}</small></td>
       <td class="num" style="${cellStyle}" ${hoverTip} onclick="openDetalleCelda('acobrar','${codEsc2}','${nomEsc}')">${r.aCobrar > 0 ? `<strong class="pos-val" style="text-decoration:underline dotted;">${fmt(r.aCobrar)}</strong>` : '<span class="nd">—</span>'}</td>
       <td class="num" style="${cellStyle}" ${hoverTip} onclick="openDetalleCelda('insumos','${codEsc2}','${nomEsc}')">${r.insumos  > 0 ? `<span class="neg-val" style="text-decoration:underline dotted;">${fmt(r.insumos)}</span>`  : '<span class="nd">—</span>'}</td>
       <td class="num" style="${cellStyle}" ${hoverTip} onclick="openDetalleCelda('mo','${codEsc2}','${nomEsc}')">${moCell}</td>
@@ -2340,14 +2336,14 @@ function renderResumenObra() {
 
     const filas = rows.filter(r => !r.extra)
       .sort((a, b) => b.margen - a.margen)
-      .map(r => _filaMargenHTML(r, moEsEstim, tnTotalGlobal, null));
+      .map(r => _filaMargenHTML(r, moEsEstim, tnTotalGlobal));
 
     const extras = rows.filter(r => r.extra);
     if (extras.length > 0) {
       filas.push(`<tr><td colspan="7" style="background:#f8fafc;padding:5px 12px;font-size:11px;color:var(--muted);border-top:2px solid var(--border);font-style:italic;">
         Con gasto/salida del mes · ${extras.length} obra${extras.length !== 1 ? 's' : ''} con OC de insumos o remitos, sin certificado en obras activas
       </td></tr>`);
-      extras.forEach(r => filas.push(_filaMargenHTML(r, moEsEstim, tnTotalGlobal, null)));
+      extras.forEach(r => filas.push(_filaMargenHTML(r, moEsEstim, tnTotalGlobal)));
     }
 
     // Fila total — MO es la suma de la MO prorateada de las obras mostradas (no el
@@ -2463,7 +2459,6 @@ function renderResumenTipoContrato() {
   renderMargenTipoChart(lista);
 
   const thead = `<thead><tr>
-    <th>Tipo de contratación</th>
     <th>Cód. Obra</th>
     <th class="num">A Cobrar</th>
     <th class="num">Insumos</th>
@@ -2477,10 +2472,9 @@ function renderResumenTipoContrato() {
   const cuadros = lista.map((g, i) => {
     const mgColor = g.tot.margen > 0 ? 'pos-val' : g.tot.margen < 0 ? 'neg-val' : '';
     const filas = [...g.rows].sort((a, b) => b.margen - a.margen)
-      .map(r => _filaMargenHTML(r, moEsEstim, tnTotalGlobal, g.tipo));
+      .map(r => _filaMargenHTML(r, moEsEstim, tnTotalGlobal));
     filas.push(`<tr style="background:#f8fafc;font-weight:700;border-top:2px solid var(--border);">
       <td style="font-size:12px;">TOTAL</td>
-      <td style="font-size:12px;">${g.tipo}</td>
       <td class="num pos-val">${fmt(g.tot.aCobrar)}</td>
       <td class="num neg-val">${fmt(g.tot.insumos)}</td>
       <td class="num">${g.tot.mo > 0 ? `<span class="neg-val">${moEsEstim ? '~' : ''}${fmt(g.tot.mo)}</span>` : '<span class="nd">—</span>'}</td>
