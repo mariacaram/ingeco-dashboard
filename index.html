@@ -2419,15 +2419,6 @@ function renderResumenTipoContrato() {
     return;
   }
 
-  // Tarjetas resumen: margen total por tipo, para comparar de un vistazo.
-  // Click → baja al cuadro con el detalle de las obras de ese tipo.
-  const cards = `<div class="kpi-grid" style="margin-bottom:16px;">` + lista.map((g, i) => `
-    <div class="kpi-card ${g.tot.margen > 0 ? 'pos' : g.tot.margen < 0 ? 'neg' : ''}" style="cursor:pointer;" onclick="scrollToCuadroTipo(${i})" title="Ver detalle de obras ${g.tipo}">
-      <div class="kpi-label">${g.tipo}</div>
-      <div class="kpi-value ${g.tot.margen > 0 ? 'pos-val' : g.tot.margen < 0 ? 'neg-val' : ''}">${fmt(g.tot.margen)}</div>
-      <div class="kpi-sub">${g.rows.length} obra${g.rows.length !== 1 ? 's' : ''} · A Cobrar ${fmt(g.tot.aCobrar)}</div>
-    </div>`).join('') + `</div>`;
-
   const thead = `<thead><tr>
     <th>Tipo de contratación</th>
     <th>Cód. Obra</th>
@@ -2479,16 +2470,7 @@ function renderResumenTipoContrato() {
     <span>Margen: <strong class="${mgG}">${fmt(totG.margen)}</strong></span>
   </div>`;
 
-  cont.innerHTML = cards + cuadros + footer;
-}
-
-// Baja al cuadro del tipo de contratación i y lo resalta un instante
-function scrollToCuadroTipo(i) {
-  const el = document.getElementById('cuadro-tipo-' + i);
-  if (!el) return;
-  el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  el.style.boxShadow = '0 0 0 3px var(--accent)';
-  setTimeout(() => { el.style.boxShadow = ''; }, 1600);
+  cont.innerHTML = cuadros + footer;
 }
 
 // ── Historial por obra: desglose mes a mes de ingresos/gastos y margen ──
