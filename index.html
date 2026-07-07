@@ -2602,12 +2602,369 @@ function openHistorialObra(codObra, nombreObra) {
       <div style="font-size:11px;color:var(--muted);margin-top:10px;">Margen mensual = A Cobrar − Insumos − MO prorrateada − Costo asfalto − Alquiler. ${algunaEstim ? '~ incluye MO estimada en meses sin TANGO cargado.' : ''}</div>`;
   }
 
+  const btnPDF = filasMes.length > 0
+    ? `<button onclick="generarReportePDF('${(codObra||'').replace(/'/g,"\\'")}','${(nombreObra||'').replace(/'/g,"\\'")}')"
+         style="margin-top:12px;width:100%;padding:10px 14px;background:var(--primary);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;">
+         📄 Descargar reporte PDF de la obra</button>`
+    : '';
+
   content.innerHTML = `
     <div class="panel-title">${nombreObra || codObra}</div>
     <div class="panel-sub">Historial de ingresos y gastos · todos los meses</div>
+    ${btnPDF}
     <div style="margin-top:14px;">${html}</div>`;
   panel.classList.add('open');
   overlay.classList.add('open');
+}
+
+// ============================================================
+// REPORTE PDF POR OBRA — recolección de datos + render imprimible
+// ============================================================
+
+// Recolecta TODOS los datos de una obra cruzando todos los meses con datos:
+// certificados, insumos (por proveedor y por mes), MO, costo de asfalto y
+// alquiler de equipos (por equipo y por mes), con sus totales.
+function _recolectarDatosObra(codObra, nombreObra) {
+  const keyC = (codObra    || '').toLowerCase().trim();
+  const keyN = (nombreObra || '').toLowerCase().trim();
+  const matchObra = (obraStr, codStr) => {
+    const o = (obraStr || '').toLowerCase().trim();
+    const c = (codStr  || '').toLowerCase().trim();
+    return (keyC && (o === keyC || c === keyC)) || (keyN && (o === keyN || c === keyN));
+  };
+
+  const meses = [];
+  const porMes = {};                 // m → { aCobrar, insumos, mo, moEstim, asf, alquiler, margen, tnCal, tnFrio, nCert }
+  const certificados = [];           // { mes, nombre, codigo, monto }
+  const provTotales  = {};           // proveedor → { monto, nOC }
+  const equipoTotales = {};          // codigo → { codigo, clasificacion, marca, modelo, horas, costo }
+  const tot = { aCobrar: 0, insumos: 0, mo: 0, asf: 0, alquiler: 0, margen: 0, tnCal: 0, tnFrio: 0 };
+  let algunaEstim = false;
+  let infoObra = null;               // { nombre, cod_obra, cliente, tipo }
+
+  MES_ORDER.forEach(m => {
+    const d = computeMargenObrasMes(m);
+    if (!d) return;
+    const r = d.rows.find(x => matchObra(x.o.nombre, x.o.cod_obra));
+    if (!r || !r.hasData) return;
+    if (!infoObra && !r.extra) infoObra = r.o;
+
+    meses.push(m);
+    porMes[m] = {
+      aCobrar: r.aCobrar, insumos: r.insumos, mo: r.moObra || 0, moEstim: d.moEsEstim && r.moObra != null,
+      asf: r.costoAsfObra || 0, alquiler: r.alquiler, margen: r.margen,
+      tnCal: r.tnObra, tnFrio: r.tnFrioObra, nCert: 0,
+    };
+    if (d.moEsEstim && r.moObra != null) algunaEstim = true;
+    tot.aCobrar += r.aCobrar; tot.insumos += r.insumos; tot.mo += r.moObra || 0;
+    tot.asf += r.costoAsfObra || 0; tot.alquiler += r.alquiler; tot.margen += r.margen;
+    tot.tnCal += r.tnObra; tot.tnFrio += r.tnFrioObra;
+
+    // Certificados del mes (renglones de Fernando Solís)
+    (r.o.items || []).forEach(it => {
+      const monto = it.monto ?? it.aCobrar ?? 0;
+      if (monto <= 0) return;
+      certificados.push({ mes: m, nombre: it.nombre || it.codigo || '—', codigo: it.codigo || '', monto });
+      porMes[m].nCert++;
+    });
+
+    // Insumos del mes — desglose por proveedor
+    if (OC_INSUMOS[m] && OC_INSUMOS[m].items) {
+      OC_INSUMOS[m].items.forEach(it => {
+        if (ocEsInt(it) || !matchObra(it.obra, it.codigo)) return;
+        (it.proveedores || []).forEach(p => {
+          const key = p.proveedor || 'Sin especificar';
+          if (!provTotales[key]) provTotales[key] = { monto: 0, nOC: 0 };
+          provTotales[key].monto += p.monto || 0;
+          provTotales[key].nOC   += p.nOC   || 0;
+        });
+      });
+    }
+
+    // Alquiler del mes — desglose por equipo
+    if (ALQUILER_EQUIPOS[m] && ALQUILER_EQUIPOS[m].porObra) {
+      const entry = ALQUILER_EQUIPOS[m].porObra.find(o => matchObra(o.obra, ''));
+      if (entry && entry.equipos) {
+        entry.equipos.forEach(eq => {
+          const key = eq.codigo || (eq.marca + ' ' + eq.modelo);
+          if (!equipoTotales[key]) equipoTotales[key] = { codigo: eq.codigo, clasificacion: eq.clasificacion, marca: eq.marca, modelo: eq.modelo, horas: 0, costo: 0 };
+          equipoTotales[key].horas += eq.horas || 0;
+          equipoTotales[key].costo += eq.costoArs || 0;
+        });
+      }
+    }
+  });
+
+  if (meses.length === 0) return null;
+  return { meses, porMes, certificados, provTotales, equipoTotales, tot, algunaEstim, infoObra: infoObra || { nombre: nombreObra, cod_obra: codObra, cliente: '', tipo: '' } };
+}
+
+function generarReportePDF(codObra, nombreObra) {
+  const D = _recolectarDatosObra(codObra, nombreObra);
+  if (!D) { alert('No hay datos para generar el reporte de esta obra.'); return; }
+
+  const showMO = !esAdmin();               // rol administración no ve MO
+  const pf = n => (n == null || n === 0) ? '—' : '$' + Math.round(n).toLocaleString('es-AR');
+  const pct = (n, base) => base > 0 ? (n / base * 100).toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%' : '—';
+  const mesLbl = m => (MES[m] || m).replace(' 2026', '');
+  const esc = s => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  const o = D.infoObra;
+  const tipo = _tipoDeFila(o);
+  // El margen siempre descuenta MO; el total de egresos mostrado la incluye
+  // (para el rol admin la MO se muestra dentro de "Otros costos operativos").
+  const egresosMostrado = D.tot.insumos + D.tot.mo + D.tot.asf + D.tot.alquiler;
+  const margen = D.tot.margen;
+  const periodo = D.meses.length > 0 ? `${mesLbl(D.meses[0])} – ${mesLbl(D.meses[D.meses.length - 1])} 2026` : '2026';
+  const hoy = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' });
+  const est = D.algunaEstim ? '~' : '';
+
+  // ── Estado de resultados (cascada) ──
+  const filaCascada = (lbl, val, tipo) => {
+    const color = tipo === 'ing' ? '#16a34a' : tipo === 'egr' ? '#dc2626' : '#1e293b';
+    const signo = tipo === 'egr' ? '(−) ' : '';
+    return `<tr>
+      <td style="padding:7px 0;font-size:12.5px;color:#334155;">${signo}${lbl}</td>
+      <td style="padding:7px 0;font-size:12.5px;text-align:right;font-weight:600;color:${color};">${pf(val)}</td>
+      <td style="padding:7px 8px;font-size:11px;text-align:right;color:#94a3b8;">${tipo !== 'tot' ? pct(val, D.tot.aCobrar) : ''}</td>
+    </tr>`;
+  };
+  let cascadaFilas = filaCascada('Certificado (ingresos)', D.tot.aCobrar, 'ing');
+  cascadaFilas += filaCascada('Insumos (OC de compra)', D.tot.insumos, 'egr');
+  if (showMO) cascadaFilas += filaCascada('Mano de obra (prorrateada)' + (D.algunaEstim ? ' *' : ''), D.tot.mo, 'egr');
+  cascadaFilas += filaCascada('Costo de asfalto', D.tot.asf, 'egr');
+  cascadaFilas += filaCascada('Alquiler de equipos', D.tot.alquiler, 'egr');
+  if (!showMO) cascadaFilas += filaCascada('Otros costos operativos', D.tot.mo, 'egr');
+  const mgColor = margen >= 0 ? '#16a34a' : '#dc2626';
+
+  // ── Sección 1: Certificados por mes ──
+  const certPorMes = D.meses.filter(m => D.porMes[m].aCobrar > 0).map(m => `
+    <tr>
+      <td style="padding:6px 10px;font-size:12px;border-top:1px solid #e2e8f0;">${mesLbl(m)}</td>
+      <td style="padding:6px 10px;font-size:12px;text-align:center;border-top:1px solid #e2e8f0;color:#64748b;">${D.porMes[m].nCert || '—'}</td>
+      <td style="padding:6px 10px;font-size:12px;text-align:right;border-top:1px solid #e2e8f0;font-weight:600;color:#16a34a;">${pf(D.porMes[m].aCobrar)}</td>
+    </tr>`).join('');
+
+  // ── Sección 2.1: Insumos por proveedor ──
+  const provArr = Object.entries(D.provTotales).map(([prov, v]) => ({ prov, ...v })).sort((a, b) => b.monto - a.monto);
+  const TOP = 12;
+  const provTop = provArr.slice(0, TOP);
+  const provResto = provArr.slice(TOP);
+  const restoMonto = provResto.reduce((s, p) => s + p.monto, 0);
+  const restoNOC   = provResto.reduce((s, p) => s + p.nOC, 0);
+  let provFilas = provTop.map(p => `
+    <tr>
+      <td style="padding:6px 10px;font-size:12px;border-top:1px solid #e2e8f0;">${esc(p.prov)}</td>
+      <td style="padding:6px 10px;font-size:12px;text-align:center;border-top:1px solid #e2e8f0;color:#64748b;">${p.nOC}</td>
+      <td style="padding:6px 10px;font-size:12px;text-align:right;border-top:1px solid #e2e8f0;font-weight:600;color:#dc2626;">${pf(p.monto)}</td>
+      <td style="padding:6px 10px;font-size:11px;text-align:right;border-top:1px solid #e2e8f0;color:#94a3b8;">${pct(p.monto, D.tot.insumos)}</td>
+    </tr>`).join('');
+  if (provResto.length > 0) provFilas += `
+    <tr>
+      <td style="padding:6px 10px;font-size:12px;border-top:1px solid #e2e8f0;font-style:italic;color:#64748b;">Otros ${provResto.length} proveedores</td>
+      <td style="padding:6px 10px;font-size:12px;text-align:center;border-top:1px solid #e2e8f0;color:#64748b;">${restoNOC}</td>
+      <td style="padding:6px 10px;font-size:12px;text-align:right;border-top:1px solid #e2e8f0;font-weight:600;color:#dc2626;">${pf(restoMonto)}</td>
+      <td style="padding:6px 10px;font-size:11px;text-align:right;border-top:1px solid #e2e8f0;color:#94a3b8;">${pct(restoMonto, D.tot.insumos)}</td>
+    </tr>`;
+
+  // ── Sección 2.2: MO por mes ──
+  const moFilas = D.meses.filter(m => D.porMes[m].mo > 0).map(m => {
+    const pm = D.porMes[m];
+    const tn = pm.tnCal + pm.tnFrio;
+    return `<tr>
+      <td style="padding:6px 10px;font-size:12px;border-top:1px solid #e2e8f0;">${mesLbl(m)}</td>
+      <td style="padding:6px 10px;font-size:12px;text-align:right;border-top:1px solid #e2e8f0;color:#64748b;">${tn > 0 ? fmtTn(tn) + ' tn' : '—'}</td>
+      <td style="padding:6px 10px;font-size:12px;text-align:right;border-top:1px solid #e2e8f0;font-weight:600;color:#dc2626;">${pm.moEstim ? '~' : ''}${pf(pm.mo)}</td>
+    </tr>`;
+  }).join('');
+
+  // ── Sección 2.3: Asfalto por mes ──
+  const asfFilas = D.meses.filter(m => D.porMes[m].asf > 0 || D.porMes[m].tnCal > 0 || D.porMes[m].tnFrio > 0).map(m => {
+    const pm = D.porMes[m];
+    return `<tr>
+      <td style="padding:6px 10px;font-size:12px;border-top:1px solid #e2e8f0;">${mesLbl(m)}</td>
+      <td style="padding:6px 10px;font-size:12px;text-align:right;border-top:1px solid #e2e8f0;color:#64748b;">${pm.tnCal > 0 ? fmtTn(pm.tnCal) : '—'}</td>
+      <td style="padding:6px 10px;font-size:12px;text-align:right;border-top:1px solid #e2e8f0;color:#64748b;">${pm.tnFrio > 0 ? fmtTn(pm.tnFrio) : '—'}</td>
+      <td style="padding:6px 10px;font-size:12px;text-align:right;border-top:1px solid #e2e8f0;font-weight:600;color:#dc2626;">${pf(pm.asf)}</td>
+    </tr>`;
+  }).join('');
+
+  // ── Sección 2.4: Alquiler por equipo ──
+  const eqArr = Object.values(D.equipoTotales).sort((a, b) => b.costo - a.costo);
+  const eqFilas = eqArr.map(e => `
+    <tr>
+      <td style="padding:6px 10px;font-size:12px;border-top:1px solid #e2e8f0;"><strong>${esc(e.codigo || '—')}</strong>${e.clasificacion ? ` · <span style="color:#64748b;">${esc(e.clasificacion)}</span>` : ''}${(e.marca || e.modelo) ? `<br><span style="color:#94a3b8;font-size:10.5px;">${esc((e.marca || '') + ' ' + (e.modelo || ''))}</span>` : ''}</td>
+      <td style="padding:6px 10px;font-size:12px;text-align:right;border-top:1px solid #e2e8f0;color:#64748b;">${fmtTn(e.horas)} h</td>
+      <td style="padding:6px 10px;font-size:12px;text-align:right;border-top:1px solid #e2e8f0;font-weight:600;color:#dc2626;">${pf(e.costo)}</td>
+    </tr>`).join('');
+
+  // ── Sección 3: Evolución mensual del margen ──
+  const evoFilas = D.meses.map(m => {
+    const pm = D.porMes[m];
+    const mg = pm.margen >= 0 ? '#16a34a' : '#dc2626';
+    return `<tr>
+      <td style="padding:6px 8px;font-size:11.5px;border-top:1px solid #e2e8f0;font-weight:600;">${mesLbl(m)}</td>
+      <td style="padding:6px 8px;font-size:11.5px;text-align:right;border-top:1px solid #e2e8f0;color:#16a34a;">${pf(pm.aCobrar)}</td>
+      <td style="padding:6px 8px;font-size:11.5px;text-align:right;border-top:1px solid #e2e8f0;color:#dc2626;">${pf(pm.insumos)}</td>
+      ${showMO ? `<td style="padding:6px 8px;font-size:11.5px;text-align:right;border-top:1px solid #e2e8f0;color:#dc2626;">${pm.moEstim ? '~' : ''}${pf(pm.mo)}</td>` : ''}
+      <td style="padding:6px 8px;font-size:11.5px;text-align:right;border-top:1px solid #e2e8f0;color:#dc2626;">${pf(pm.asf)}</td>
+      <td style="padding:6px 8px;font-size:11.5px;text-align:right;border-top:1px solid #e2e8f0;color:#dc2626;">${pf(pm.alquiler)}</td>
+      <td style="padding:6px 8px;font-size:11.5px;text-align:right;border-top:1px solid #e2e8f0;font-weight:700;color:${mg};">${pf(pm.margen)}</td>
+    </tr>`;
+  }).join('');
+
+  const seccion = (num, titulo, sub, tabla) => `
+    <div class="seccion">
+      <div class="sec-titulo"><span class="sec-num">${num}</span>${titulo}</div>
+      ${sub ? `<div class="sec-sub">${sub}</div>` : ''}
+      ${tabla}
+    </div>`;
+
+  const th = (cols) => `<thead><tr>${cols.map(c => `<th style="padding:7px 10px;font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;color:#64748b;text-align:${c.a || 'left'};background:#f8fafc;border-bottom:2px solid #cbd5e1;">${c.t}</th>`).join('')}</tr></thead>`;
+  const totRow = (cells) => `<tr style="background:#f1f5f9;font-weight:700;border-top:2px solid #cbd5e1;">${cells.map(c => `<td style="padding:8px 10px;font-size:12px;text-align:${c.a || 'left'};color:${c.c || '#1e293b'};">${c.t}</td>`).join('')}</tr>`;
+
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
+<title>Reporte ${esc(o.nombre || o.cod_obra)} — INGECO</title>
+<style>
+  @page { size: A4; margin: 13mm 14mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; color: #1e293b; font-size: 13px; line-height: 1.4; }
+  .doc { max-width: 800px; margin: 0 auto; padding: 8px; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #1b3a5c; padding-bottom: 14px; margin-bottom: 18px; }
+  .brand { font-size: 20px; font-weight: 800; color: #1b3a5c; letter-spacing: -.01em; }
+  .brand span { color: #e8a100; }
+  .doc-tipo { font-size: 11px; color: #64748b; margin-top: 2px; text-transform: uppercase; letter-spacing: .05em; }
+  .header-right { text-align: right; font-size: 11px; color: #64748b; }
+  .obra-box { background: #1b3a5c; color: #fff; border-radius: 10px; padding: 16px 20px; margin-bottom: 18px; }
+  .obra-nombre { font-size: 18px; font-weight: 700; }
+  .obra-meta { font-size: 12px; color: #cbd5e1; margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px 20px; }
+  .obra-meta b { color: #fff; font-weight: 600; }
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
+  .kpi { border: 1px solid #e2e8f0; border-radius: 9px; padding: 12px 14px; }
+  .kpi-lbl { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: #64748b; font-weight: 600; }
+  .kpi-val { font-size: 19px; font-weight: 800; margin-top: 4px; }
+  .kpi-sub { font-size: 10px; color: #94a3b8; margin-top: 2px; }
+  .seccion { margin-bottom: 20px; break-inside: avoid; }
+  .sec-titulo { font-size: 14px; font-weight: 700; color: #1b3a5c; display: flex; align-items: center; gap: 9px; margin-bottom: 3px; }
+  .sec-num { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; background: #1b3a5c; color: #fff; border-radius: 6px; font-size: 12px; }
+  .sec-sub { font-size: 11px; color: #94a3b8; margin: 0 0 9px 31px; }
+  table.data { width: 100%; border-collapse: collapse; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
+  .estado { border: 1px solid #e2e8f0; border-radius: 10px; padding: 6px 18px; margin-bottom: 20px; }
+  .estado table { width: 100%; border-collapse: collapse; }
+  .estado tr:not(:last-child) td { border-bottom: 1px dashed #e2e8f0; }
+  .margen-final { background: ${margen >= 0 ? '#f0fdf4' : '#fef2f2'}; border: 1.5px solid ${mgColor}; border-radius: 10px; padding: 14px 18px; margin-bottom: 22px; display: flex; justify-content: space-between; align-items: center; }
+  .margen-final .lbl { font-size: 13px; font-weight: 700; color: #1e293b; }
+  .margen-final .val { font-size: 24px; font-weight: 800; color: ${mgColor}; }
+  .nota { font-size: 10px; color: #94a3b8; line-height: 1.6; border-top: 1px solid #e2e8f0; padding-top: 12px; margin-top: 8px; }
+  .print-btn { position: fixed; top: 16px; right: 16px; background: #1b3a5c; color: #fff; border: none; border-radius: 8px; padding: 10px 18px; font-size: 13px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+  @media print { .print-btn { display: none; } .doc { padding: 0; } }
+</style></head><body>
+<button class="print-btn" onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>
+<div class="doc">
+  <div class="header">
+    <div>
+      <div class="brand">INGE<span>CO</span></div>
+      <div class="doc-tipo">Reporte de Contribución Marginal por Obra</div>
+    </div>
+    <div class="header-right">
+      Generado: ${hoy}<br>Adrián Koss · Socio Director
+    </div>
+  </div>
+
+  <div class="obra-box">
+    <div class="obra-nombre">${esc(o.nombre || o.cod_obra)}</div>
+    <div class="obra-meta">
+      ${o.cod_obra && o.cod_obra !== o.nombre ? `<span>Código: <b>${esc(o.cod_obra)}</b></span>` : ''}
+      <span>Tipo de contratación: <b>${esc(tipo)}</b></span>
+      ${o.cliente && o.cliente !== '—' ? `<span>Cliente: <b>${esc(o.cliente)}</b></span>` : ''}
+      <span>Período: <b>${periodo}</b></span>
+    </div>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi"><div class="kpi-lbl">Certificado</div><div class="kpi-val" style="color:#16a34a;">${pf(D.tot.aCobrar)}</div><div class="kpi-sub">Ingresos del período</div></div>
+    <div class="kpi"><div class="kpi-lbl">Egresos</div><div class="kpi-val" style="color:#dc2626;">${est}${pf(egresosMostrado)}</div><div class="kpi-sub">Insumos + MO + asfalto + alquiler</div></div>
+    <div class="kpi"><div class="kpi-lbl">Margen de contribución</div><div class="kpi-val" style="color:${mgColor};">${est}${pf(margen)}</div><div class="kpi-sub">Certificado − egresos</div></div>
+    <div class="kpi"><div class="kpi-lbl">Margen %</div><div class="kpi-val" style="color:${mgColor};">${pct(margen, D.tot.aCobrar)}</div><div class="kpi-sub">Sobre certificado</div></div>
+  </div>
+
+  <div class="seccion">
+    <div class="sec-titulo"><span class="sec-num">§</span>Estado de resultados</div>
+    <div class="sec-sub">Cómo se llega desde el certificado hasta el margen de contribución</div>
+    <div class="estado"><table>${cascadaFilas}</table></div>
+  </div>
+  <div class="margen-final">
+    <div class="lbl">MARGEN DE CONTRIBUCIÓN TOTAL</div>
+    <div class="val">${est}${pf(margen)} <span style="font-size:14px;font-weight:600;">(${pct(margen, D.tot.aCobrar)})</span></div>
+  </div>
+
+  ${seccion('1', 'Ingresos — Certificados', 'Certificados por período (Fernando Solís)', `
+    <table class="data">
+      ${th([{ t: 'Mes' }, { t: 'Nº cert.', a: 'center' }, { t: 'Monto certificado', a: 'right' }])}
+      <tbody>${certPorMes}
+        ${totRow([{ t: 'TOTAL' }, { t: D.certificados.length || '', a: 'center' }, { t: pf(D.tot.aCobrar), a: 'right', c: '#16a34a' }])}
+      </tbody>
+    </table>`)}
+
+  <div class="seccion"><div class="sec-titulo"><span class="sec-num">2</span>Egresos</div></div>
+
+  ${D.tot.insumos > 0 ? seccion('2.1', 'Insumos — Órdenes de compra', 'Agrupado por proveedor · fuente: Guillermo Konicek', `
+    <table class="data">
+      ${th([{ t: 'Proveedor' }, { t: 'Nº OC', a: 'center' }, { t: 'Monto', a: 'right' }, { t: '%', a: 'right' }])}
+      <tbody>${provFilas}
+        ${totRow([{ t: 'TOTAL INSUMOS' }, { t: '', a: 'center' }, { t: pf(D.tot.insumos), a: 'right', c: '#dc2626' }, { t: '100%', a: 'right' }])}
+      </tbody>
+    </table>`) : ''}
+
+  ${(showMO && D.tot.mo > 0) ? seccion('2.2', 'Mano de obra', 'Prorrateada por tn de asfalto despachado · fuente: TANGO (Mauro Orellana)' + (D.algunaEstim ? ' · ~ incluye meses estimados' : ''), `
+    <table class="data">
+      ${th([{ t: 'Mes' }, { t: 'Tn despachadas', a: 'right' }, { t: 'MO prorrateada', a: 'right' }])}
+      <tbody>${moFilas}
+        ${totRow([{ t: 'TOTAL MANO DE OBRA' }, { t: (D.tot.tnCal + D.tot.tnFrio > 0 ? fmtTn(D.tot.tnCal + D.tot.tnFrio) + ' tn' : ''), a: 'right' }, { t: est + pf(D.tot.mo), a: 'right', c: '#dc2626' }])}
+      </tbody>
+    </table>`) : ''}
+
+  ${D.tot.asf > 0 ? seccion('2.3', 'Costo de asfalto', 'Tn despachadas × precio de mercado del mes', `
+    <table class="data">
+      ${th([{ t: 'Mes' }, { t: 'Tn caliente', a: 'right' }, { t: 'Tn frío', a: 'right' }, { t: 'Costo', a: 'right' }])}
+      <tbody>${asfFilas}
+        ${totRow([{ t: 'TOTAL ASFALTO' }, { t: D.tot.tnCal > 0 ? fmtTn(D.tot.tnCal) : '—', a: 'right' }, { t: D.tot.tnFrio > 0 ? fmtTn(D.tot.tnFrio) : '—', a: 'right' }, { t: pf(D.tot.asf), a: 'right', c: '#dc2626' }])}
+      </tbody>
+    </table>`) : ''}
+
+  ${D.tot.alquiler > 0 ? seccion('2.4', 'Alquiler interno de equipos', 'Por equipo · fuente: Partes diarios (Nico) + tarifas', `
+    <table class="data">
+      ${th([{ t: 'Equipo' }, { t: 'Horas', a: 'right' }, { t: 'Costo', a: 'right' }])}
+      <tbody>${eqFilas}
+        ${totRow([{ t: 'TOTAL ALQUILER' }, { t: '', a: 'right' }, { t: pf(D.tot.alquiler), a: 'right', c: '#dc2626' }])}
+      </tbody>
+    </table>`) : ''}
+
+  ${seccion('3', 'Evolución mensual del margen', 'Detalle mes a mes de todos los componentes', `
+    <table class="data">
+      ${th([{ t: 'Mes' }, { t: 'Certificado', a: 'right' }, { t: 'Insumos', a: 'right' }].concat(showMO ? [{ t: 'MO', a: 'right' }] : []).concat([{ t: 'Asfalto', a: 'right' }, { t: 'Alquiler', a: 'right' }, { t: 'Margen', a: 'right' }]))}
+      <tbody>${evoFilas}
+        ${totRow([{ t: 'TOTAL', a: 'left' }, { t: pf(D.tot.aCobrar), a: 'right', c: '#16a34a' }, { t: pf(D.tot.insumos), a: 'right', c: '#dc2626' }].concat(showMO ? [{ t: est + pf(D.tot.mo), a: 'right', c: '#dc2626' }] : []).concat([{ t: pf(D.tot.asf), a: 'right', c: '#dc2626' }, { t: pf(D.tot.alquiler), a: 'right', c: '#dc2626' }, { t: est + pf(margen), a: 'right', c: mgColor }]))}
+      </tbody>
+    </table>`)}
+
+  <div class="nota">
+    <strong>Nota metodológica.</strong> Margen de contribución = Certificado − Insumos − Mano de obra prorrateada − Costo de asfalto − Alquiler de equipos.
+    La mano de obra se prorratea entre las obras según las toneladas de asfalto despachadas en el mes (fuente de tn: Remitos Oficiales).
+    ${D.algunaEstim ? 'El símbolo <strong>~</strong> indica meses en los que la MO aún no estaba cargada en TANGO y se estimó a partir del último mes con datos. ' : ''}
+    El costo de asfalto valoriza las toneladas despachadas al precio de mercado del mes (transferencia interna Planta → Obra).
+    <br><strong>Fuentes:</strong> Certificados — Fernando Solís · Insumos — Guillermo Konicek · Mano de obra — TANGO (Mauro Orellana) · Alquiler — Partes diarios (Nico) · Remitos — Planta de asfalto.
+    Reporte generado automáticamente desde el Dashboard Ejecutivo INGECO el ${hoy}.
+  </div>
+</div>
+<script>window.onload = function(){ setTimeout(function(){ window.print(); }, 350); };<\/script>
+</body></html>`;
+
+  const w = window.open('', '_blank');
+  if (!w) { alert('El navegador bloqueó la ventana emergente. Permití pop-ups para descargar el reporte.'); return; }
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
 }
 
 function renderChartsObra(data) {
