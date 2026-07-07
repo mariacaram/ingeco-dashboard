@@ -611,6 +611,11 @@
   </div>
 
   <div class="section">
+    <div class="section-title">Margen por tipo de contratación</div>
+    <div id="chart-margen-tipo"></div>
+  </div>
+
+  <div class="section">
     <div class="section-title">
       Contribución marginal por tipo de contratación · <span id="mes-label-margen-tipo"></span>
       <span class="badge partial" id="badge-margen-tipo">Presioná "Actualizar datos"</span>
@@ -2380,6 +2385,37 @@ function renderResumenObra() {
 // Agrupa las mismas filas del resumen por obra según TIPO_CONTRATO del
 // Maestro de Obras (col F), un cuadro por tipo con su subtotal.
 // ================================================================
+// Gráfico de barras divergente (desde el cero) con el margen de cada tipo de
+// contratación — verde a la derecha si es positivo, rojo a la izquierda si es
+// negativo. `lista` ya viene ordenada de mayor a menor margen.
+function renderMargenTipoChart(lista) {
+  const container = document.getElementById('chart-margen-tipo');
+  if (!container) return;
+  if (!lista || lista.length === 0) {
+    container.innerHTML = '<div class="nd" style="text-align:center;padding:20px;font-size:13px;">Actualizá datos para ver el gráfico</div>';
+    return;
+  }
+  const maxAbs = Math.max(...lista.map(g => Math.abs(g.tot.margen)), 1);
+  const filas = lista.map(g => {
+    const pct = Math.round((Math.abs(g.tot.margen) / maxAbs) * 50); // mitad de la pista a cada lado del cero
+    const pos = g.tot.margen >= 0;
+    const color = pos ? '#16a34a' : '#dc2626';
+    const bar = pos
+      ? `<div style="position:absolute;left:50%;top:0;height:100%;width:${pct}%;background:${color};border-radius:0 4px 4px 0;"></div>`
+      : `<div style="position:absolute;right:50%;top:0;height:100%;width:${pct}%;background:${color};border-radius:4px 0 0 4px;"></div>`;
+    return `
+      <div style="display:grid;grid-template-columns:170px 1fr auto;align-items:center;gap:10px;margin-bottom:10px;">
+        <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${g.tipo}">${g.tipo}</div>
+        <div style="position:relative;height:18px;background:#f1f5f9;border-radius:4px;overflow:hidden;">
+          <div style="position:absolute;left:50%;top:0;width:1px;height:100%;background:var(--border);"></div>
+          ${bar}
+        </div>
+        <div style="font-size:13px;font-weight:700;color:${color};white-space:nowrap;min-width:90px;text-align:right;">${fmt(g.tot.margen)}</div>
+      </div>`;
+  }).join('');
+  container.innerHTML = `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;">${filas}</div>`;
+}
+
 function renderResumenTipoContrato() {
   const cont     = document.getElementById('container-margen-tipo');
   const mesLabel = document.getElementById('mes-label-margen-tipo');
@@ -2389,6 +2425,7 @@ function renderResumenTipoContrato() {
   const datos = computeMargenFilas();
   if (!datos) {
     cont.innerHTML = '<div class="nd" style="text-align:center;padding:20px;font-size:13px;">Presioná "Actualizar datos" para cargar desde Drive</div>';
+    renderMargenTipoChart([]);
     return;
   }
   const { rows, moEsEstim, tnTotalGlobal } = datos;
@@ -2419,8 +2456,11 @@ function renderResumenTipoContrato() {
 
   if (lista.length === 0) {
     cont.innerHTML = '<div class="nd" style="text-align:center;padding:20px;font-size:13px;">Sin obras con tipo de contratación para este período</div>';
+    renderMargenTipoChart([]);
     return;
   }
+
+  renderMargenTipoChart(lista);
 
   const thead = `<thead><tr>
     <th>Tipo de contratación</th>
