@@ -1608,18 +1608,21 @@ let GENERADO_POR_OBRA = null;
 
 // Devuelve la lista de obras filtrada por mes (default mesActual) usando "Período de realización".
 // Si hay datos por mes (obrasPorMes) los usa; si no, cae al listado plano (.obras).
+// Excluye obras con tipo_contrato "Interno" (provisión de asfalto/áridos, cantera,
+// planta, predio, etc.): son transferencias internas, no contratos con clientes,
+// y no deben aparecer en ningún cálculo de "obras" del tablero (KPIs, tablas, paneles).
 function _obrasActuales(mes) {
   if (!GENERADO_POR_OBRA) return [];
   const byMonth = GENERADO_POR_OBRA.obrasPorMes && GENERADO_POR_OBRA.obrasPorMes[mes || mesActual];
   // Si hay obrasPorMes, usar solo esas (filtradas por mes). Si no existe (caché viejo), caer a .obras.
-  if (GENERADO_POR_OBRA.obrasPorMes) return byMonth || [];
-  return GENERADO_POR_OBRA.obras || [];
+  const lista = GENERADO_POR_OBRA.obrasPorMes ? (byMonth || []) : (GENERADO_POR_OBRA.obras || []);
+  return lista.filter(o => !_esTipoInterno(o));
 }
 
 // Obras sin "Período de realización" asignado — sección separada en las tablas.
 function _obrasSinPeriodo() {
   if (!GENERADO_POR_OBRA) return [];
-  return GENERADO_POR_OBRA.obrasSinPeriodo || [];
+  return (GENERADO_POR_OBRA.obrasSinPeriodo || []).filter(o => !_esTipoInterno(o));
 }
 
 // Alquiler interno de equipos — se carga desde Apps Script
@@ -2030,10 +2033,8 @@ function _esTipoInterno(o) { return _tipoDeFila(o).toLowerCase().trim() === 'int
 
 function computeMargenObrasMes(mes) {
   mes = mes || mesActual;
-  // Obras "Interno" (provisión de asfalto, áridos, cantera, etc.) son transferencias
-  // internas, no contratos con clientes — se excluyen de ambas tablas de margen
-  // (por obra y por tipo de contratación) para que sus totales coincidan siempre.
-  const obras = _obrasActuales(mes).filter(o => !_esTipoInterno(o));
+  // _obrasActuales() ya excluye las obras "Interno" (ver definición más arriba)
+  const obras = _obrasActuales(mes);
   if (obras.length === 0 && _obrasSinPeriodo().length === 0) return null;
 
   // OC Insumos del mes: mapa por nombre Y por código de obra (lowercase), excluye INT
