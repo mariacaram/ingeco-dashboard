@@ -2076,12 +2076,15 @@ function _syncKpiCardsTipo() {
 // (indexado por código/nombre en minúsculas). Usado tanto para excluir obras
 // "Interno" del cálculo de margen como para agrupar en la pestaña por tipo.
 function _tipoDeFila(o) {
+  // Placeholders de "sin dato" en la planilla: guion simple/largo, N/A, vacío
+  const esVacio = v => !v || ['-', '—', '–', 'n/a'].includes(v.trim().toLowerCase());
   const t = ((o && o.tipo) || '').trim();
-  if (t && t !== '—') return t;
+  if (!esVacio(t)) return t;
   const tiposMaestro = (GENERADO_POR_OBRA && GENERADO_POR_OBRA.tipos) || {};
   const ck = ((o && o.cod_obra) || '').toLowerCase().trim();
   const nk = ((o && o.nombre)   || '').toLowerCase().trim();
-  return tiposMaestro[ck] || tiposMaestro[nk] || 'Sin clasificar';
+  const tMaestro = tiposMaestro[ck] || tiposMaestro[nk] || '';
+  return esVacio(tMaestro) ? 'Sin clasificar' : tMaestro;
 }
 function _esTipoInterno(o) { return _tipoDeFila(o).toLowerCase().trim() === 'interno'; }
 
