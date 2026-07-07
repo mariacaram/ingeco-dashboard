@@ -2014,9 +2014,26 @@ function renderMargen() {
 // Compartido por "Contribución marginal por obra" y "... por tipo de contratación".
 // Cada fila: { o, aCobrar, insumos, alquiler, tnObra, tnFrioObra, tnObraTotal,
 // moObra, costoAsfObra, margen, hasData, extra }. Devuelve null si no hay datos.
+// Tipo de contratación de una obra: viene de la obra (maestro vía Apps Script);
+// para obras sin match directo se busca en el mapa GENERADO_POR_OBRA.tipos
+// (indexado por código/nombre en minúsculas). Usado tanto para excluir obras
+// "Interno" del cálculo de margen como para agrupar en la pestaña por tipo.
+function _tipoDeFila(o) {
+  const t = ((o && o.tipo) || '').trim();
+  if (t && t !== '—') return t;
+  const tiposMaestro = (GENERADO_POR_OBRA && GENERADO_POR_OBRA.tipos) || {};
+  const ck = ((o && o.cod_obra) || '').toLowerCase().trim();
+  const nk = ((o && o.nombre)   || '').toLowerCase().trim();
+  return tiposMaestro[ck] || tiposMaestro[nk] || 'Sin clasificar';
+}
+function _esTipoInterno(o) { return _tipoDeFila(o).toLowerCase().trim() === 'interno'; }
+
 function computeMargenObrasMes(mes) {
   mes = mes || mesActual;
-  const obras = _obrasActuales(mes);
+  // Obras "Interno" (provisión de asfalto, áridos, cantera, etc.) son transferencias
+  // internas, no contratos con clientes — se excluyen de ambas tablas de margen
+  // (por obra y por tipo de contratación) para que sus totales coincidan siempre.
+  const obras = _obrasActuales(mes).filter(o => !_esTipoInterno(o));
   if (obras.length === 0 && _obrasSinPeriodo().length === 0) return null;
 
   // OC Insumos del mes: mapa por nombre Y por código de obra (lowercase), excluye INT
@@ -2133,6 +2150,7 @@ function computeMargenObrasMes(mes) {
     const ck = (c.cod    || '').toLowerCase().trim();
     const nk = (c.nombre || '').toLowerCase().trim();
     if ((ck && consumido.has(ck)) || (nk && consumido.has(nk))) return;
+    if (_esTipoInterno({ cod_obra: c.cod, nombre: c.nombre })) return; // obra interna sin certificado — no es un contrato
     const _lblOrigen = { 'OC': 'Con OC de insumos', 'Remito': 'Con salida en Remitos', 'Alquiler': 'Con alquiler de maquinaria' };
     const r = buildDatosObra({ cod_obra: c.cod || c.nombre, nombre: c.nombre || _lblOrigen[c.origen] || 'Con gasto del mes', aCobrar: 0 }, true);
     if (r.hasData) rows.push(r);
@@ -2240,15 +2258,16 @@ function renderResumenObra() {
   if (tbody && !datos) {
     tbody.innerHTML = '<tr><td colspan="7" class="nd" style="text-align:center;padding:20px;">Presioná "Actualizar datos" para cargar desde Drive</td></tr>';
   } else if (tbody) {
-    const { rows, moTotal, moEsEstim, tnTotalGlobal } = datos;
+    const { rows, moEsEstim, tnTotalGlobal } = datos;
 
-    let sumaCobrar = 0, sumaInsumos = 0, sumaAlquiler = 0, sumaTn = 0;
+    let sumaCobrar = 0, sumaInsumos = 0, sumaAlquiler = 0, sumaTn = 0, sumaMO = 0;
     const chartData = { insumos: [], mo: [], alquiler: [], tn: [] };
     rows.forEach(r => {
       sumaCobrar   += r.aCobrar;
       sumaInsumos  += r.insumos;
       sumaAlquiler += r.alquiler;
       sumaTn       += r.tnObra + r.tnFrioObra;
+      sumaMO       += r.moObra || 0;
       const label = (r.o.cod_obra || r.o.nombre || '').trim();
       if (r.insumos  > 0) chartData.insumos.push({ label, valor: r.insumos });
       if (r.moObra   > 0) chartData.mo.push({ label, valor: r.moObra, estim: moEsEstim });
@@ -2268,14 +2287,16 @@ function renderResumenObra() {
       extras.forEach(r => filas.push(_filaMargenHTML(r, moEsEstim, tnTotalGlobal, null)));
     }
 
-    // Fila total
-    const moCellTotal = moTotal != null
-      ? `<span class="neg-val" title="${moEsEstim ? 'Estimado — MO real no cargada aún' : 'MO real del mes'}">${moEsEstim ? '~' : ''}${fmt(moTotal)}</span>`
+    // Fila total — MO es la suma de la MO prorateada de las obras mostradas (no el
+    // total de la empresa vía TANGO), para que coincida exactamente con la suma de
+    // cada fila y con el total de "Contribución marginal por tipo de contratación"
+    const moCellTotal = sumaMO > 0
+      ? `<span class="neg-val" title="${moEsEstim ? 'Estimado — MO real no cargada aún' : 'MO real del mes'} · suma de MO prorateada por obra">${moEsEstim ? '~' : ''}${fmt(sumaMO)}</span>`
       : '<span class="nd">sin dato</span>';
     const tnTotalCell = sumaTn > 0
       ? `<span style="font-size:12px;color:var(--muted);">${fmtTn(sumaTn)} tn</span>`
       : '<span class="nd">—</span>';
-    const sumaEgresos = sumaInsumos + (moTotal || 0) + sumaAlquiler;
+    const sumaEgresos = sumaInsumos + sumaMO + sumaAlquiler;
     const sumaMargen  = sumaCobrar - sumaEgresos;
     const sumaColor   = sumaMargen > 0 ? 'pos-val' : sumaMargen < 0 ? 'neg-val' : '';
 
@@ -2314,26 +2335,16 @@ function renderResumenTipoContrato() {
   }
   const { rows, moEsEstim, tnTotalGlobal } = datos;
 
-  // Tipo de contratación: viene en la obra (maestro vía Apps Script); para las
-  // filas extra (OC/remitos/alquiler sin certificado) se busca en el mapa .tipos
-  const tiposMaestro = (GENERADO_POR_OBRA && GENERADO_POR_OBRA.tipos) || {};
-  const tipoDe = r => {
-    const t = (r.o.tipo || '').trim();
-    if (t && t !== '—') return t;
-    const ck = (r.o.cod_obra || '').toLowerCase().trim();
-    const nk = (r.o.nombre   || '').toLowerCase().trim();
-    return tiposMaestro[ck] || tiposMaestro[nk] || 'Sin clasificar';
-  };
-
+  // Las obras "Interno" ya vienen excluidas de `rows` (computeMargenObrasMes/Total),
+  // así el total de esta pestaña coincide siempre con el de "Contribución marginal
+  // por obra" — acá solo agrupamos por tipo, no volvemos a filtrar nada.
   const grupos = {};
   rows.forEach(r => {
-    const t = tipoDe(r);
+    const t = _tipoDeFila(r.o);
     (grupos[t] = grupos[t] || []).push(r);
   });
 
   const lista = Object.keys(grupos)
-    // Obras internas (Interno en el maestro) no son contratos — no se muestran acá
-    .filter(tipo => tipo.toLowerCase().trim() !== 'interno')
     .map(tipo => {
       const rs  = grupos[tipo];
       const tot = { aCobrar: 0, insumos: 0, mo: 0, tn: 0, alquiler: 0, margen: 0 };
