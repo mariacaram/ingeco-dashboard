@@ -1076,9 +1076,8 @@ function leerAlquilerEquipos() {
 
     const COL_FECHA_PD    = 0;  // A: Fecha
     const COL_COD_EQ      = 2;  // C: Código de equipo
-    const COL_OBRA_PD     = 5;  // F: Obra Particular (fallback)
     const COL_HORAS_PD    = 8;  // I: Total de horas
-    const COL_COD_OBRA_PD = 15; // P: Obra General (preferido para agrupar)
+    const COL_COD_OBRA_PD = 15; // P: Obra General (ÚNICA fuente para agrupar)
 
     let hdrPD = 0;
     for (let i = 0; i < Math.min(5, rowsPD.length); i++) {
@@ -1100,10 +1099,14 @@ function leerAlquilerEquipos() {
       const codEq = String(row[COL_COD_EQ] || '').trim();
       if (!codEq || !precios[codEq]) continue;
 
+      // Agrupar SIEMPRE por OBRA GENERAL (col P). Es la columna canónica que
+      // mantiene Nico; la col F ("Obra Particular", ej. "Ruinas de Quilmes —
+      // Ruta 357") tiene nombres locales que crean obras fantasma en el tablero.
+      // Si la fila no tiene OBRA GENERAL cargada, va a "Sin asignar" (no se
+      // inventa el nombre desde la col F) — así se preservan horas y costo del
+      // equipo sin distorsionar el prorrateo, y se ve el hueco de carga.
       const codObra = String(row[COL_COD_OBRA_PD] || '').trim();
-      const nomObra = String(row[COL_OBRA_PD]     || '').trim();
-      const obra    = (codObra && codObra !== '-') ? codObra
-                    : (nomObra  && nomObra  !== '-') ? nomObra : 'Sin asignar';
+      const obra    = (codObra && codObra !== '-') ? codObra : 'Sin asignar';
 
       const horas = typeof row[COL_HORAS_PD] === 'number' ? row[COL_HORAS_PD]
                   : parsearHoras(row[COL_HORAS_PD]);
