@@ -576,6 +576,40 @@
 <!-- TAB: CONTRIBUCIÓN MARGINAL POR TIPO DE CONTRATACIÓN -->
 <!-- ================================================================ -->
 <div class="tab-panel" id="tab-margen-tipo">
+  <div class="kpi-grid">
+    <div class="kpi-card pos" style="cursor:pointer;" onclick="openTotalACobrarPanel()" title="Ver detalle de certificados">
+      <div class="kpi-label">Total Certificado</div>
+      <div class="kpi-value nd" id="kpi-generado-t">Actualizá datos</div>
+      <div class="kpi-sub" id="kpi-generado-sub-t">Certificados por período (A Cobrar + Cobradas)</div>
+      <div id="kpi-generado-breakdown-t" style="font-size:10px;color:var(--muted);margin-top:5px;line-height:1.7;display:flex;flex-wrap:wrap;gap:4px 10px;"></div>
+      <div class="fuente"><a href="https://docs.google.com/spreadsheets/d/1Hl8HZqrH6lMwnAGpitA37ZGLg4szTcFGK7vmv92qkBA/edit" target="_blank" onclick="event.stopPropagation()">Obras activas (Fernando Solís)</a></div>
+    </div>
+    <div class="kpi-card neg" style="cursor:pointer;" onclick="openOCInsumosPanel()" title="Ver detalle por obra">
+      <div class="kpi-label">OC Insumos</div>
+      <div class="kpi-value nd" id="kpi-oc-insumos-t">sin dato</div>
+      <div class="kpi-sub" id="kpi-oc-insumos-sub-t">Requiere datos de Guillermo</div>
+      <div class="fuente"><a href="https://docs.google.com/spreadsheets/d/1344ZyEM-E4ptp-Gv4J3uQlOouSE4ApWxIIaQ-OoN2Cg/edit" target="_blank" onclick="event.stopPropagation()">OC Insumos — Guillermo Konicek</a></div>
+    </div>
+    <div class="kpi-card neg" style="cursor:pointer;" onclick="openMOPanel()" title="Ver detalle por centro de costo">
+      <div class="kpi-label">Mano de Obra</div>
+      <div class="kpi-value nd" id="kpi-mo-obras-t">sin dato</div>
+      <div class="kpi-sub" id="kpi-mo-obras-sub-t">Requiere TANGO (Mauro)</div>
+      <div class="fuente"><a href="https://drive.google.com/drive/u/0/folders/1hQZoJovbFDHNsJhNiGMEueH1bLfXuuCP" target="_blank" onclick="event.stopPropagation()">TANGO ambas quincenas — Mauro Orellana</a></div>
+    </div>
+    <div class="kpi-card neg" style="cursor:pointer;" onclick="openAlquilerMainPanel()" title="Ver detalle por obra">
+      <div class="kpi-label">Alquiler interno equipos</div>
+      <div class="kpi-value neg-val" id="kpi-alquiler-equipos-t">sin dato</div>
+      <div class="kpi-sub" id="kpi-alquiler-sub-t">Actualizá datos para cargar</div>
+      <div class="fuente"><a href="https://docs.google.com/spreadsheets/d/1e_emRVEUxTaNtLxeC0wXIWKzcKuoulZkFSS9O1e0XHo/edit?gid=1172883606#gid=1172883606" target="_blank" onclick="event.stopPropagation()">Partes diarios (Nico)</a> · <a href="https://docs.google.com/spreadsheets/d/1PEcPzwrQ8kE2evmUlrFq9wPbgWOR92MPl3LEqcSYbIk/edit?gid=1528087869#gid=1528087869" target="_blank" onclick="event.stopPropagation()">Tarifas equipos</a> · <a href="https://www.bna.com.ar/Personas/TipoCambio" target="_blank" style="color:inherit;text-decoration:underline dotted;" onclick="event.stopPropagation()">TC BNA</a></div>
+    </div>
+    <div class="kpi-card" style="cursor:pointer;" onclick="openMargenPanel()" title="Ver cómo se calcula">
+      <div class="kpi-label">Margen estimado</div>
+      <div class="kpi-value nd" id="kpi-margen-est-t">sin dato</div>
+      <div class="kpi-sub" id="kpi-margen-sub-t">Pendiente de archivos de costo</div>
+      <div class="fuente" id="kpi-margen-formula-t">A Cobrar − (OC Insumos + MO TANGO + Alquiler Equipos)</div>
+    </div>
+  </div>
+
   <div class="section">
     <div class="section-title">
       Contribución marginal por tipo de contratación · <span id="mes-label-margen-tipo"></span>
@@ -2011,6 +2045,27 @@ function renderMargen() {
   }
 
   renderResumenObra();
+}
+
+// Copia el estado de las tarjetas KPI de "Contribución marginal por obra"
+// (Total Certificado, OC Insumos, Mano de Obra, Alquiler, Margen estimado) a su
+// duplicado en la pestaña "por tipo de contratación" (mismos datos, IDs con sufijo -t).
+function _syncKpiCardsTipo() {
+  const pares = [
+    ['kpi-generado', 'kpi-generado-t'], ['kpi-generado-sub', 'kpi-generado-sub-t'], ['kpi-generado-breakdown', 'kpi-generado-breakdown-t'],
+    ['kpi-oc-insumos', 'kpi-oc-insumos-t'], ['kpi-oc-insumos-sub', 'kpi-oc-insumos-sub-t'],
+    ['kpi-mo-obras', 'kpi-mo-obras-t'], ['kpi-mo-obras-sub', 'kpi-mo-obras-sub-t'],
+    ['kpi-alquiler-equipos', 'kpi-alquiler-equipos-t'], ['kpi-alquiler-sub', 'kpi-alquiler-sub-t'],
+    ['kpi-margen-est', 'kpi-margen-est-t'], ['kpi-margen-sub', 'kpi-margen-sub-t'], ['kpi-margen-formula', 'kpi-margen-formula-t'],
+  ];
+  pares.forEach(([origId, destId]) => {
+    const orig = document.getElementById(origId);
+    const dest = document.getElementById(destId);
+    if (!orig || !dest) return;
+    dest.innerHTML   = orig.innerHTML;
+    dest.className   = orig.className;
+    dest.style.color = orig.style.color;
+  });
 }
 
 // Computa las filas de contribución marginal de un mes (solo datos, sin HTML).
@@ -6060,6 +6115,7 @@ function renderAll() {
   renderFlujo();
   renderPersonas();
   renderFuentes();
+  _syncKpiCardsTipo();
 }
 
 
@@ -6216,6 +6272,7 @@ function setMes(mes) {
   renderPlanta();
   renderCtroCosto();
   renderRentabilidad();
+  _syncKpiCardsTipo();
 }
 
 // ================================================================
