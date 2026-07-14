@@ -56,7 +56,8 @@ function doGet(e) {
       const stockNuevo = parseFloat((e.parameter.stockNuevo || '0').replace(',', '.'));
       const usuario    = e.parameter.usuario || 'Agustín';
       const tipo       = e.parameter.tipo || 'asfalto';
-      const resultado  = guardarAjusteStock(stockAntes, stockNuevo, usuario, tipo);
+      const fecha      = e.parameter.fecha || null; // dd/MM/yyyy opcional — fecha retroactiva del corte
+      const resultado  = guardarAjusteStock(stockAntes, stockNuevo, usuario, tipo, fecha);
       const json       = JSON.stringify(resultado);
       if (callback) {
         return ContentService.createTextOutput(callback + '(' + json + ')')
@@ -1976,7 +1977,11 @@ function diagnosticoEquipos() {
 // AJUSTE DE STOCK DE ASFALTO
 // ============================================================
 
-function guardarAjusteStock(stockAntes, stockNuevo, usuario, tipo) {
+// fechaCustom (opcional): dd/MM/yyyy — permite cargar retroactivamente la
+// fecha real del corte en vez de usar siempre "hoy" (ej. Agustín carga hoy
+// un ajuste que en los hechos se hizo la semana pasada). Si no es un formato
+// válido, se ignora y se usa la fecha actual como siempre.
+function guardarAjusteStock(stockAntes, stockNuevo, usuario, tipo, fechaCustom) {
   try {
     const ss    = SpreadsheetApp.openById(FILE_IDS.ajusteStock);
     const sheet = ss.getSheetByName('Ajuste de stock');
@@ -1985,13 +1990,17 @@ function guardarAjusteStock(stockAntes, stockNuevo, usuario, tipo) {
     }
     const tz    = 'America/Argentina/Buenos_Aires';
     const now   = new Date();
-    const fecha = Utilities.formatDate(now, tz, 'dd/MM/yyyy');
+    let fecha   = Utilities.formatDate(now, tz, 'dd/MM/yyyy');
     const hora  = Utilities.formatDate(now, tz, 'HH:mm:ss');
+    if (fechaCustom) {
+      const m = String(fechaCustom).trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+      if (m) fecha = m[1].padStart(2, '0') + '/' + m[2].padStart(2, '0') + '/' + m[3];
+    }
     const tipoN = (String(tipo || 'asfalto').toLowerCase().trim() === 'frio') ? 'frio' : 'asfalto';
     // Col F = tipo ('asfalto' | 'frio'). Filas viejas sin col F se leen como 'asfalto'.
     sheet.appendRow([fecha, hora, usuario, stockAntes, stockNuevo, tipoN]);
-    Logger.log('Ajuste de stock (' + tipoN + ') guardado: ' + stockAntes + ' → ' + stockNuevo + ' (' + usuario + ')');
-    return { status: 'ok', stockNuevo: stockNuevo, tipo: tipoN, timestamp: now.toISOString() };
+    Logger.log('Ajuste de stock (' + tipoN + ') guardado: ' + stockAntes + ' → ' + stockNuevo + ' (' + usuario + ') fecha=' + fecha);
+    return { status: 'ok', stockNuevo: stockNuevo, tipo: tipoN, fecha: fecha, timestamp: now.toISOString() };
   } catch (err) {
     Logger.log('guardarAjusteStock error: ' + err.toString());
     return { status: 'error', message: err.toString() };
@@ -2031,10 +2040,14 @@ function leerStockAsfalto(remitosData) {
         var fAj = null;
         if (partsAj.length === 3) fAj = new Date(parseInt(partsAj[2]), parseInt(partsAj[1]) - 1, parseInt(partsAj[0]));
         var usrAj = String(rowsAj[a][2] || BASE_USUARIO);
+        // Gana la fecha más RECIENTE de cada tipo, no la última fila cargada —
+        // permite cargar ajustes retroactivos sin pisar un checkpoint más nuevo
+        // que ya estaba guardado. Filas sin fecha parseable (legado) ganan
+        // igual, como antes, por no tener con qué compararlas.
         if (tipoAj === 'frio' || tipoAj === 'frío') {
-          frioBase = valAj; if (fAj) frioFecha = fAj; frioUsuario = usrAj;
+          if (!fAj || fAj >= frioFecha) { frioBase = valAj; if (fAj) frioFecha = fAj; frioUsuario = usrAj; }
         } else {
-          stockBase = valAj; if (fAj) fechaBase = fAj; usuarioBase = usrAj;
+          if (!fAj || fAj >= fechaBase) { stockBase = valAj; if (fAj) fechaBase = fAj; usuarioBase = usrAj; }
         }
       }
     }

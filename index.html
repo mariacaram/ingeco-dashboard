@@ -892,6 +892,12 @@
             Guardar ajuste
           </button>
         </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <label style="font-size:11px;color:var(--muted);">Fecha del corte:</label>
+          <input type="date" id="ajuste-fecha-input"
+            style="padding:5px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;color:var(--text);">
+          <span style="font-size:10px;color:var(--muted);">(vacío = hoy)</span>
+        </div>
         <div id="ajuste-feedback" style="font-size:12px;min-height:16px;"></div>
       </div>
     </div>
@@ -915,6 +921,12 @@
             style="padding:8px 18px;background:#0369a1;border:none;border-radius:7px;color:#fff;font-weight:700;cursor:pointer;font-size:13px;transition:opacity .2s;">
             Guardar ajuste
           </button>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <label style="font-size:11px;color:var(--muted);">Fecha del corte:</label>
+          <input type="date" id="ajuste-frio-fecha-input"
+            style="padding:5px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;color:var(--text);">
+          <span style="font-size:10px;color:var(--muted);">(vacío = hoy)</span>
         </div>
         <div id="ajuste-frio-feedback" style="font-size:12px;min-height:16px;"></div>
       </div>
@@ -5970,19 +5982,31 @@ async function ajustarStock(tipo) {
     return;
   }
 
+  // Fecha del corte (opcional): permite cargar retroactivamente la fecha real
+  // del ajuste en vez de usar siempre "hoy" — ej. si Agustín recién ahora
+  // carga un corte que en realidad se hizo la semana pasada.
+  const fechaInputEl = document.getElementById(esFrio ? 'ajuste-frio-fecha-input' : 'ajuste-fecha-input');
+  let fechaParam = '';
+  if (fechaInputEl && fechaInputEl.value) {
+    const [aaaa, mm, dd] = fechaInputEl.value.split('-');
+    fechaParam = dd + '/' + mm + '/' + aaaa;
+  }
+
   const stockAntes = esFrio ? frioTerminado : stockAsfalto;
   btn.disabled     = true;
   btn.textContent  = '⏳ Guardando...';
   btn.style.opacity = '.7';
   fb.textContent   = '';
 
-  const params = new URLSearchParams({
+  const paramsObj = {
     action:     'ajusteStock',
     tipo:       tipo,
     stockAntes: stockAntes,
     stockNuevo: nuevoValor,
     usuario:    'Agustín',
-  });
+  };
+  if (fechaParam) paramsObj.fecha = fechaParam;
+  const params = new URLSearchParams(paramsObj);
   const url = APPS_SCRIPT_URL + '?' + params.toString();
 
   let data;
@@ -6001,26 +6025,34 @@ async function ajustarStock(tipo) {
     const mm  = String(now.getMonth() + 1).padStart(2, '0');
     const aaaa = now.getFullYear();
     const hoy = dd + '/' + mm + '/' + aaaa;
+    const fechaEfectiva = fechaParam || hoy;
+    // Si la fecha cargada es retroactiva (o futura), el recálculo de ingresos/
+    // consumo entre esa fecha y hoy depende de datos que solo tiene el backend
+    // (remitos, formulario de ingresos) — no lo replicamos acá para no mostrar
+    // un número optimista incorrecto. Con fecha de hoy sí es seguro asumir
+    // "reinicia desde ahora, todavía sin movimientos".
+    const esRetroactiva = fechaEfectiva !== hoy;
 
     // Después de un ajuste manual, el checkpoint de ESE tipo es el nuevo valor
-    // (ingresos y consumo de ese tipo se reinician desde ahora).
+    // (ingresos y consumo de ese tipo se reinician desde la fecha cargada).
     if (esFrio) {
       frioTerminado = nuevoValor;
-      stockData.frioBase = nuevoValor; stockData.frioActual = nuevoValor;
-      stockData.frioFechaBase = hoy;   stockData.frioUsuarioBase = 'Agustín';
-      stockData.frioConsumo = 0;       stockData.frioConsumoDetalle = []; stockData.frioExcess = 0;
+      stockData.frioBase = nuevoValor; stockData.frioActual = esRetroactiva ? stockData.frioActual : nuevoValor;
+      stockData.frioFechaBase = fechaEfectiva; stockData.frioUsuarioBase = 'Agustín';
+      if (!esRetroactiva) { stockData.frioConsumo = 0; stockData.frioConsumoDetalle = []; stockData.frioExcess = 0; }
     } else {
-      stockAsfalto = nuevoValor;
-      stockFecha   = hoy; stockUsuario = 'Agustín';
-      stockData.valor = nuevoValor; stockData.stockBase = nuevoValor;
-      stockData.ingresos = 0; stockData.consumo = 0;
-      stockData.fechaBase = hoy; stockData.usuarioBase = 'Agustín';
-      stockData.ingresosDetalle = []; stockData.consumoDetalle = [];
+      stockAsfalto = esRetroactiva ? stockAsfalto : nuevoValor;
+      stockFecha   = fechaEfectiva; stockUsuario = 'Agustín';
+      stockData.stockBase = nuevoValor; stockData.valor = esRetroactiva ? stockData.valor : nuevoValor;
+      if (!esRetroactiva) { stockData.ingresos = 0; stockData.consumo = 0; stockData.ingresosDetalle = []; stockData.consumoDetalle = []; }
+      stockData.fechaBase = fechaEfectiva; stockData.usuarioBase = 'Agustín';
     }
 
     renderStockDisplay();
     input.value  = '';
-    fb.innerHTML = '✅ ' + (esFrio ? 'Frío terminado' : 'Stock') + ' actualizado: <strong>' + fmtTn(nuevoValor) + ' tn</strong> (antes: ' + fmtTn(stockAntes) + ' tn)';
+    if (fechaInputEl) fechaInputEl.value = '';
+    fb.innerHTML = '✅ ' + (esFrio ? 'Frío terminado' : 'Stock') + ' actualizado con fecha ' + fechaEfectiva + ': <strong>' + fmtTn(nuevoValor) + ' tn</strong> (antes: ' + fmtTn(stockAntes) + ' tn)'
+      + (esRetroactiva ? '<br><span style="font-size:11px;">Fecha retroactiva — presioná "Actualizar datos" para recalcular ingresos/consumo desde esa fecha.</span>' : '');
     fb.style.color = 'var(--pos)';
     btn.textContent  = '✓ Guardado';
     btn.style.opacity = '1';
