@@ -1364,13 +1364,6 @@
       </table>
     </div>
   </div>
-
-  <div class="section">
-    <div class="section-title">Acceso desde cuenta dashboard</div>
-    <div class="alert info">
-      La cuenta conectada al dashboard es <strong>mariacaram94@gmail.com</strong>. Los archivos marcados como "Pendiente" no están compartidos con esta cuenta. Para activar esos datos: el responsable debe compartir el archivo con permisos de visualización desde Google Drive.
-    </div>
-  </div>
 </div>
 
 <!-- ================================================================ -->
@@ -1864,15 +1857,23 @@ const PERSONAS = [
   }
 ];
 
+// Fechas reales de última modificación de cada archivo fuente, leídas por el
+// Apps Script vía DriveApp (leerFechasFuentes()). Clave = fileKey de FUENTES.
+let FECHAS_FUENTES = {};
+
 // Fuentes de datos
+// ultimaActualizacion es un valor de referencia (fallback) que se muestra
+// hasta que llegan las fechas reales desde Drive (fileKey → FECHAS_FUENTES,
+// vía leerFechasFuentes() en el .gs). "ÓC Repuestos..." no tiene fileKey
+// porque su dato (OC_PLANTA) todavía es una carga manual, no lectura de Drive.
 const FUENTES = [
-  { archivo: 'Cobros Ingeco Feb-Mar-Abr 2026.xlsx', responsable: 'Esteban', ultimaActualizacion: '07/05/2026', estado: 'real', dato: 'Cobros reales Feb/Mar/Abr — 37 registros', accion: '✅ Accesible — datos cargados' },
-  { archivo: '1° Quinc. Abril 2026 - LIQ TANGO.xlsx', responsable: 'Mauro Orellana', ultimaActualizacion: '29/04/2026', estado: 'real', dato: 'MO por centro de costo — taller y obras', accion: '✅ Accesible — datos cargados' },
-  { archivo: 'ÓRDENES DE COMPRA DE INSUMOS PARA OBRAS (GUILLERMO KONICEK)', responsable: 'Guillermo Konicek', ultimaActualizacion: '13/05/2026', estado: 'real', dato: 'OC insumos Feb $549M / Mar $515M / Abr $183M (parcial) — 294 órdenes 2026', accion: '✅ Accesible — carpeta Guillermo (Drive) — datos cargados' },
-  { archivo: 'REMITOS OFICIALES (Google Sheet)', responsable: 'Roberto', ultimaActualizacion: '12/05/2026', estado: 'parcial', dato: 'Tn caliente/frío (sin precios cargados)', accion: 'Completar columna PRECIO en sheet' },
-  { archivo: 'Maestro de obras NUEVO.xlsx', responsable: 'Adrián / Equipo', ultimaActualizacion: '07/05/2026', estado: 'real', dato: '60+ obras con código canónico y cliente', accion: '✅ Accesible — cargado' },
-  { archivo: 'ENTREGAS DE REPUESTOS ABRIL 2026', responsable: 'Nicolás Dall\'Agata', ultimaActualizacion: '12/05/2026', estado: 'real', dato: 'Costos reales reparaciones taller abr 2026', accion: '✅ Accesible — datos cargados' },
-  { archivo: 'ÓC Repuestos para Equipos (Alberto Lescano)', responsable: 'Alberto Lescano', ultimaActualizacion: '29/04/2026', estado: 'parcial', dato: 'OC planta asfalto y equipos', accion: '✅ Accesible — datos cargados' }
+  { archivo: 'Cobros Ingeco Feb-Mar-Abr 2026.xlsx', responsable: 'Esteban', fileKey: 'estebanSheet', ultimaActualizacion: '07/05/2026', estado: 'real', dato: 'Cobros reales Feb/Mar/Abr — 37 registros', accion: '✅ Accesible — datos cargados' },
+  { archivo: '1° Quinc. Abril 2026 - LIQ TANGO.xlsx', responsable: 'Mauro Orellana', fileKey: 'tangoFolder', ultimaActualizacion: '29/04/2026', estado: 'real', dato: 'MO por centro de costo — taller y obras', accion: '✅ Accesible — datos cargados' },
+  { archivo: 'ÓRDENES DE COMPRA DE INSUMOS PARA OBRAS (GUILLERMO KONICEK)', responsable: 'Guillermo Konicek', fileKey: 'ocInsumos', ultimaActualizacion: '13/05/2026', estado: 'real', dato: 'OC insumos Feb $549M / Mar $515M / Abr $183M (parcial) — 294 órdenes 2026', accion: '✅ Accesible — carpeta Guillermo (Drive) — datos cargados' },
+  { archivo: 'REMITOS OFICIALES (Google Sheet)', responsable: 'Roberto', fileKey: 'remitosAsfalto', ultimaActualizacion: '12/05/2026', estado: 'parcial', dato: 'Tn caliente/frío (sin precios cargados)', accion: 'Completar columna PRECIO en sheet' },
+  { archivo: 'Maestro de obras NUEVO.xlsx', responsable: 'Adrián / Equipo', fileKey: 'maestroObras', ultimaActualizacion: '07/05/2026', estado: 'real', dato: '60+ obras con código canónico y cliente', accion: '✅ Accesible — cargado' },
+  { archivo: 'ENTREGAS DE REPUESTOS ABRIL 2026', responsable: 'Nicolás Dall\'Agata', fileKey: 'repuestosEquipos', ultimaActualizacion: '12/05/2026', estado: 'real', dato: 'Costos reales reparaciones taller abr 2026', accion: '✅ Accesible — datos cargados' },
+  { archivo: 'ÓC Repuestos para Equipos (Alberto Lescano)', responsable: 'Alberto Lescano', fileKey: null, ultimaActualizacion: '29/04/2026', estado: 'parcial', dato: 'OC planta asfalto y equipos', accion: '✅ Accesible — datos cargados' }
 ];
 
 // ================================================================
@@ -4430,16 +4431,24 @@ function renderPersonas() {
 
 function renderFuentes() {
   const tbody = document.getElementById('tbody-fuentes');
-  tbody.innerHTML = FUENTES.map(f => `
+  tbody.innerHTML = FUENTES.map(f => {
+    // Fecha real de Drive si ya llegó (leerFechasFuentes en el .gs); si no, el
+    // valor de referencia hardcodeado en FUENTES como fallback.
+    const isoReal = f.fileKey ? FECHAS_FUENTES[f.fileKey] : null;
+    const fechaMostrada = isoReal
+      ? new Date(isoReal).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+      : f.ultimaActualizacion;
+    const tituloFecha = isoReal ? 'Última modificación real (Google Drive)' : 'Fecha de referencia — actualizá datos para leer la real';
+    return `
     <tr>
       <td style="font-weight:500;">${f.archivo}</td>
       <td>${f.responsable}</td>
-      <td>${f.ultimaActualizacion}</td>
+      <td title="${tituloFecha}">${fechaMostrada}${!isoReal ? ' <span style="color:var(--muted);font-size:10px;">(ref.)</span>' : ''}</td>
       <td><span class="status-badge ${f.estado}">${f.estado === 'real' ? 'Real' : f.estado === 'parcial' ? 'Parcial' : 'Pendiente'}</span></td>
       <td>${f.dato}</td>
       <td style="font-size:12px; color:var(--muted);">${f.accion}</td>
-    </tr>
-  `).join('');
+    </tr>`;
+  }).join('');
 }
 
 // ================================================================
@@ -6701,6 +6710,9 @@ async function refreshData() {
       if (data.precioAsfalto && typeof data.precioAsfalto === 'object') {
         Object.assign(PRECIO_ASFALTO, data.precioAsfalto);
       }
+      if (data.fechasFuentes && typeof data.fechasFuentes === 'object') {
+        Object.assign(FECHAS_FUENTES, data.fechasFuentes);
+      }
       if (data.stockAsfalto && data.stockAsfalto.valor != null) {
         stockData    = data.stockAsfalto;
         stockAsfalto = data.stockAsfalto.valor;
@@ -6892,6 +6904,9 @@ if (APPS_SCRIPT_URL) {
         }
         if (data.precioAsfalto && typeof data.precioAsfalto === 'object') {
           Object.assign(PRECIO_ASFALTO, data.precioAsfalto);
+        }
+        if (data.fechasFuentes && typeof data.fechasFuentes === 'object') {
+          Object.assign(FECHAS_FUENTES, data.fechasFuentes);
         }
         if (data.stockAsfalto && data.stockAsfalto.valor != null) {
           stockData    = data.stockAsfalto;

@@ -192,7 +192,42 @@ function buildData() {
   catch(e) { Logger.log('stockAsfalto error: ' + e); result.stockAsfalto = null; }
   try { result.precioAsfalto = leerPrecioAsfalto(); }
   catch(e) { Logger.log('precioAsfalto error: ' + e); result.precioAsfalto = null; }
+  try { result.fechasFuentes = leerFechasFuentes(); }
+  catch(e) { Logger.log('fechasFuentes error: ' + e); result.fechasFuentes = null; }
   return result;
+}
+
+// ============================================================
+// FECHAS DE ÚLTIMA MODIFICACIÓN DE LOS ARCHIVOS FUENTE (pestaña Fuentes de Datos)
+// Lee vía DriveApp la fecha real de última modificación de cada archivo, para
+// no depender de que alguien actualice a mano la columna en FUENTES (index.html).
+// ============================================================
+function leerFechasFuentes() {
+  const resultado = {};
+  const claves = ['ocInsumos', 'maestroObras', 'fernandoObras', 'estebanSheet',
+    'equiposFlota', 'usageEquipos', 'repuestosEquipos', 'remitosAsfalto',
+    'ajusteStock', 'precioAsfalto'];
+  claves.forEach(function(k) {
+    try {
+      resultado[k] = DriveApp.getFileById(FILE_IDS[k]).getLastUpdated().toISOString();
+    } catch (e) {
+      Logger.log('leerFechasFuentes: error en ' + k + ': ' + e);
+    }
+  });
+  // tangoFolder es una carpeta con un archivo por mes — usar el modificado más reciente
+  try {
+    const files = DriveApp.getFolderById(FILE_IDS.tangoFolder).getFiles();
+    let masReciente = null;
+    while (files.hasNext()) {
+      const f = files.next();
+      const d = f.getLastUpdated();
+      if (!masReciente || d > masReciente) masReciente = d;
+    }
+    if (masReciente) resultado.tangoFolder = masReciente.toISOString();
+  } catch (e) {
+    Logger.log('leerFechasFuentes: error en tangoFolder: ' + e);
+  }
+  return resultado;
 }
 
 // ============================================================
