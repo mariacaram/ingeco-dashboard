@@ -2487,11 +2487,13 @@ function openHistorialObra(codObra, nombreObra) {
 
   const tot = { aCobrar: 0, insumos: 0, mo: 0, asf: 0, alquiler: 0, margen: 0, tnCal: 0, tnFrio: 0 };
   let algunaEstim = false;
+  let hayDatosMesActual = false;
   const filasMes = [];
   MES_ORDER.forEach(m => {
     const d = computeMargenObrasMes(m);
     const r = buscaFila(d);
     if (!r || !r.hasData) return;
+    if (m === mesActual) hayDatosMesActual = true;
     if (d.moEsEstim && r.moObra != null) algunaEstim = true;
     tot.aCobrar  += r.aCobrar;
     tot.insumos  += r.insumos;
@@ -2561,16 +2563,26 @@ function openHistorialObra(codObra, nombreObra) {
       <div style="font-size:11px;color:var(--muted);margin-top:10px;">Margen mensual = A Cobrar − Insumos − MO prorrateada − Costo asfalto − Alquiler. ${algunaEstim ? '~ incluye MO estimada en meses sin TANGO cargado.' : ''}</div>`;
   }
 
-  const btnPDF = filasMes.length > 0
-    ? `<button onclick="generarReportePDF('${(codObra||'').replace(/'/g,"\\'")}','${(nombreObra||'').replace(/'/g,"\\'")}')"
+  const codEsc3 = (codObra    || '').replace(/'/g, "\\'");
+  const nomEsc3 = (nombreObra || '').replace(/'/g, "\\'");
+  const btnPDFTotal = filasMes.length > 0
+    ? `<button onclick="generarReportePDF('${codEsc3}','${nomEsc3}')"
          style="margin-top:12px;width:100%;padding:10px 14px;background:var(--primary);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;">
-         📄 Descargar reporte PDF de la obra</button>`
+         📄 Descargar reporte PDF de la obra (histórico)</button>`
+    : '';
+  // Botón adicional para el mes actualmente seleccionado en el tablero (no tiene
+  // sentido si el filtro activo es "TOTAL", ya que ahí no hay un único mes).
+  const btnPDFMes = (mesActual !== 'total' && hayDatosMesActual)
+    ? `<button onclick="generarReportePDF('${codEsc3}','${nomEsc3}','${mesActual}')"
+         style="margin-top:8px;width:100%;padding:10px 14px;background:#fff;color:var(--primary);border:1.5px solid var(--primary);border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;">
+         📄 Descargar PDF de ${MES[mesActual] || mesActual}</button>`
     : '';
 
   content.innerHTML = `
     <div class="panel-title">${nombreObra || codObra}</div>
     <div class="panel-sub">Historial de ingresos y gastos · todos los meses</div>
-    ${btnPDF}
+    ${btnPDFTotal}
+    ${btnPDFMes}
     <div style="margin-top:14px;">${html}</div>`;
   panel.classList.add('open');
   overlay.classList.add('open');
@@ -2580,10 +2592,11 @@ function openHistorialObra(codObra, nombreObra) {
 // REPORTE PDF POR OBRA — recolección de datos + render imprimible
 // ============================================================
 
-// Recolecta TODOS los datos de una obra cruzando todos los meses con datos:
-// certificados, insumos (por proveedor y por mes), MO, costo de asfalto y
-// alquiler de equipos (por equipo y por mes), con sus totales.
-function _recolectarDatosObra(codObra, nombreObra) {
+// Recolecta los datos de una obra cruzando los meses con datos: certificados,
+// insumos (por proveedor y por mes), MO, costo de asfalto y alquiler de
+// equipos (por equipo y por mes), con sus totales. Si se pasa `soloMes`,
+// restringe todo el cálculo a ese único mes (reporte mensual en vez de histórico).
+function _recolectarDatosObra(codObra, nombreObra, soloMes) {
   const keyC = (codObra    || '').toLowerCase().trim();
   const keyN = (nombreObra || '').toLowerCase().trim();
   const matchObra = (obraStr, codStr) => {
@@ -2601,7 +2614,8 @@ function _recolectarDatosObra(codObra, nombreObra) {
   let algunaEstim = false;
   let infoObra = null;               // { nombre, cod_obra, cliente, tipo }
 
-  MES_ORDER.forEach(m => {
+  const mesesAIterar = soloMes ? [soloMes] : MES_ORDER;
+  mesesAIterar.forEach(m => {
     const d = computeMargenObrasMes(m);
     if (!d) return;
     const r = d.rows.find(x => matchObra(x.o.nombre, x.o.cod_obra));
@@ -2658,8 +2672,10 @@ function _recolectarDatosObra(codObra, nombreObra) {
   return { meses, porMes, certificados, provTotales, equipoTotales, tot, algunaEstim, infoObra: infoObra || { nombre: nombreObra, cod_obra: codObra, cliente: '', tipo: '' } };
 }
 
-function generarReportePDF(codObra, nombreObra) {
-  const D = _recolectarDatosObra(codObra, nombreObra);
+// soloMes (opcional): key de mes (ej. 'jul') para generar el reporte de un
+// único mes en vez del histórico completo de la obra.
+function generarReportePDF(codObra, nombreObra, soloMes) {
+  const D = _recolectarDatosObra(codObra, nombreObra, soloMes);
   if (!D) { alert('No hay datos para generar el reporte de esta obra.'); return; }
 
   const showMO = !esAdmin();               // rol administración no ve MO
@@ -2667,6 +2683,7 @@ function generarReportePDF(codObra, nombreObra) {
   const pct = (n, base) => base > 0 ? (n / base * 100).toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%' : '—';
   const mesLbl = m => (MES[m] || m).replace(' 2026', '');
   const esc = s => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const esMensual = !!soloMes;
 
   const o = D.infoObra;
   const tipo = _tipoDeFila(o);
@@ -2674,7 +2691,9 @@ function generarReportePDF(codObra, nombreObra) {
   // (para el rol admin la MO se muestra dentro de "Otros costos operativos").
   const egresosMostrado = D.tot.insumos + D.tot.mo + D.tot.asf + D.tot.alquiler;
   const margen = D.tot.margen;
-  const periodo = D.meses.length > 0 ? `${mesLbl(D.meses[0])} – ${mesLbl(D.meses[D.meses.length - 1])} 2026` : '2026';
+  const periodo = esMensual
+    ? (MES[soloMes] || soloMes)
+    : (D.meses.length > 0 ? `${mesLbl(D.meses[0])} – ${mesLbl(D.meses[D.meses.length - 1])} 2026` : '2026');
   const hoy = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' });
   const est = D.algunaEstim ? '~' : '';
 
@@ -2757,7 +2776,9 @@ function generarReportePDF(codObra, nombreObra) {
       <td style="padding:6px 10px;font-size:12px;text-align:right;border-top:1px solid #e2e8f0;font-weight:600;color:#dc2626;">${pf(e.costo)}</td>
     </tr>`).join('');
 
-  // ── Sección 3: Evolución mensual del margen ──
+  // ── Sección 3: Evolución mensual del margen (histórico) o detalle del mes ──
+  const tituloEvo = esMensual ? 'Detalle del mes' : 'Evolución mensual del margen';
+  const subEvo    = esMensual ? `Todos los componentes del margen · ${periodo}` : 'Detalle mes a mes de todos los componentes';
   const evoFilas = D.meses.map(m => {
     const pm = D.porMes[m];
     const mg = pm.margen >= 0 ? '#16a34a' : '#dc2626';
@@ -2783,7 +2804,7 @@ function generarReportePDF(codObra, nombreObra) {
   const totRow = (cells) => `<tr style="background:#f1f5f9;font-weight:700;border-top:2px solid #cbd5e1;">${cells.map(c => `<td style="padding:8px 10px;font-size:12px;text-align:${c.a || 'left'};color:${c.c || '#1e293b'};">${c.t}</td>`).join('')}</tr>`;
 
   const html = `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
-<title>Reporte ${esc(o.nombre || o.cod_obra)} — INGECO</title>
+<title>Reporte ${esc(o.nombre || o.cod_obra)}${esMensual ? ' — ' + periodo : ''} — INGECO</title>
 <style>
   @page { size: A4; margin: 13mm 14mm; }
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -2823,7 +2844,7 @@ function generarReportePDF(codObra, nombreObra) {
   <div class="header">
     <div>
       <div class="brand">INGE<span>CO</span></div>
-      <div class="doc-tipo">Reporte de Contribución Marginal por Obra</div>
+      <div class="doc-tipo">Reporte ${esMensual ? 'Mensual' : 'Histórico'} de Contribución Marginal por Obra</div>
     </div>
     <div class="header-right">
       Generado: ${hoy}<br>Adrián Koss · Socio Director
@@ -2899,7 +2920,7 @@ function generarReportePDF(codObra, nombreObra) {
       </tbody>
     </table>`) : ''}
 
-  ${seccion('3', 'Evolución mensual del margen', 'Detalle mes a mes de todos los componentes', `
+  ${seccion('3', tituloEvo, subEvo, `
     <table class="data">
       ${th([{ t: 'Mes' }, { t: 'Certificado', a: 'right' }, { t: 'Insumos', a: 'right' }].concat(showMO ? [{ t: 'MO', a: 'right' }] : []).concat([{ t: 'Asfalto', a: 'right' }, { t: 'Alquiler', a: 'right' }, { t: 'Margen', a: 'right' }]))}
       <tbody>${evoFilas}
