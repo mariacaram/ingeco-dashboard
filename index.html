@@ -543,6 +543,19 @@
       Contribución marginal por obra · <span id="mes-label-resumen-obra"></span>
       <span class="badge partial" id="badge-resumen-obra">Presioná "Actualizar datos"</span>
     </div>
+    <div style="position:relative;max-width:340px;margin:2px 0 14px;">
+      <div style="position:relative;">
+        <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:14px;pointer-events:none;">🔍</span>
+        <input type="text" id="busqueda-obra-input" placeholder="Buscar obra por nombre o código…" autocomplete="off"
+          oninput="onBuscarObraInput('obra', this.value)"
+          onfocus="onBuscarObraInput('obra', this.value)"
+          onblur="ocultarDropdownBusquedaDelay('obra')"
+          style="width:100%;padding:9px 32px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:#fff;">
+        <span id="busqueda-obra-clear" onclick="limpiarBusquedaObra('obra')" title="Limpiar búsqueda"
+          style="display:none;position:absolute;right:10px;top:50%;transform:translateY(-50%);cursor:pointer;color:var(--muted);font-size:13px;">✕</span>
+      </div>
+      <div id="busqueda-obra-dropdown" style="display:none;position:absolute;z-index:80;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.14);max-height:260px;overflow-y:auto;"></div>
+    </div>
     <div class="table-wrap">
       <table id="tabla-resumen-obra">
         <thead>
@@ -614,6 +627,19 @@
     <div class="section-title">
       Contribución marginal por tipo de contratación · <span id="mes-label-margen-tipo"></span>
       <span class="badge partial" id="badge-margen-tipo">Presioná "Actualizar datos"</span>
+    </div>
+    <div style="position:relative;max-width:340px;margin:2px 0 14px;">
+      <div style="position:relative;">
+        <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:14px;pointer-events:none;">🔍</span>
+        <input type="text" id="busqueda-tipo-input" placeholder="Buscar obra por nombre o código…" autocomplete="off"
+          oninput="onBuscarObraInput('tipo', this.value)"
+          onfocus="onBuscarObraInput('tipo', this.value)"
+          onblur="ocultarDropdownBusquedaDelay('tipo')"
+          style="width:100%;padding:9px 32px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:#fff;">
+        <span id="busqueda-tipo-clear" onclick="limpiarBusquedaObra('tipo')" title="Limpiar búsqueda"
+          style="display:none;position:absolute;right:10px;top:50%;transform:translateY(-50%);cursor:pointer;color:var(--muted);font-size:13px;">✕</span>
+      </div>
+      <div id="busqueda-tipo-dropdown" style="display:none;position:absolute;z-index:80;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.14);max-height:260px;overflow-y:auto;"></div>
     </div>
     <div id="container-margen-tipo">
       <div class="nd" style="text-align:center;padding:20px;font-size:13px;">Presioná "Actualizar datos" para cargar desde Drive</div>
@@ -2303,16 +2329,115 @@ function _filaMargenHTML(r, moEsEstim, tnTotalGlobal) {
     </tr>`;
 }
 
+// ================================================================
+// BUSCADOR DE OBRA — filtra "Contribución marginal por obra" y "... por tipo
+// de contratación" en tiempo real, con dropdown de sugerencias mientras se
+// escribe. Cada pestaña tiene su propio estado de búsqueda independiente.
+// ================================================================
+const BUSQUEDA_OBRA = { obra: '', tipo: '' };
+
+// Lista única de obras conocidas (histórico completo, sin obras "Interno")
+// para armar las sugerencias del dropdown, sin importar el mes seleccionado.
+function _listaObrasParaBuscador() {
+  const total = computeMargenObrasTotal();
+  if (!total) return [];
+  const vistos = new Set();
+  const lista = [];
+  total.rows.forEach(r => {
+    const cod = (r.o.cod_obra || '').trim();
+    const nom = (r.o.nombre   || '').trim();
+    const key = (cod || nom).toLowerCase();
+    if (!key || vistos.has(key)) return;
+    vistos.add(key);
+    lista.push({ cod, nombre: nom });
+  });
+  return lista.sort((a, b) => (a.cod || a.nombre).localeCompare(b.cod || b.nombre, 'es'));
+}
+
+// true si el código o nombre de la obra contiene el texto buscado
+function _obraMatchBusqueda(o, textoNorm) {
+  if (!textoNorm) return true;
+  const cod = (o.cod_obra || '').toLowerCase();
+  const nom = (o.nombre   || '').toLowerCase();
+  return cod.includes(textoNorm) || nom.includes(textoNorm);
+}
+
+function onBuscarObraInput(tab, valor) {
+  BUSQUEDA_OBRA[tab] = valor.trim().toLowerCase();
+  _actualizarDropdownBusqueda(tab, valor);
+  const clearEl = document.getElementById('busqueda-' + tab + '-clear');
+  if (clearEl) clearEl.style.display = valor ? '' : 'none';
+  if (tab === 'obra') renderResumenObra(); else renderResumenTipoContrato();
+}
+
+function _actualizarDropdownBusqueda(tab, valor) {
+  const dd = document.getElementById('busqueda-' + tab + '-dropdown');
+  if (!dd) return;
+  const texto = (valor || '').trim().toLowerCase();
+  if (!texto) { dd.style.display = 'none'; dd.innerHTML = ''; return; }
+  const coincidencias = _listaObrasParaBuscador().filter(o => _obraMatchBusqueda({ cod_obra: o.cod, nombre: o.nombre }, texto)).slice(0, 8);
+  if (coincidencias.length === 0) {
+    dd.innerHTML = '<div style="padding:10px 14px;font-size:12px;color:var(--muted);">Sin coincidencias</div>';
+  } else {
+    dd.innerHTML = coincidencias.map(o => {
+      const valorSel = (o.cod || o.nombre).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+      const nombreCorto = o.nombre && o.nombre.length > 70 ? o.nombre.slice(0, 70) + '…' : o.nombre;
+      return `<div onmousedown="seleccionarObraBusqueda('${tab}','${valorSel}')"
+          style="padding:9px 14px;font-size:12.5px;cursor:pointer;border-bottom:1px solid var(--border);"
+          onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
+        <div style="font-weight:600;">${o.cod || o.nombre}</div>
+        ${nombreCorto && nombreCorto !== o.cod ? `<div style="font-size:11px;color:var(--muted);">${nombreCorto}</div>` : ''}
+      </div>`;
+    }).join('');
+  }
+  dd.style.display = '';
+}
+
+// onmousedown (no click) en las sugerencias para que dispare ANTES del blur del input
+function seleccionarObraBusqueda(tab, valor) {
+  const input = document.getElementById('busqueda-' + tab + '-input');
+  if (input) input.value = valor;
+  BUSQUEDA_OBRA[tab] = valor.trim().toLowerCase();
+  ocultarDropdownBusqueda(tab);
+  const clearEl = document.getElementById('busqueda-' + tab + '-clear');
+  if (clearEl) clearEl.style.display = '';
+  if (tab === 'obra') renderResumenObra(); else renderResumenTipoContrato();
+}
+
+function limpiarBusquedaObra(tab) {
+  const input = document.getElementById('busqueda-' + tab + '-input');
+  if (input) input.value = '';
+  BUSQUEDA_OBRA[tab] = '';
+  ocultarDropdownBusqueda(tab);
+  const clearEl = document.getElementById('busqueda-' + tab + '-clear');
+  if (clearEl) clearEl.style.display = 'none';
+  if (tab === 'obra') renderResumenObra(); else renderResumenTipoContrato();
+}
+
+function ocultarDropdownBusqueda(tab) {
+  const dd = document.getElementById('busqueda-' + tab + '-dropdown');
+  if (dd) { dd.style.display = 'none'; dd.innerHTML = ''; }
+}
+// Delay para que el onmousedown de una sugerencia llegue a disparar antes de ocultar
+function ocultarDropdownBusquedaDelay(tab) {
+  setTimeout(() => ocultarDropdownBusqueda(tab), 150);
+}
+
 function renderResumenObra() {
   const tbody   = document.getElementById('tbody-resumen-obra');
   const mesLabel = document.getElementById('mes-label-resumen-obra');
   if (mesLabel) mesLabel.textContent = MES[mesActual] || mesActual;
 
   const datos = computeMargenFilas();
+  const busq = BUSQUEDA_OBRA.obra;
   if (tbody && !datos) {
     tbody.innerHTML = '<tr><td colspan="7" class="nd" style="text-align:center;padding:20px;">Presioná "Actualizar datos" para cargar desde Drive</td></tr>';
+  } else if (tbody && busq && !datos.rows.some(r => _obraMatchBusqueda(r.o, busq))) {
+    tbody.innerHTML = `<tr><td colspan="7" class="nd" style="text-align:center;padding:20px;">Sin obras que coincidan con "${busq}" en este período</td></tr>`;
+    renderChartsObra({ insumos: [], mo: [], alquiler: [], tn: [] });
   } else if (tbody) {
-    const { rows, moEsEstim, tnTotalGlobal } = datos;
+    const rows = busq ? datos.rows.filter(r => _obraMatchBusqueda(r.o, busq)) : datos.rows;
+    const { moEsEstim, tnTotalGlobal } = datos;
 
     let sumaCobrar = 0, sumaInsumos = 0, sumaAlquiler = 0, sumaTn = 0, sumaMO = 0;
     const chartData = { insumos: [], mo: [], alquiler: [], tn: [] };
@@ -2386,7 +2511,9 @@ function renderResumenTipoContrato() {
     cont.innerHTML = '<div class="nd" style="text-align:center;padding:20px;font-size:13px;">Presioná "Actualizar datos" para cargar desde Drive</div>';
     return;
   }
-  const { rows, moEsEstim, tnTotalGlobal } = datos;
+  const { moEsEstim, tnTotalGlobal } = datos;
+  const busq = BUSQUEDA_OBRA.tipo;
+  const rows = busq ? datos.rows.filter(r => _obraMatchBusqueda(r.o, busq)) : datos.rows;
 
   // Las obras "Interno" ya vienen excluidas de `rows` (computeMargenObrasMes/Total),
   // así el total de esta pestaña coincide siempre con el de "Contribución marginal
@@ -2413,7 +2540,9 @@ function renderResumenTipoContrato() {
     }).sort((a, b) => b.tot.margen - a.tot.margen);
 
   if (lista.length === 0) {
-    cont.innerHTML = '<div class="nd" style="text-align:center;padding:20px;font-size:13px;">Sin obras con tipo de contratación para este período</div>';
+    cont.innerHTML = busq
+      ? `<div class="nd" style="text-align:center;padding:20px;font-size:13px;">Sin obras que coincidan con "${busq}" en este período</div>`
+      : '<div class="nd" style="text-align:center;padding:20px;font-size:13px;">Sin obras con tipo de contratación para este período</div>';
     return;
   }
 
