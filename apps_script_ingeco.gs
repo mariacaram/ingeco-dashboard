@@ -2012,22 +2012,20 @@ function leerStockAsfalto(remitosData) {
   const TZ = 'America/Argentina/Buenos_Aires';
   // Punto de partida fijo (corte real confirmado por Agustín)
   const BASE_STOCK  = 700;
-  const BASE_FRIO   = 35;   // frío terminado por defecto (hasta que Agustín lo ajuste)
   const BASE_FECHA  = new Date(2026, 4, 7, 0, 0, 0); // 07/05/2026
   const BASE_USUARIO = 'Agustín';
 
   try {
     const ss = SpreadsheetApp.openById(FILE_IDS.ajusteStock);
 
-    // ── 1. Checkpoints: último ajuste manual de cada tipo (asfalto / frío) ──
+    // ── 1. Checkpoint: último ajuste manual de asfalto (materia prima) ──
     // Hoja "Ajuste de stock": A fecha · B hora · C usuario · D antes · E nuevo · F tipo
-    // Filas viejas sin col F = 'asfalto'. Gana la última fila de cada tipo.
+    // Modelo simplificado: un solo stock de asfalto. Tanto caliente como frío
+    // se producen consumiendo asfalto (÷20) — ya no hay buffer de frío aparte,
+    // así que los ajustes de tipo 'frio' (legado) se ignoran.
     let stockBase   = BASE_STOCK;
     let fechaBase   = BASE_FECHA;
     let usuarioBase = BASE_USUARIO;
-    let frioBase    = BASE_FRIO;
-    let frioFecha   = BASE_FECHA;
-    let frioUsuario = BASE_USUARIO;
 
     const sheetAjuste = ss.getSheetByName('Ajuste de stock');
     if (sheetAjuste && sheetAjuste.getLastRow() >= 2) {
@@ -2035,11 +2033,12 @@ function leerStockAsfalto(remitosData) {
       for (var a = 1; a < rowsAj.length; a++) {
         var valAj = Number(rowsAj[a][4]);
         if (isNaN(valAj) || valAj < 0) continue;
+        // Se ignoran los ajustes de tipo 'frio' (modelo anterior): el frío ya no
+        // es un stock aparte. Solo cuenta el checkpoint de asfalto.
         var tipoAj = String(rowsAj[a][5] || 'asfalto').toLowerCase().trim();
+        if (tipoAj === 'frio' || tipoAj === 'frío') continue;
         // Col A puede venir como Date (celda formateada como fecha — lo normal) o
-        // como texto "dd/MM/yyyy" (filas viejas). Antes solo se parseaba el texto,
-        // así que las fechas-objeto quedaban en null y el checkpoint conservaba la
-        // fecha base (07/05) aunque el valor sí se actualizara. Manejar ambos casos.
+        // como texto "dd/MM/yyyy" (filas viejas). Manejar ambos casos.
         var celdaFecha = rowsAj[a][0];
         var fAj = null;
         if (celdaFecha instanceof Date && !isNaN(celdaFecha.getTime())) {
@@ -2050,15 +2049,9 @@ function leerStockAsfalto(remitosData) {
           if (partsAj.length === 3) fAj = new Date(parseInt(partsAj[2]), parseInt(partsAj[1]) - 1, parseInt(partsAj[0]));
         }
         var usrAj = String(rowsAj[a][2] || BASE_USUARIO);
-        // Gana la fecha más RECIENTE de cada tipo, no la última fila cargada —
-        // permite cargar ajustes retroactivos sin pisar un checkpoint más nuevo
-        // que ya estaba guardado. Filas sin fecha parseable (legado) ganan
-        // igual, como antes, por no tener con qué compararlas.
-        if (tipoAj === 'frio' || tipoAj === 'frío') {
-          if (!fAj || fAj >= frioFecha) { frioBase = valAj; if (fAj) frioFecha = fAj; frioUsuario = usrAj; }
-        } else {
-          if (!fAj || fAj >= fechaBase) { stockBase = valAj; if (fAj) fechaBase = fAj; usuarioBase = usrAj; }
-        }
+        // Gana la fecha más RECIENTE, no la última fila cargada — permite cargar
+        // ajustes retroactivos sin pisar un checkpoint más nuevo ya guardado.
+        if (!fAj || fAj >= fechaBase) { stockBase = valAj; if (fAj) fechaBase = fAj; usuarioBase = usrAj; }
       }
     }
 
@@ -2103,50 +2096,25 @@ function leerStockAsfalto(remitosData) {
     }
 
     // ── 3. Consumo desde REMITOS ─────────────────────────────────────────────
-    // Tanto caliente como frío se PRODUCEN consumiendo asfalto (tn asfalto = tn mezcla / 20).
-    // El frío terminado (predio) es un buffer: las salidas frío se sirven primero de ese
-    // buffer; lo que exceda el buffer se produce en el momento y también descuenta asfalto.
+    // Modelo simplificado: TODA la mezcla despachada (caliente + frío) se produce
+    // consumiendo asfalto (tn asfalto = tn mezcla / 20). Sin buffer de frío.
     const RATIO = 20;
-    let consumo     = 0;   // asfalto materia prima consumido (caliente + frío excedente) / 20
-    let frioConsumo = 0;   // total frío despachado (tn, desde frioFecha)
-    let frioExcess  = 0;   // frío producido desde asfalto por falta de buffer (tn de mezcla)
-    let frioActual  = frioBase;
-    const consumoDetalle     = []; // todas las salidas (para el detalle de movimientos)
-    const frioConsumoDetalle = []; // salidas frío posteriores al ajuste de frío
+    let consumo = 0;            // asfalto materia prima consumido (caliente + frío) / 20
+    const consumoDetalle = [];  // todas las salidas (para el detalle de movimientos)
     const remitos = remitosData || {};
 
     if (remitos._detalle && remitos._detalle.length > 0) {
-      // Procesar cronológicamente para ir vaciando el buffer de frío en orden.
       var salidas = remitos._detalle.slice().sort(function(a, b) { return a.fecha - b.fecha; });
-      var pile = frioBase;
       for (var f = 0; f < salidas.length; f++) {
         var r = salidas[f];
-        if (r.tipo === 'frio') {
-          if (r.fecha < frioFecha) continue;
-          frioConsumo += r.cant;
-          var fromPile = Math.min(pile, r.cant);
-          pile -= fromPile;
-          var excess = r.cant - fromPile;
-          var asfExcess = 0;
-          if (excess > 0 && r.fecha >= fechaBase) {  // el excedente se produce desde asfalto
-            asfExcess   = excess / RATIO;
-            consumo    += asfExcess;
-            frioExcess += excess;
-          }
-          frioConsumoDetalle.push({ fecha: r.fechaStr, tnMezcla: r.cant,
-                                    desdeStock: Math.round(fromPile * 10) / 10,
-                                    desdeAsfalto: Math.round(excess * 10) / 10 });
-          consumoDetalle.push({ fecha: r.fechaStr, tipo: 'frio', caliente: 0, frio: r.cant,
-                                tnMezcla: r.cant, tnAsfalto: Math.round(asfExcess * 10) / 10, exacto: true });
-        } else {
-          if (r.fecha < fechaBase) continue;
-          consumo += r.cant / RATIO;
-          consumoDetalle.push({ fecha: r.fechaStr, tipo: r.tipo, caliente: r.cant, frio: 0,
-                                tnMezcla: r.cant, tnAsfalto: Math.round((r.cant / RATIO) * 10) / 10, exacto: true });
-        }
+        if (r.fecha < fechaBase) continue;
+        consumo += r.cant / RATIO;
+        consumoDetalle.push({ fecha: r.fechaStr, tipo: r.tipo,
+                              caliente: r.tipo === 'frio' ? 0 : r.cant,
+                              frio:     r.tipo === 'frio' ? r.cant : 0,
+                              tnMezcla: r.cant, tnAsfalto: Math.round((r.cant / RATIO) * 10) / 10, exacto: true });
       }
-      frioActual = pile;  // nunca baja de 0
-      Logger.log('StockAsfalto — salidas: ' + consumoDetalle.length + ' (frío: ' + frioConsumoDetalle.length + ', excedente frío→asfalto: ' + frioExcess + ' tn)');
+      Logger.log('StockAsfalto — salidas: ' + consumoDetalle.length + ' (consumo asfalto: ' + consumo + ' tn)');
     } else {
       // ── Fallback: pro-rateo mensual si no hay fechas exactas ────────────────
       const MES_NUM = { ene:1, feb:2, mar:3, abr:4, may:5, jun:6,
@@ -2160,37 +2128,25 @@ function leerStockAsfalto(remitosData) {
         var frioMes   = remitos[mes].frio     || 0;
 
         if (finMes >= fechaBase) {
-          var fracCal = 1;
+          var frac = 1;
           if (inicioMes < fechaBase && fechaBase <= finMes) {
-            fracCal = Math.max(0, finMes.getDate() - fechaBase.getDate()) / finMes.getDate();
+            frac = Math.max(0, finMes.getDate() - fechaBase.getDate()) / finMes.getDate();
           }
-          consumo += (calMes * fracCal) / RATIO;
-        }
-        if (finMes >= frioFecha) {
-          var fracFrio = 1;
-          if (inicioMes < frioFecha && frioFecha <= finMes) {
-            fracFrio = Math.max(0, finMes.getDate() - frioFecha.getDate()) / finMes.getDate();
-          }
-          frioConsumo += frioMes * fracFrio;
+          consumo += ((calMes + frioMes) * frac) / RATIO;
         }
         consumoDetalle.push({
           mes:       mes,
           tnMezcla:  Math.round((calMes + frioMes) * 10) / 10,
-          tnAsfalto: Math.round((calMes / RATIO) * 10) / 10,
+          tnAsfalto: Math.round(((calMes + frioMes) / RATIO) * 10) / 10,
           caliente:  Math.round(calMes  * 10) / 10,
           frio:      Math.round(frioMes * 10) / 10,
           pct:       100,
         });
       }
-      // Buffer de frío a nivel agregado: lo que exceda el buffer se produce desde asfalto
-      frioActual = Math.max(0, frioBase - frioConsumo);
-      frioExcess = Math.max(0, frioConsumo - frioBase);
-      consumo   += frioExcess / RATIO;
     }
 
     const stockActual = stockBase + ingresos - consumo;
-    Logger.log('StockAsfalto: base=' + stockBase + ' + ing=' + ingresos + ' - cons=' + consumo + ' = ' + stockActual +
-               ' | frío base=' + frioBase + ' - out=' + frioConsumo + ' (exc→asfalto=' + frioExcess + ') = ' + frioActual);
+    Logger.log('StockAsfalto: base=' + stockBase + ' + ing=' + ingresos + ' - cons=' + consumo + ' = ' + stockActual);
 
     return {
       valor:           Math.round(stockActual * 10) / 10,
@@ -2201,23 +2157,12 @@ function leerStockAsfalto(remitosData) {
       consumo:         Math.round(consumo * 10) / 10,
       ingresosDetalle: ingresosDetalle,
       consumoDetalle:  consumoDetalle,
-      // ── Frío terminado (buffer aparte; producir frío consume asfalto) ──
-      frioBase:           frioBase,
-      frioFechaBase:      Utilities.formatDate(frioFecha, TZ, 'dd/MM/yyyy'),
-      frioUsuarioBase:    frioUsuario,
-      frioConsumo:        Math.round(frioConsumo * 10) / 10,
-      frioActual:         Math.round(frioActual * 10) / 10,
-      frioExcess:         Math.round(frioExcess * 10) / 10,
-      frioConsumoDetalle: frioConsumoDetalle,
     };
 
   } catch (err) {
     Logger.log('leerStockAsfalto error: ' + err.toString());
     return { valor: BASE_STOCK, stockBase: BASE_STOCK, ingresos: 0, consumo: 0,
              fechaBase: Utilities.formatDate(BASE_FECHA, 'America/Argentina/Buenos_Aires', 'dd/MM/yyyy'),
-             usuarioBase: BASE_USUARIO, ingresosDetalle: [], consumoDetalle: [],
-             frioBase: BASE_FRIO, frioActual: BASE_FRIO,
-             frioFechaBase: Utilities.formatDate(BASE_FECHA, 'America/Argentina/Buenos_Aires', 'dd/MM/yyyy'),
-             frioUsuarioBase: BASE_USUARIO, frioConsumo: 0, frioExcess: 0, frioConsumoDetalle: [] };
+             usuarioBase: BASE_USUARIO, ingresosDetalle: [], consumoDetalle: [] };
   }
 }
