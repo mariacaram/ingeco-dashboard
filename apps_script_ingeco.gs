@@ -2036,9 +2036,19 @@ function leerStockAsfalto(remitosData) {
         var valAj = Number(rowsAj[a][4]);
         if (isNaN(valAj) || valAj < 0) continue;
         var tipoAj = String(rowsAj[a][5] || 'asfalto').toLowerCase().trim();
-        var partsAj = String(rowsAj[a][0] || '').split('/');
+        // Col A puede venir como Date (celda formateada como fecha — lo normal) o
+        // como texto "dd/MM/yyyy" (filas viejas). Antes solo se parseaba el texto,
+        // así que las fechas-objeto quedaban en null y el checkpoint conservaba la
+        // fecha base (07/05) aunque el valor sí se actualizara. Manejar ambos casos.
+        var celdaFecha = rowsAj[a][0];
         var fAj = null;
-        if (partsAj.length === 3) fAj = new Date(parseInt(partsAj[2]), parseInt(partsAj[1]) - 1, parseInt(partsAj[0]));
+        if (celdaFecha instanceof Date && !isNaN(celdaFecha.getTime())) {
+          var sF = Utilities.formatDate(celdaFecha, TZ, 'dd/MM/yyyy').split('/');
+          fAj = new Date(parseInt(sF[2]), parseInt(sF[1]) - 1, parseInt(sF[0]));
+        } else {
+          var partsAj = String(celdaFecha || '').trim().split('/');
+          if (partsAj.length === 3) fAj = new Date(parseInt(partsAj[2]), parseInt(partsAj[1]) - 1, parseInt(partsAj[0]));
+        }
         var usrAj = String(rowsAj[a][2] || BASE_USUARIO);
         // Gana la fecha más RECIENTE de cada tipo, no la última fila cargada —
         // permite cargar ajustes retroactivos sin pisar un checkpoint más nuevo
