@@ -97,6 +97,18 @@ function doGet(e) {
         const cachedCob = PROPS.getProperty(CACHE_KEY + '_cobros_est');
         if (cachedCob) data.cobrosEsteban = JSON.parse(cachedCob);
       }
+      if (data && !data.stockAsfalto) {
+        const cachedStock = PROPS.getProperty(CACHE_KEY + '_stock');
+        if (cachedStock) data.stockAsfalto = JSON.parse(cachedStock);
+      }
+      if (data && !data.precioAsfalto) {
+        const cachedPrecio = PROPS.getProperty(CACHE_KEY + '_precio');
+        if (cachedPrecio) data.precioAsfalto = JSON.parse(cachedPrecio);
+      }
+      if (data && !data.fechasFuentes) {
+        const cachedFechas = PROPS.getProperty(CACHE_KEY + '_fechas');
+        if (cachedFechas) data.fechasFuentes = JSON.parse(cachedFechas);
+      }
     } else {
       data = buildData();
       // Guardar cada campo en su propia clave — PropertiesService tiene límite de 9 KB por propiedad
@@ -121,6 +133,15 @@ function doGet(e) {
       try {
         if (data.cobrosEsteban) PROPS.setProperty(CACHE_KEY + '_cobros_est', JSON.stringify(data.cobrosEsteban));
       } catch(ce) { Logger.log('Cache write (cobros_est) error: ' + ce); }
+      try {
+        if (data.stockAsfalto) PROPS.setProperty(CACHE_KEY + '_stock', JSON.stringify(data.stockAsfalto));
+      } catch(ce) { Logger.log('Cache write (stock) error: ' + ce); }
+      try {
+        if (data.precioAsfalto) PROPS.setProperty(CACHE_KEY + '_precio', JSON.stringify(data.precioAsfalto));
+      } catch(ce) { Logger.log('Cache write (precio) error: ' + ce); }
+      try {
+        if (data.fechasFuentes) PROPS.setProperty(CACHE_KEY + '_fechas', JSON.stringify(data.fechasFuentes));
+      } catch(ce) { Logger.log('Cache write (fechas) error: ' + ce); }
     }
 
     const json = JSON.stringify(data);
@@ -159,6 +180,9 @@ function actualizarNocturno() {
     if (data.ocInsumos)       PROPS.setProperty(CACHE_KEY + '_oc',       JSON.stringify(data.ocInsumos));
     if (data.remitosAsfalto)  PROPS.setProperty(CACHE_KEY + '_remitos',  JSON.stringify(data.remitosAsfalto));
     if (data.cobrosEsteban)   PROPS.setProperty(CACHE_KEY + '_cobros_est', JSON.stringify(data.cobrosEsteban));
+    if (data.stockAsfalto)    PROPS.setProperty(CACHE_KEY + '_stock',    JSON.stringify(data.stockAsfalto));
+    if (data.precioAsfalto)   PROPS.setProperty(CACHE_KEY + '_precio',   JSON.stringify(data.precioAsfalto));
+    if (data.fechasFuentes)   PROPS.setProperty(CACHE_KEY + '_fechas',   JSON.stringify(data.fechasFuentes));
     Logger.log('Cache actualizado: ' + data.timestamp);
   } catch (err) {
     Logger.log('Error en trigger nocturno: ' + err.toString());
