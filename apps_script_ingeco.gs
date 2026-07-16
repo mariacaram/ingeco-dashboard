@@ -2082,6 +2082,7 @@ function leerStockAsfalto(remitosData) {
     // ── 2. Ingresos desde formulario (solo después del checkpoint) ──
     let ingresos = 0;
     const ingresosDetalle = [];
+    let costoAsfaltoTotal = 0, tnAsfaltoComprado = 0, precioAsfaltoTn = null;
     const sheetForm = ss.getSheetByName('Respuestas de formulario 1');
 
     if (sheetForm && sheetForm.getLastRow() >= 2) {
@@ -2095,18 +2096,36 @@ function leerStockAsfalto(remitosData) {
                h.includes('kilogra') || h.includes(' tn') || h === 'tn' ||
                (h.includes('asfalto') && !h.includes('marca'));
       });
-      Logger.log('StockAsfalto — iQty=' + iQty + (iQty >= 0 ? ' ("' + headers[iQty] + '")' : ' (no encontrado)'));
+      // Columna "Costo total" — costo de compra del asfalto (materia prima)
+      const iCosto = headers.findIndex(function(h) { return h.includes('costo'); });
+      Logger.log('StockAsfalto — iQty=' + iQty + ' iCosto=' + iCosto +
+                 (iQty >= 0 ? ' ("' + headers[iQty] + '")' : ' (qty no encontrado)'));
+
+      // Precio de referencia del asfalto: costo total ÷ tn compradas, sobre TODAS
+      // las cargas del formulario que tengan costo cargado (no solo post-checkpoint).
+      var kgAsfaltoConCosto = 0;
 
       if (iQty >= 0) {
         for (var i = 1; i < rows.length; i++) {
           var rawFecha = rows[i][0];
           var fechaForm = rawFecha instanceof Date ? rawFecha : new Date(rawFecha);
           if (!fechaForm || isNaN(fechaForm.getTime())) continue;
-          if (fechaForm <= fechaBase) continue;
 
           var raw = rows[i][iQty];
           var qtyKg = typeof raw === 'number' ? raw
                     : parseFloat(String(raw || '').replace(',', '.')) || 0;
+
+          // Costo del asfalto (materia prima) — se acumula aunque la carga sea
+          // anterior al checkpoint, porque es un precio de compra de referencia.
+          if (iCosto >= 0 && qtyKg > 0) {
+            var costoRaw = rows[i][iCosto];
+            var costo = typeof costoRaw === 'number' ? costoRaw
+                      : parseFloat(String(costoRaw || '').replace(/[.$\s]/g, '').replace(',', '.')) || 0;
+            if (costo > 0) { costoAsfaltoTotal += costo; kgAsfaltoConCosto += qtyKg; }
+          }
+
+          // Ingresos al stock: solo cargas posteriores al checkpoint.
+          if (fechaForm <= fechaBase) continue;
           if (qtyKg <= 0) continue;
           var qty = qtyKg / 1000; // formulario carga en kg → convertir a tn
 
@@ -2117,6 +2136,9 @@ function leerStockAsfalto(remitosData) {
           });
         }
       }
+
+      tnAsfaltoComprado = kgAsfaltoConCosto / 1000;
+      precioAsfaltoTn   = tnAsfaltoComprado > 0 ? costoAsfaltoTotal / tnAsfaltoComprado : null;
     }
 
     // ── 3. Consumo desde REMITOS ─────────────────────────────────────────────
@@ -2181,6 +2203,10 @@ function leerStockAsfalto(remitosData) {
       consumo:         Math.round(consumo * 10) / 10,
       ingresosDetalle: ingresosDetalle,
       consumoDetalle:  consumoDetalle,
+      // Costo del asfalto (materia prima) desde el formulario "Costo total"
+      costoAsfaltoTotal: Math.round(costoAsfaltoTotal),
+      tnAsfaltoComprado: Math.round(tnAsfaltoComprado * 10) / 10,
+      precioAsfaltoTn:   precioAsfaltoTn != null ? Math.round(precioAsfaltoTn) : null,
     };
 
   } catch (err) {
