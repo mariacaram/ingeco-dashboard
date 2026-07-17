@@ -776,12 +776,12 @@ function leerGeneradoFernando() {
     // Columnas fijas por pestaña (índice 0 = col A).
     // OBRAS DE MUNICIPIO: MontoTotal=F(5), Monto=G(6), Período=R(17), Estado$=E(4), filtrar "A Cobrar"
     // VIALIDAD1:          MontoTotal=H(7), Monto=I(8), Período=U(20), sin filtro de estado
-    // OTROS INGRESOS:     Monto=F(5), Fecha ejecución=P(15), sin filtro de estado
+    // OTROS INGRESOS:     Monto=F(5), Código=P(15), Período de realización=Q(16), sin filtro de estado
     // iMontoFallback: si Monto=0, usar esta columna (Monto Total = valor del contrato)
     const TAB_CONFIG = {
       'OBRAS DE MUNICIPIO': { iMonto: 6,  iMontoFallback: 5,    iPeriodo: 17, iEstado: 4,    estadoFiltro: ['a cobrar', 'cobrada'], iCod: null, iNom: null },
       'VIALIDAD1':          { iMonto: 8,  iMontoFallback: 7,    iPeriodo: 20, iEstado: null,  estadoFiltro: null,       iCod: 19,   iNom: 0 },
-      'OTROS INGRESOS':     { iMonto: 5,  iMontoFallback: null, iPeriodo: 15, iEstado: null,  estadoFiltro: null,       iCod: 16,   iNom: 0 },
+      'OTROS INGRESOS':     { iMonto: 5,  iMontoFallback: null, iPeriodo: 16, iEstado: null,  estadoFiltro: null,       iCod: 15,   iNom: 0 },
     };
 
     const aCobrarPorCodigo  = {};
