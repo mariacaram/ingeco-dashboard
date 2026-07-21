@@ -2106,16 +2106,15 @@ const CENTROS_PLANTA_ALQUILER = ['planta de trituracion', 'cantera', 'planta de 
 function esCentroPlanta(obra) { return CENTROS_PLANTA_ALQUILER.includes(_normSinTilde(obra)); }
 // Cualquier bucket de alquiler que NO es una obra real de INGECO.
 function esAlquilerNoObra(obra) { return esAlquilerExterno(obra) || esCentroPlanta(obra); }
-// "Obra no disponible" / "Sin asignar": placeholders de Partes diarios cuando la
-// fila no tiene OBRA GENERAL cargada — NO es un centro interno real (a diferencia
-// de Predio Warnes / Planta), es directamente un dato sin clasificar. En el
-// Maestro a veces figura como "Interno" por default, pero acá interesa que
-// SIEMPRE aparezca como fila a revisar (para poder detectar e imputar el gasto
-// a la obra correcta), en vez de esconderse detrás del filtro de Interno.
-function esBucketSinClasificar(obra) {
-  const n = _normSinTilde(obra);
-  return n === 'obra no disponible' || n === 'sin asignar';
-}
+// Centros internos REALES de INGECO (predio + planta) — la única lista de
+// nombres que debe excluirse por completo de Margen por obra/tipo cuando el
+// Maestro los marca "Interno". Cualquier OTRO candidato marcado "Interno" en
+// el Maestro (ej. "Obra no disponible", "Provisión de Pavimax") no es un
+// centro real — es un dato sin clasificar (placeholder, proveedor sin obra
+// asignada, etc.) que conviene mostrar para poder investigarlo e imputarlo
+// a la obra correcta, en vez de esconderse detrás del filtro de Interno.
+const CENTROS_INTERNOS_CONOCIDOS = ['predio warnes'].concat(CENTROS_PLANTA_ALQUILER);
+function esCentroInternoConocido(obra) { return CENTROS_INTERNOS_CONOCIDOS.includes(_normSinTilde(obra)); }
 // Costo de alquiler que es realmente de obras (excluye alquiler externo y centros de planta).
 // Usa el campo totalObras del backend si está disponible; si no (backend viejo,
 // aún sin redeploy), lo calcula al vuelo filtrando porObra — así el fix funciona
@@ -2257,11 +2256,13 @@ function computeMargenObrasMes(mes) {
     const ck = (c.cod    || '').toLowerCase().trim();
     const nk = (c.nombre || '').toLowerCase().trim();
     if ((ck && consumido.has(ck)) || (nk && consumido.has(nk))) return;
-    const sinClasificar = esBucketSinClasificar(c.cod) || esBucketSinClasificar(c.nombre);
-    // obra interna sin certificado — no es un contrato. Excepción: los buckets sin
-    // clasificar ("Obra no disponible"/"Sin asignar") siempre se muestran, aunque
-    // el Maestro los tenga cargados como "Interno" por default — son gastos a revisar.
-    if (!sinClasificar && _esTipoInterno({ cod_obra: c.cod, nombre: c.nombre })) return;
+    const esInterno = _esTipoInterno({ cod_obra: c.cod, nombre: c.nombre });
+    // obra interna sin certificado — no es un contrato. Excepción: si el Maestro
+    // la marca "Interno" pero NO es un centro interno real conocido (Predio Warnes
+    // / Planta), es un dato sin clasificar (ej. "Obra no disponible", "Provisión
+    // de Pavimax") — se muestra igual, marcado, para poder investigarlo.
+    const sinClasificar = esInterno && !esCentroInternoConocido(c.cod) && !esCentroInternoConocido(c.nombre);
+    if (esInterno && !sinClasificar) return;
     const _lblOrigen = { 'OC': 'Con OC de insumos', 'Remito': 'Con salida en Remitos', 'Alquiler': 'Con alquiler de maquinaria' };
     const nombreFila = sinClasificar
       ? '⚠ ' + (c.cod || c.nombre) + ' — revisar imputación'
