@@ -2106,6 +2106,16 @@ const CENTROS_PLANTA_ALQUILER = ['planta de trituracion', 'cantera', 'planta de 
 function esCentroPlanta(obra) { return CENTROS_PLANTA_ALQUILER.includes(_normSinTilde(obra)); }
 // Cualquier bucket de alquiler que NO es una obra real de INGECO.
 function esAlquilerNoObra(obra) { return esAlquilerExterno(obra) || esCentroPlanta(obra); }
+// "Obra no disponible" / "Sin asignar": placeholders de Partes diarios cuando la
+// fila no tiene OBRA GENERAL cargada — NO es un centro interno real (a diferencia
+// de Predio Warnes / Planta), es directamente un dato sin clasificar. En el
+// Maestro a veces figura como "Interno" por default, pero acá interesa que
+// SIEMPRE aparezca como fila a revisar (para poder detectar e imputar el gasto
+// a la obra correcta), en vez de esconderse detrás del filtro de Interno.
+function esBucketSinClasificar(obra) {
+  const n = _normSinTilde(obra);
+  return n === 'obra no disponible' || n === 'sin asignar';
+}
 // Costo de alquiler que es realmente de obras (excluye alquiler externo y centros de planta).
 // Usa el campo totalObras del backend si está disponible; si no (backend viejo,
 // aún sin redeploy), lo calcula al vuelo filtrando porObra — así el fix funciona
@@ -2247,9 +2257,21 @@ function computeMargenObrasMes(mes) {
     const ck = (c.cod    || '').toLowerCase().trim();
     const nk = (c.nombre || '').toLowerCase().trim();
     if ((ck && consumido.has(ck)) || (nk && consumido.has(nk))) return;
-    if (_esTipoInterno({ cod_obra: c.cod, nombre: c.nombre })) return; // obra interna sin certificado — no es un contrato
+    const sinClasificar = esBucketSinClasificar(c.cod) || esBucketSinClasificar(c.nombre);
+    // obra interna sin certificado — no es un contrato. Excepción: los buckets sin
+    // clasificar ("Obra no disponible"/"Sin asignar") siempre se muestran, aunque
+    // el Maestro los tenga cargados como "Interno" por default — son gastos a revisar.
+    if (!sinClasificar && _esTipoInterno({ cod_obra: c.cod, nombre: c.nombre })) return;
     const _lblOrigen = { 'OC': 'Con OC de insumos', 'Remito': 'Con salida en Remitos', 'Alquiler': 'Con alquiler de maquinaria' };
-    const r = buildDatosObra({ cod_obra: c.cod || c.nombre, nombre: c.nombre || _lblOrigen[c.origen] || 'Con gasto del mes', aCobrar: 0 }, true);
+    const nombreFila = sinClasificar
+      ? '⚠ ' + (c.cod || c.nombre) + ' — revisar imputación'
+      : (c.nombre || _lblOrigen[c.origen] || 'Con gasto del mes');
+    // tipo explícito 'Sin clasificar': evita heredar "Interno" del Maestro (a veces
+    // cargado por default ahí) y que este gasto a revisar termine agrupado como
+    // obra interna en "Contribución marginal por tipo de contratación".
+    const obraExtra = { cod_obra: c.cod || c.nombre, nombre: nombreFila, aCobrar: 0 };
+    if (sinClasificar) obraExtra.tipo = 'Sin clasificar';
+    const r = buildDatosObra(obraExtra, true);
     if (r.hasData) rows.push(r);
     if (ck) consumido.add(ck);
     if (nk) consumido.add(nk);
