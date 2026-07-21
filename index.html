@@ -1396,8 +1396,8 @@
           <div style="padding-left:14px;color:var(--muted);font-size:11px;">⏳ pendiente criterio de valorización</div>
           <div><span style="color:#dc2626;font-weight:700;">−</span> OC Insumos planta (asfalto, FO, etc.)</div>
           <div><span style="color:#dc2626;font-weight:700;">−</span> Mano de obra Planta (TANGO)</div>
-          <div><span style="color:#dc2626;font-weight:700;">−</span> Gastos de cantera / triturado</div>
-          <div style="padding-left:14px;color:var(--muted);font-size:11px;">⏳ pendiente fuente de datos</div>
+          <div><span style="color:#dc2626;font-weight:700;">−</span> Alquiler equipos (Cantera / Trituración / Planta)</div>
+          <div style="padding-left:14px;color:var(--muted);font-size:11px;">fuente: Partes diarios (Nico)</div>
           <div style="margin-top:8px;padding-top:8px;border-top:1px solid #93c5fd;font-weight:700;color:#1d4ed8;font-size:13px;">= Resultado Planta</div>
         </div>
       </div>
@@ -1898,7 +1898,9 @@ function renderMargen() {
   const moEstObj     = moMensual == null ? getMOEstimado(mesActual) : null;
   const moParaCalc   = moMensual != null ? moMensual : (moEstObj ? moEstObj.monto : null);
   const moEsEstimado = (moMensual == null && moEstObj != null);
-  const alqMes    = ALQUILER_EQUIPOS[mesActual] ? ALQUILER_EQUIPOS[mesActual].totalArs : null;
+  // Solo el alquiler que es costo real de obra (excluye "Alquiler de equipos": taller → terceros)
+  const alqMesObj = ALQUILER_EQUIPOS[mesActual];
+  const alqMes    = _alqTotalObras(alqMesObj);
   const totalEgresos = (ocMes != null && moParaCalc != null) ? ocMes + moParaCalc : null;
 
   // Card OC Insumos
@@ -2092,6 +2094,35 @@ function _tipoDeFila(o) {
   return esVacio(tMaestro) ? 'Sin clasificar' : tMaestro;
 }
 function _esTipoInterno(o) { return _tipoDeFila(o).toLowerCase().trim() === 'interno'; }
+// "Alquiler de equipos": el taller le alquila máquinas a OTRAS empresas — no es
+// una obra de INGECO. Se excluye de los costos de obra (margen por obra / por
+// tipo); es ingreso del taller (ver renderRentabilidad).
+function esAlquilerExterno(obra) { return String(obra || '').trim().toLowerCase() === 'alquiler de equipos'; }
+// "Planta de Trituración", "Cantera", "Planta de Asfalto": centros internos de
+// la Planta de Asfalto (col OBRA GENERAL de Partes diarios), tampoco son obras
+// de INGECO. Su costo de alquiler es costo de PLANTA, no de obra.
+function _normSinTilde(s) { return String(s || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+const CENTROS_PLANTA_ALQUILER = ['planta de trituracion', 'cantera', 'planta de asfalto'];
+function esCentroPlanta(obra) { return CENTROS_PLANTA_ALQUILER.includes(_normSinTilde(obra)); }
+// Cualquier bucket de alquiler que NO es una obra real de INGECO.
+function esAlquilerNoObra(obra) { return esAlquilerExterno(obra) || esCentroPlanta(obra); }
+// Costo de alquiler que es realmente de obras (excluye alquiler externo y centros de planta).
+// Usa el campo totalObras del backend si está disponible; si no (backend viejo,
+// aún sin redeploy), lo calcula al vuelo filtrando porObra — así el fix funciona
+// desde el frontend sin depender de que ya se haya redeployado el .gs.
+function _alqTotalObras(alqObj) {
+  if (!alqObj) return null;
+  if (alqObj.totalObras != null) return alqObj.totalObras;
+  if (!alqObj.porObra) return alqObj.totalArs;
+  return alqObj.porObra.reduce((s, it) => s + (esAlquilerNoObra(it.obra) ? 0 : (it.costoArs || 0)), 0);
+}
+// Costo de alquiler atribuido a centros de Planta (Cantera / Trituración / Planta de Asfalto).
+function _alqTotalPlanta(alqObj) {
+  if (!alqObj) return null;
+  if (alqObj.totalPlanta != null) return alqObj.totalPlanta;
+  if (!alqObj.porObra) return null;
+  return alqObj.porObra.reduce((s, it) => s + (esCentroPlanta(it.obra) ? (it.costoArs || 0) : 0), 0);
+}
 
 function computeMargenObrasMes(mes) {
   mes = mes || mesActual;
@@ -2118,10 +2149,13 @@ function computeMargenObrasMes(mes) {
 
   // Alquiler del mes: mapa por nombre de obra (lowercase) + display original.
   // No se filtra por INT: el costo de alquiler aplica a todas las obras, incluso internas.
+  // "Alquiler de equipos" (ingreso de taller) y "Planta de Trituración"/"Cantera"/
+  // "Planta de Asfalto" (costos de Planta) se excluyen: no son obras de INGECO.
   const alqPorNombre = {};
   const alqDisplay = {};
   if (ALQUILER_EQUIPOS && ALQUILER_EQUIPOS[mes] && ALQUILER_EQUIPOS[mes].porObra) {
     ALQUILER_EQUIPOS[mes].porObra.forEach(item => {
+      if (esAlquilerNoObra(item.obra)) return;
       const k = (item.obra || '').toLowerCase().trim();
       if (k) {
         alqPorNombre[k] = (alqPorNombre[k] || 0) + item.costoArs;
@@ -3854,22 +3888,26 @@ function renderAlquilerEquipos() {
   if (mesLabel) mesLabel.textContent = MES[mesActual] || mesActual;
 
   const datos = ALQUILER_EQUIPOS[mesActual];
+  // Costo real de obra: excluye "Alquiler de equipos" (taller alquilando a
+  // terceros — no es costo de ninguna obra de INGECO).
+  const totalObrasAlq = _alqTotalObras(datos);
+  const porObraFiltrado = datos && datos.porObra ? datos.porObra.filter(it => !esAlquilerNoObra(it.obra)) : [];
 
-  if (!datos || !datos.totalArs) {
+  if (!datos || !totalObrasAlq) {
     if (kpiEl)  { kpiEl.textContent = 'sin dato'; kpiEl.className = 'kpi-value nd'; }
     if (kpiSub) kpiSub.textContent = 'Actualizá datos para cargar';
   } else {
-    if (kpiEl)  { kpiEl.textContent = fmt(datos.totalArs); kpiEl.className = 'kpi-value neg-val'; }
+    if (kpiEl)  { kpiEl.textContent = fmt(totalObrasAlq); kpiEl.className = 'kpi-value neg-val'; }
     if (kpiSub) kpiSub.textContent = datos.tcUsd
       ? 'TC USD oficial: $' + datos.tcUsd.toLocaleString('es-AR') + '/USD · ' + (MES[mesActual] || mesActual)
       : MES[mesActual] || mesActual;
   }
 
-  // Actualizar KPI de Taller también
+  // Actualizar KPI de Taller también (mismo valor que el costo de obras — ver footnote)
   const tallerKpi    = document.getElementById('kpi-taller-alquiler');
   const tallerKpiSub = document.getElementById('kpi-taller-alquiler-sub');
-  if (datos && datos.totalArs) {
-    if (tallerKpi)    { tallerKpi.textContent = fmt(datos.totalArs); }
+  if (datos && totalObrasAlq) {
+    if (tallerKpi)    { tallerKpi.textContent = fmt(totalObrasAlq); }
     if (tallerKpiSub) tallerKpiSub.textContent = MES[mesActual] || mesActual;
   }
 
@@ -3877,17 +3915,17 @@ function renderAlquilerEquipos() {
   const tbody = document.getElementById('tbody-alquiler-equipos');
   if (!tbody) return;
 
-  if (!datos || !datos.totalArs) {
+  if (!datos || !totalObrasAlq) {
     tbody.innerHTML = '<tr><td colspan="3" class="nd" style="text-align:center;padding:16px;">Sin datos para el mes seleccionado — actualizá desde Drive</td></tr>';
     return;
   }
 
-  if (!datos.porObra || datos.porObra.length === 0) {
+  if (porObraFiltrado.length === 0) {
     tbody.innerHTML = '<tr><td colspan="3" class="nd" style="text-align:center;padding:16px;">Detalle por obra no disponible — actualizá desde Drive</td></tr>';
     return;
   }
 
-  const filas = datos.porObra.map(it => {
+  const filas = porObraFiltrado.map(it => {
     const obraEsc = it.obra.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     return `<tr style="cursor:pointer;" onclick="openAlquilerPanel('${obraEsc}')" title="Ver detalle de equipos">
       <td style="font-size:12px;">${it.obra}</td>
@@ -3898,8 +3936,8 @@ function renderAlquilerEquipos() {
 
   const totalFila = `<tr style="background:#f8fafc;font-weight:700;border-top:2px solid var(--border);">
     <td>TOTAL</td>
-    <td class="num" style="color:var(--muted);">${datos.porObra.reduce((s,r) => s + r.horasTot, 0).toFixed(1)}h</td>
-    <td class="num neg-val">${fmt(datos.totalArs)}</td>
+    <td class="num" style="color:var(--muted);">${porObraFiltrado.reduce((s,r) => s + r.horasTot, 0).toFixed(1)}h</td>
+    <td class="num neg-val">${fmt(totalObrasAlq)}</td>
   </tr>`;
 
   tbody.innerHTML = filas + totalFila;
@@ -4160,7 +4198,15 @@ function renderRentabilidad() {
   const moPlantaEstObj = moPlantaReal == null ? getMOEstimadoPlanta(mesActual) : null;
   const moPlanta       = moPlantaReal ?? (moPlantaEstObj ? moPlantaEstObj.monto : null);
 
-  const alqMes      = ALQUILER_EQUIPOS[mesActual] ? ALQUILER_EQUIPOS[mesActual].totalArs : null;
+  // alqMes: ingreso total del taller (obras + Planta + terceros — "Alquiler de equipos").
+  // alqObrasMes: solo la porción que es costo real de una obra.
+  // alqPlantaMes: porción atribuida a Cantera/Planta de Trituración/Planta de Asfalto — costo de PLANTA.
+  // alqExterno: alquiler a terceros ("Alquiler de equipos") — ingreso neto, no cancela con ningún costo interno.
+  const alqObj       = ALQUILER_EQUIPOS[mesActual];
+  const alqMes       = alqObj ? alqObj.totalArs : null;
+  const alqObrasMes  = _alqTotalObras(alqObj);
+  const alqPlantaMes = _alqTotalPlanta(alqObj);
+  const alqExterno   = (alqMes != null && alqObrasMes != null) ? alqMes - alqObrasMes - (alqPlantaMes || 0) : 0;
   const ocTotalMes  = OC_INSUMOS[mesActual] ? OC_INSUMOS[mesActual].total : null;
   const ocPlantaObj = getOCPlantaInterna(mesActual);
   const ocPlanta    = ocPlantaObj ? ocPlantaObj.total : null;
@@ -4189,23 +4235,26 @@ function renderRentabilidad() {
   const costoAsfaltoObras = ingPlantaAsf; // se cancela en consolidado
 
   // ── Márgenes por unidad ──────────────────────────────────────────────────
-  // Margen Obras (el alquiler es costo real de la unidad Obras)
+  // Margen Obras (el alquiler interno es costo real de la unidad Obras; el
+  // alquiler a terceros — "Alquiler de equipos" — NO es costo de obra)
   const costoObras  = (moObras            != null ? moObras            : 0)
                     + (ocObras            != null ? ocObras            : 0)
-                    + (alqMes             != null ? alqMes             : 0)
+                    + (alqObrasMes        != null ? alqObrasMes        : 0)
                     + (costoAsfaltoObras  != null ? costoAsfaltoObras  : 0);
   const margenObras = ingObras != null ? ingObras - costoObras : null;
 
-  // Resultado Taller: revenue = alquiler cobrado a obras; costo = MO taller
+  // Resultado Taller: revenue = alquiler cobrado a obras (interno) + alquiler a
+  // terceros (externo); costo = MO taller
   const resultTaller = alqMes != null
     ? alqMes - (moTaller != null ? moTaller : 0)
     : null;
 
   // Resultado Planta
-  const egresosPlanta = (moPlanta != null ? moPlanta : 0) + (ocPlanta != null ? ocPlanta : 0);
+  const egresosPlanta = (moPlanta != null ? moPlanta : 0) + (ocPlanta != null ? ocPlanta : 0) + (alqPlantaMes || 0);
   const resultPlanta  = ingPlanta != null ? ingPlanta - egresosPlanta : null;
 
-  // ── Consolidado parcial (alquiler y asfalto se cancelan entre unidades) ──
+  // ── Consolidado parcial (alquiler interno y asfalto se cancelan entre
+  // unidades; el alquiler a terceros SÍ es ingreso real neto, se suma) ──
   const consolidadoConocido = (ingObras != null)
     ? ingObras
       - (moObras    != null ? moObras    : 0)
@@ -4215,6 +4264,7 @@ function renderRentabilidad() {
       - (ocPlanta   != null ? ocPlanta   : 0)
       // costoAsfaltoObras e ingPlantaAsf se cancelan → no afectan el consolidado
       + (ingPlantaManual != null ? ingPlantaManual : 0)
+      + alqExterno
     : null;
 
   // ── Helpers de render ────────────────────────────────────────────────────
@@ -4273,12 +4323,13 @@ function renderRentabilidad() {
       + (tnFrioMes && pFrio ? (tnCalienteMes ? ' + ' : '') + fmtTn(tnFrioMes) + 'tn frío × $' + pFrio.toLocaleString('es-AR') : '')
     : 'cargar precio en planilla';
   rows += row('− Costo asfalto ↕', costoAsfaltoObras != null ? 'real' : 'pend', costoAsfaltoObras, 'neg', { indent: 1, nota: notaAsfObras });
-  rows += row('− Alquiler interno de máquinas ↕', alqMes != null ? 'real' : 'pend', alqMes, 'neg', { indent: 1, nota: 'transferencia interna' });
+  rows += row('− Alquiler interno de máquinas ↕', alqObrasMes != null ? 'real' : 'pend', alqObrasMes, 'neg', { indent: 1, nota: 'transferencia interna' });
   rows += row('= Margen Obras', margenObrasStatus, margenObras, 'res', { isTotal: true });
 
   // TALLER
   rows += sectionHeader('🔧 TALLER MECÁNICO', '#92400e');
-  rows += row('+ Alquiler cobrado a obras ↕', alqMes != null ? 'real' : 'pend', alqMes, '', { nota: 'cancela con costo de Obras' });
+  rows += row('+ Alquiler cobrado a obras ↕', alqObrasMes != null ? 'real' : 'pend', alqObrasMes, '', { nota: 'cancela con costo de Obras' });
+  rows += row('+ Alquiler a terceros (Alquiler de equipos)', alqExterno > 0 ? 'real' : 'pend', alqExterno > 0 ? alqExterno : null, '', { nota: 'ingreso real, no cancela' });
   rows += row('− Mano de obra Taller', moTaller != null ? 'real' : 'pend', moTaller, 'neg', { indent: 1 });
   rows += row('− OC Taller (repuestos, etc.)', 'pend', null, 'neg', { indent: 1, nota: 'pendiente clasificación' });
   rows += row('= Resultado Taller', resultTaller != null ? 'parcial' : 'pend', resultTaller, 'res', { isTotal: true, nota: 'sin OC Taller' });
@@ -4294,7 +4345,7 @@ function renderRentabilidad() {
   rows += row('+ Otros ingresos (triturado, etc.)', ingPlantaManual != null && ingPlantaAsf != null ? 'real' : 'pend', ingPlantaAsf != null ? ingPlantaManual : null, '', { indent: 1, nota: 'completar arriba si aplica' });
   rows += row('− OC Insumos planta', ocPlanta != null ? 'real' : 'pend', ocPlanta, 'neg', { indent: 1 });
   rows += row('− Mano de obra Planta', moPlanta != null ? (moPlantaReal == null ? 'aprox' : 'real') : 'pend', moPlanta, 'neg', { indent: 1, nota: moPlantaReal == null && moPlantaEstObj ? 'estimado — base ' + (MES[moPlantaEstObj.refMes] || moPlantaEstObj.refMes) : '' });
-  rows += row('− Gastos de cantera / triturado', 'pend', null, 'neg', { indent: 1, nota: 'pendiente fuente' });
+  rows += row('− Alquiler equipos (Cantera / Trituración / Planta) ↕', alqPlantaMes > 0 ? 'real' : 'pend', alqPlantaMes > 0 ? alqPlantaMes : null, 'neg', { indent: 1, nota: 'transferencia interna' });
   const resultPlantaStatus = ingPlanta != null ? (egresosPlanta > 0 ? 'parcial' : 'real') : 'pend';
   const resultPlantaVal    = ingPlanta != null ? resultPlanta : (egresosPlanta > 0 ? -egresosPlanta : null);
   const resultPlantaNota   = ingPlanta != null ? '' : 'solo egresos conocidos';
@@ -5356,11 +5407,13 @@ function openAlquilerMainPanel() {
 
   const mesLabel = MES[mesActual] || mesActual;
   const datos    = ALQUILER_EQUIPOS[mesActual];
+  const porObraObras = datos && datos.porObra ? datos.porObra.filter(it => !esAlquilerNoObra(it.obra)) : [];
+  const totalObrasAlq = _alqTotalObras(datos);
 
   let html = '';
-  if (!datos || !datos.totalArs) {
+  if (!datos || !totalObrasAlq) {
     html = `<p class="nd" style="padding:16px 0;">Sin datos de alquiler para ${mesLabel}. Actualizá desde Drive.</p>`;
-  } else if (!datos.porObra || datos.porObra.length === 0) {
+  } else if (porObraObras.length === 0) {
     html = `<p class="nd" style="padding:16px 0;">Datos disponibles pero sin desglose por obra. Actualizá desde Drive para ver el detalle.</p>`;
   } else {
     const tcStr = 'TC BNA: $' + (datos.tcUsd || '—').toLocaleString('es-AR') + '/USD';
@@ -5370,22 +5423,22 @@ function openAlquilerMainPanel() {
       <th style="text-align:right;padding:8px 10px;font-size:11px;color:var(--muted);font-weight:600;">COSTO ARS</th>
     </tr></thead>`;
 
-    const filas = datos.porObra.map(it => `
+    const filas = porObraObras.map(it => `
       <tr style="border-top:1px solid var(--border);cursor:pointer;" onclick="openAlquilerPanel('${it.obra.replace(/'/g,"\\'")}')" title="Ver equipos">
         <td style="padding:8px 10px;font-size:12px;font-weight:600;color:var(--primary);">${it.obra}</td>
         <td style="text-align:right;padding:8px 10px;font-size:12px;color:var(--muted);">${it.horasTot}h</td>
         <td style="text-align:right;padding:8px 10px;font-size:12px;white-space:nowrap;" class="neg-val">${fmt(it.costoArs)}</td>
       </tr>`).join('');
 
-    const totalHoras = datos.porObra.reduce((s, r) => s + r.horasTot, 0).toFixed(1);
+    const totalHoras = porObraObras.reduce((s, r) => s + r.horasTot, 0).toFixed(1);
     html = `
       <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">${tcStr} · Hacé click en una obra para ver los equipos</div>
       <table style="width:100%;border-collapse:collapse;">${thead}<tbody>
         ${filas}
         <tr style="background:#fef2f2;border-top:3px solid #fca5a5;font-weight:700;">
-          <td style="padding:9px 10px;font-size:12px;">TOTAL · ${datos.porObra.length} obras</td>
+          <td style="padding:9px 10px;font-size:12px;">TOTAL · ${porObraObras.length} obras</td>
           <td style="text-align:right;padding:9px 10px;font-size:12px;color:var(--muted);">${totalHoras}h</td>
-          <td style="text-align:right;padding:9px 10px;font-size:14px;" class="neg-val">${fmt(datos.totalArs)}</td>
+          <td style="text-align:right;padding:9px 10px;font-size:14px;" class="neg-val">${fmt(totalObrasAlq)}</td>
         </tr>
       </tbody></table>`;
   }
@@ -5536,7 +5589,7 @@ function openMargenPanel() {
   const moEsEstimado = (moReal == null && moEst != null);
 
   const alqObj = ALQUILER_EQUIPOS[mesActual];
-  const alq    = alqObj ? alqObj.totalArs : null;
+  const alq    = _alqTotalObras(alqObj);
 
   // Calculable con A Cobrar + OC + MO (real o estimada); alquiler opcional
   const calculable = (aCobrar != null && oc != null && mo != null);
@@ -6369,7 +6422,8 @@ function renderEgresosChart() {
   const moEstimEgr = moReal == null ? getMOEstimado(mesActual) : null;
   const moMes  = moReal ?? (moEstimEgr ? moEstimEgr.monto : null);
   const moEsEstimEgr = moReal == null && moMes != null;
-  const alqMes = ALQUILER_EQUIPOS[mesActual] ? ALQUILER_EQUIPOS[mesActual].totalArs : null;
+  const alqObjEgr = ALQUILER_EQUIPOS[mesActual];
+  const alqMes = _alqTotalObras(alqObjEgr);
 
   if (ocMes == null && moMes == null && alqMes == null) {
     container.innerHTML = '<div class="nd" style="text-align:center;padding:20px;font-size:13px;">Actualizá datos para ver el gráfico</div>';
@@ -6538,7 +6592,9 @@ function _sintetizarTotales() {
       });
     });
     // tcUsd: null — el TC varía por mes, no hay un único TC para el total
-    ALQUILER_EQUIPOS.total = { totalArs, tcUsd: null, porObra: Object.values(porObra).sort((a, b) => b.costoArs - a.costoArs) };
+    let totalObras = 0;
+    mAlq.forEach(m => { totalObras += _alqTotalObras(ALQUILER_EQUIPOS[m]) || 0; });
+    ALQUILER_EQUIPOS.total = { totalArs, totalObras, tcUsd: null, porObra: Object.values(porObra).sort((a, b) => b.costoArs - a.costoArs) };
   }
 
   // Remitos de asfalto: suma tn por obra

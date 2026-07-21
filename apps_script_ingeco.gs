@@ -1086,6 +1086,31 @@ function fetchTCMensual(mesKey) {
   return TC_USD_MENSUAL[mesKey] || 1400;
 }
 
+// "Alquiler de equipos" (col OBRA GENERAL de Partes diarios): el taller le
+// alquila máquinas a OTRAS empresas — no es una obra de INGECO. Se usa para
+// separar ese costo del prorrateo por obra (no es gasto de obra, es ingreso
+// de taller, ver leerAlquilerEquipos).
+function esAlquilerExterno(obra) {
+  return String(obra || '').trim().toLowerCase() === 'alquiler de equipos';
+}
+
+// "Planta de Trituración", "Cantera", "Planta de Asfalto" (col OBRA GENERAL de
+// Partes diarios): son centros internos de la Planta de Asfalto, no obras de
+// INGECO. Su costo de alquiler de equipos es un costo de PLANTA, no de obra.
+function _normSinTilde(s) {
+  return String(s || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+const CENTROS_PLANTA_ALQUILER = ['planta de trituracion', 'cantera', 'planta de asfalto'];
+function esCentroPlanta(obra) {
+  return CENTROS_PLANTA_ALQUILER.includes(_normSinTilde(obra));
+}
+// Cualquier bucket de "OBRA GENERAL" que NO es una obra real de INGECO
+// (ni alquiler externo ni centro interno de planta) — no debe imputarse
+// como costo de obra en el prorrateo de alquiler.
+function esAlquilerNoObra(obra) {
+  return esAlquilerExterno(obra) || esCentroPlanta(obra);
+}
+
 function leerAlquilerEquipos() {
   try {
     // 1. Leer precios — buscar en todas las hojas la que tenga CÓDIGO + PF
@@ -1258,9 +1283,21 @@ function leerAlquilerEquipos() {
 
       if (Object.keys(porObra).length === 0) continue;
 
+      // "Alquiler de equipos" (taller alquilando a OTRAS empresas — ingreso de
+      // taller) y "Planta de Trituración"/"Cantera"/"Planta de Asfalto" (costos
+      // internos de la Planta) NO son obras de INGECO — no deben imputarse como
+      // costo de obra en Margen (por obra / por tipo de contratación).
+      let costoExterno = 0, costoPlanta = 0;
+      Object.entries(porObra).forEach(([obra, v]) => {
+        if (esAlquilerExterno(obra)) costoExterno += v.costoArs;
+        else if (esCentroPlanta(obra)) costoPlanta += v.costoArs;
+      });
+
       resultado[mes] = {
-        totalArs: totalMes,
-        tcUsd:    tc,
+        totalArs:    totalMes,
+        totalObras:  totalMes - costoExterno - costoPlanta,
+        totalPlanta: costoPlanta,
+        tcUsd:      tc,
         porObra:  Object.entries(porObra)
           .map(([obra, v]) => ({
             obra,
