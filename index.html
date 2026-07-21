@@ -111,31 +111,52 @@
   }
   .btn-logout:hover { background: rgba(248,113,113,0.18); border-color: #f87171; color: #fecaca; }
 
-  /* TABS */
-  .tabs-bar {
+  /* PAGE BODY: sidebar + content lado a lado */
+  .page-body { display: flex; align-items: flex-start; }
+
+  /* SIDEBAR NAV (vertical, izquierda) */
+  .sidebar-nav {
     background: var(--primary);
-    padding: 0 24px;
-    display: flex;
-    gap: 2px;
-    border-top: 1px solid rgba(255,255,255,0.1);
+    width: 240px;
+    flex-shrink: 0;
+    padding: 16px 0;
+    position: sticky;
+    top: var(--header-h, 87px); /* debajo del header sticky — ajustado por JS */
+    height: calc(100vh - var(--header-h, 87px));
+    overflow-y: auto;
+    border-right: 1px solid rgba(255,255,255,0.1);
   }
   .tab-btn {
+    display: block;
+    width: 100%;
+    text-align: left;
     background: transparent;
     border: none;
+    border-left: 3px solid transparent;
     color: #a0bad8;
-    padding: 10px 16px;
+    padding: 10px 20px;
     cursor: pointer;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 500;
-    border-bottom: 3px solid transparent;
     transition: all 0.2s;
     white-space: nowrap;
   }
-  .tab-btn.active { color: #fff; border-bottom-color: var(--accent); }
-  .tab-btn:hover:not(.active) { color: #fff; }
+  .tab-btn.active { color: #fff; background: rgba(255,255,255,0.08); border-left-color: var(--accent); font-weight: 700; }
+  .tab-btn:hover:not(.active) { color: #fff; background: rgba(255,255,255,0.05); }
+  .sidebar-group { margin-bottom: 2px; }
+  .sidebar-group-title {
+    padding: 10px 20px 4px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #6d8bad;
+  }
+  .sidebar-group.has-active .sidebar-group-title { color: var(--accent); }
+  .sidebar-group .tab-btn.sidebar-sub { padding-left: 34px; font-size: 12px; }
 
   /* CONTENT */
-  .content { padding: 20px 24px; max-width: 1400px; margin: 0 auto; }
+  .content { flex: 1; min-width: 0; padding: 20px 24px; max-width: 1400px; margin: 0 auto; }
   .tab-panel { display: none; }
   .tab-panel.active { display: block; }
 
@@ -470,10 +491,15 @@
   </div>
 </div>
 
-<!-- TABS -->
-<div class="tabs-bar">
-  <button class="tab-btn active" onclick="openTab('margen')">Contribución marginal por obra</button>
-  <button class="tab-btn" onclick="openTab('margen-tipo')">Contribución marginal por tipo de contratación</button>
+<div class="page-body">
+
+<!-- SIDEBAR NAV -->
+<nav class="sidebar-nav" id="sidebar-nav">
+  <div class="sidebar-group" id="sidebar-group-margen">
+    <div class="sidebar-group-title">Contribución marginal</div>
+    <button class="tab-btn sidebar-sub active" onclick="openTab('margen')">Por obra</button>
+    <button class="tab-btn sidebar-sub" onclick="openTab('margen-tipo')">Por tipo de contratación</button>
+  </div>
   <button class="tab-btn" onclick="openTab('cobros')">Estado financiero</button>
   <button class="tab-btn" onclick="openTab('planta')">Planta de Asfalto</button>
   <button class="tab-btn" data-restrict="sueldos" onclick="openTab('taller')">Taller Mecánico</button>
@@ -481,7 +507,8 @@
   <button class="tab-btn" onclick="openTab('manual')">Manual de tareas/instructivos</button>
   <button class="tab-btn" onclick="openTab('fuentes')">Fuentes de Datos</button>
   <button class="tab-btn" onclick="openTab('metodologia')">Rentabilidad</button>
-</div>
+  <button class="tab-btn" onclick="openTab('gastos-estructura')">Gastos de Estructura</button>
+</nav>
 
 <!-- CONTENT -->
 <div class="content">
@@ -1466,7 +1493,19 @@
 
 </div>
 
+<!-- ================================================================ -->
+<!-- TAB: GASTOS DE ESTRUCTURA -->
+<div class="tab-panel" id="tab-gastos-estructura">
+  <div class="section">
+    <div class="section-title">Gastos de Estructura <span class="badge">Sin datos aún</span></div>
+    <div class="table-wrap" style="padding:40px 20px;text-align:center;">
+      <p class="nd" style="font-size:13px;">Todavía no hay información cargada para esta sección.</p>
+    </div>
+  </div>
+</div>
+
 </div><!-- /content -->
+</div><!-- /page-body -->
 
 <script>
 // ================================================================
@@ -6852,14 +6891,30 @@ async function refreshData() {
 // TABS Y MES
 // ================================================================
 
+// El header cambia de alto según el ancho (el título hace wrap en pantallas
+// angostas) — se sincroniza --header-h para que el sidebar sticky arranque
+// justo debajo, sin superponerse ni dejar hueco.
+function _syncSidebarOffset() {
+  const header = document.querySelector('.header');
+  if (header) document.documentElement.style.setProperty('--header-h', header.offsetHeight + 'px');
+}
+window.addEventListener('load', _syncSidebarOffset);
+window.addEventListener('resize', _syncSidebarOffset);
+_syncSidebarOffset();
+
 function openTab(id) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.sidebar-group').forEach(g => g.classList.remove('has-active'));
   const panel = document.getElementById('tab-' + id);
   if (panel) panel.classList.add('active');
   // Activar el botón cuyo onclick referencia esta pestaña (robusto al agregar/reordenar tabs)
   document.querySelectorAll('.tab-btn').forEach(b => {
-    if ((b.getAttribute('onclick') || '').indexOf("openTab('" + id + "')") !== -1) b.classList.add('active');
+    if ((b.getAttribute('onclick') || '').indexOf("openTab('" + id + "')") !== -1) {
+      b.classList.add('active');
+      const grupo = b.closest('.sidebar-group');
+      if (grupo) grupo.classList.add('has-active');
+    }
   });
 }
 
