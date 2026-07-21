@@ -360,9 +360,17 @@ function parsearGSheetTangoMO(file) {
     for (let i = 0; i < Math.min(25, rows.length); i++) {
       const cells = rows[i].map(c => String(c).toUpperCase().trim());
 
-      // Formato A: OBRA + TOTAL QUINCENA (planilla por empleado con obra asignada)
-      const iObra   = cells.findIndex(c => c === 'OBRA');
-      const iTotalQ = cells.findIndex(c => c.includes('TOTAL') && c.includes('QUINCENA'));
+      // Formato A: OBRA + TOTAL QUINCENA (planilla por empleado con obra asignada).
+      // Hay DOS columnas candidatas: "TOTAL QUINCENA" y "TOTAL QUINCENA C/REDONDEO
+      // PARA PAGO EN EFECTIVO". Cuál de las dos trae el monto real varía según la
+      // quincena (en una puede venir vacía "TOTAL QUINCENA" y el dato estar solo en
+      // la de redondeo, o viceversa) — por eso NO alcanza con quedarse con la
+      // primera que matchee ambas palabras. Se prioriza la de "REDONDEO" (es el
+      // total final de pago) y se cae a la plana solo si no existe esa columna.
+      const iObra          = cells.findIndex(c => c === 'OBRA');
+      const iTotalRedondeo = cells.findIndex(c => c.includes('TOTAL') && c.includes('QUINCENA') && c.includes('REDONDEO'));
+      const iTotalPlano    = cells.findIndex(c => c.includes('TOTAL') && c.includes('QUINCENA') && !c.includes('REDONDEO'));
+      const iTotalQ = iTotalRedondeo >= 0 ? iTotalRedondeo : iTotalPlano;
       if (iObra >= 0 && iTotalQ >= 0) {
         hdrIdx = i; iClave = iObra; iMonto = iTotalQ; modo = 'obra';
         iClasif = cells.findIndex(c => c.includes('CLASIF'));
