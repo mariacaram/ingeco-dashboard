@@ -85,6 +85,10 @@ function doGet(e) {
         const cachedMo = PROPS.getProperty(CACHE_KEY + '_mo');
         if (cachedMo) data.moCtroCosto = JSON.parse(cachedMo);
       }
+      if (data && !data.moQuincenas) {
+        const cachedMoQ = PROPS.getProperty(CACHE_KEY + '_moq');
+        if (cachedMoQ) data.moQuincenas = JSON.parse(cachedMoQ);
+      }
       if (data && !data.ocInsumos) {
         const cachedOc = PROPS.getProperty(CACHE_KEY + '_oc');
         if (cachedOc) data.ocInsumos = JSON.parse(cachedOc);
@@ -124,6 +128,9 @@ function doGet(e) {
       try {
         if (data.moCtroCosto) PROPS.setProperty(CACHE_KEY + '_mo', JSON.stringify(data.moCtroCosto));
       } catch(ce) { Logger.log('Cache write (mo) error: ' + ce); }
+      try {
+        if (data.moQuincenas) PROPS.setProperty(CACHE_KEY + '_moq', JSON.stringify(data.moQuincenas));
+      } catch(ce) { Logger.log('Cache write (moq) error: ' + ce); }
       try {
         if (data.ocInsumos) PROPS.setProperty(CACHE_KEY + '_oc', JSON.stringify(data.ocInsumos));
       } catch(ce) { Logger.log('Cache write (oc) error: ' + ce); }
@@ -177,6 +184,7 @@ function actualizarNocturno() {
     if (data.generadoPorObra) PROPS.setProperty(CACHE_KEY + '_obras',   JSON.stringify(data.generadoPorObra));
     if (data.alquilerEquipos) PROPS.setProperty(CACHE_KEY + '_alquiler', JSON.stringify(data.alquilerEquipos));
     if (data.moCtroCosto)     PROPS.setProperty(CACHE_KEY + '_mo',       JSON.stringify(data.moCtroCosto));
+    if (data.moQuincenas)     PROPS.setProperty(CACHE_KEY + '_moq',      JSON.stringify(data.moQuincenas));
     if (data.ocInsumos)       PROPS.setProperty(CACHE_KEY + '_oc',       JSON.stringify(data.ocInsumos));
     if (data.remitosAsfalto)  PROPS.setProperty(CACHE_KEY + '_remitos',  JSON.stringify(data.remitosAsfalto));
     if (data.cobrosEsteban)   PROPS.setProperty(CACHE_KEY + '_cobros_est', JSON.stringify(data.cobrosEsteban));
@@ -193,10 +201,12 @@ function actualizarNocturno() {
 // CONSTRUIR EL OBJETO DE DATOS COMPLETO
 // ============================================================
 function buildData() {
+  const tangoData = leerTangoMO();
   const result = {
     status:      'ok',
     timestamp:   new Date().toISOString(),
-    moCtroCosto: leerTangoMO(),
+    moCtroCosto: tangoData.porCentro,
+    moQuincenas: tangoData.quincenas, // { mes: [{nombre, total, totalObra, totalTaller, totalPlanta}] }
     ocInsumos:   leerOCInsumos(),
   };
   try { result.generadoPorObra  = leerGeneradoPorObra(); }
@@ -258,12 +268,15 @@ function leerFechasFuentes() {
 // ============================================================
 // TANGO — MO por Centro de Costo (1° Quincena)
 // ============================================================
-// Lee todos los archivos de la carpeta de Mauro y devuelve { ene: [...], feb: [...], abr: [...] }
+// Lee todos los archivos de la carpeta de Mauro y devuelve
+// { porCentro: { ene: [{centro,monto,clasificacion}], ... },
+//   quincenas: { ene: [{nombre, total, totalObra, totalTaller, totalPlanta}], ... } }
 function leerTangoMO() {
   try {
     const folder  = DriveApp.getFolderById(FILE_IDS.tangoFolder);
     const files   = folder.getFiles();
     const resultado = {};
+    const resultadoQuincenas = {};
 
     while (files.hasNext()) {
       const file    = files.next();
@@ -297,28 +310,32 @@ function leerTangoMO() {
 
       Logger.log('Tango — procesando "' + file.getName() + '" → ' + mes);
       const data = parsearArchivoTangoMO(file);
-      if (data && data.length > 0) resultado[mes] = data;
+      if (data && data.rows && data.rows.length > 0) {
+        resultado[mes] = data.rows;
+        resultadoQuincenas[mes] = data.quincenas || [];
+      }
     }
 
     Logger.log('Tango MO — meses cargados: ' + Object.keys(resultado).join(', '));
-    return resultado;
+    return { porCentro: resultado, quincenas: resultadoQuincenas };
 
   } catch (err) {
     Logger.log('leerTangoMO error: ' + err.toString());
-    return null;
+    return { porCentro: null, quincenas: null };
   }
 }
 
-// Parsea un archivo de TANGO (Google Sheet o CSV) y devuelve [{centro, monto}]
-// Si es Google Sheet: suma todas las pestañas (= ambas quincenas del mes)
+// Parsea un archivo de TANGO (Google Sheet o CSV) y devuelve { rows: [{centro, monto, clasificacion}], quincenas: [...] }
+// Si es Google Sheet: cada pestaña es una quincena; se suman para el total del mes
+// y también se exponen por separado en `quincenas` para el detalle del cálculo.
 function parsearArchivoTangoMO(file) {
   try {
     const mime = file.getMimeType();
     if (mime === 'application/vnd.google-apps.spreadsheet') {
       return parsearGSheetTangoMO(file);
     }
-    // Fallback CSV/TXT
-    return parsearCsvTangoMO(file);
+    // Fallback CSV/TXT — no tiene noción de quincenas separadas
+    return { rows: parsearCsvTangoMO(file) || [], quincenas: [] };
   } catch (err) {
     Logger.log('parsearArchivoTangoMO error (' + file.getName() + '): ' + err.toString());
     return null;
@@ -332,7 +349,8 @@ function parsearArchivoTangoMO(file) {
 function parsearGSheetTangoMO(file) {
   const ss     = SpreadsheetApp.openById(file.getId());
   const sheets = ss.getSheets();
-  const totales = {}; // key = "centro||clasificacion"
+  const totales = {}; // key = "centro||clasificacion" — acumulado de TODAS las quincenas
+  const quincenas = []; // [{nombre, total, totalObra, totalTaller, totalPlanta}] — una por pestaña
 
   for (const sheet of sheets) {
     const rows = sheet.getDataRange().getValues();
@@ -367,6 +385,9 @@ function parsearGSheetTangoMO(file) {
     }
     Logger.log('Tango GSheet [' + sheet.getName() + '] — modo=' + modo + ' hdr=' + hdrIdx + ' iClave=' + iClave + ' iMonto=' + iMonto + ' iClasif=' + iClasif);
 
+    // Totales de ESTA pestaña (quincena), por clasificación — para el detalle del cálculo
+    let qTotal = 0, qObra = 0, qTaller = 0, qPlanta = 0;
+
     for (let i = hdrIdx + 1; i < rows.length; i++) {
       const row   = rows[i];
       const clave = String(row[iClave] || '').trim();
@@ -380,6 +401,21 @@ function parsearGSheetTangoMO(file) {
       const clasif = iClasif >= 0 ? String(row[iClasif] || '').trim() || 'Obra' : 'Obra';
       const totKey = key + '||' + clasif;
       totales[totKey] = (totales[totKey] || 0) + monto;
+
+      qTotal += monto;
+      if (clasif === 'Taller') qTaller += monto;
+      else if (clasif === 'Pta. Asfalto') qPlanta += monto;
+      else qObra += monto;
+    }
+
+    if (qTotal > 0) {
+      quincenas.push({
+        nombre:      sheet.getName().trim(),
+        total:       Math.round(qTotal),
+        totalObra:   Math.round(qObra),
+        totalTaller: Math.round(qTaller),
+        totalPlanta: Math.round(qPlanta),
+      });
     }
   }
 
@@ -396,8 +432,8 @@ function parsearGSheetTangoMO(file) {
     .sort((a, b) => b.monto - a.monto);
 
   Logger.log('Tango GSheet "' + file.getName() + '" — ' + result.length + ' obras/centros, total=' +
-    result.reduce((s, r) => s + r.monto, 0));
-  return result;
+    result.reduce((s, r) => s + r.monto, 0) + ' | quincenas: ' + quincenas.map(q => q.nombre + '=' + q.total).join(', '));
+  return { rows: result, quincenas: quincenas };
 }
 
 // Fallback: parsea un CSV/TXT de TANGO exportado
