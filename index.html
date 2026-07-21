@@ -1451,7 +1451,7 @@
       </div>
       <div style="background:#fff;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;">
         <div style="font-size:12px;font-weight:700;color:#92400e;margin-bottom:5px;">🏢 Gastos de Estructura</div>
-        <div style="font-size:12px;color:var(--text);line-height:1.7;">Administración, dirección, seguros, impuestos s/activos, etc. No pertenecen a ninguna unidad pero son costos reales. Fuente sugerida: TANGO, cuentas de gastos generales.</div>
+        <div style="font-size:12px;color:var(--text);line-height:1.7;">Administración, dirección, seguros, impuestos s/activos, etc. No pertenecen a ninguna unidad pero son costos reales. Ya se incluye el alquiler de equipos de Predio Warnes (Partes diarios); falta el resto (TANGO, cuentas de gastos generales).</div>
       </div>
       <div style="background:#fff;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;">
         <div style="font-size:12px;font-weight:700;color:#92400e;margin-bottom:5px;">🔧 OC Taller</div>
@@ -2104,8 +2104,11 @@ function esAlquilerExterno(obra) { return String(obra || '').trim().toLowerCase(
 function _normSinTilde(s) { return String(s || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
 const CENTROS_PLANTA_ALQUILER = ['planta de trituracion', 'cantera', 'planta de asfalto'];
 function esCentroPlanta(obra) { return CENTROS_PLANTA_ALQUILER.includes(_normSinTilde(obra)); }
+// "Predio Warnes": depósito/predio de INGECO, tampoco es una obra. Su costo de
+// alquiler es un gasto de Estructura, no de obra ni de Planta.
+function esCentroPredio(obra) { return _normSinTilde(obra) === 'predio warnes'; }
 // Cualquier bucket de alquiler que NO es una obra real de INGECO.
-function esAlquilerNoObra(obra) { return esAlquilerExterno(obra) || esCentroPlanta(obra); }
+function esAlquilerNoObra(obra) { return esAlquilerExterno(obra) || esCentroPlanta(obra) || esCentroPredio(obra); }
 // Centros internos REALES de INGECO (predio + planta) — la única lista de
 // nombres que debe excluirse por completo de Margen por obra/tipo cuando el
 // Maestro los marca "Interno". Cualquier OTRO candidato marcado "Interno" en
@@ -2115,22 +2118,27 @@ function esAlquilerNoObra(obra) { return esAlquilerExterno(obra) || esCentroPlan
 // a la obra correcta, en vez de esconderse detrás del filtro de Interno.
 const CENTROS_INTERNOS_CONOCIDOS = ['predio warnes'].concat(CENTROS_PLANTA_ALQUILER);
 function esCentroInternoConocido(obra) { return CENTROS_INTERNOS_CONOCIDOS.includes(_normSinTilde(obra)); }
-// Costo de alquiler que es realmente de obras (excluye alquiler externo y centros de planta).
-// Usa el campo totalObras del backend si está disponible; si no (backend viejo,
-// aún sin redeploy), lo calcula al vuelo filtrando porObra — así el fix funciona
-// desde el frontend sin depender de que ya se haya redeployado el .gs.
+// Costo de alquiler que es realmente de obras (excluye alquiler externo, Planta y Predio Warnes).
+// Se calcula SIEMPRE filtrando porObra en el frontend (no confía en el campo
+// totalObras del backend/caché) — así, cuando se amplía qué categorías se
+// excluyen, el fix aplica de inmediato sin depender de un redeploy del .gs
+// ni de que actualizarNocturno() haya refrescado el caché.
 function _alqTotalObras(alqObj) {
   if (!alqObj) return null;
-  if (alqObj.totalObras != null) return alqObj.totalObras;
   if (!alqObj.porObra) return alqObj.totalArs;
   return alqObj.porObra.reduce((s, it) => s + (esAlquilerNoObra(it.obra) ? 0 : (it.costoArs || 0)), 0);
 }
 // Costo de alquiler atribuido a centros de Planta (Cantera / Trituración / Planta de Asfalto).
 function _alqTotalPlanta(alqObj) {
   if (!alqObj) return null;
-  if (alqObj.totalPlanta != null) return alqObj.totalPlanta;
   if (!alqObj.porObra) return null;
   return alqObj.porObra.reduce((s, it) => s + (esCentroPlanta(it.obra) ? (it.costoArs || 0) : 0), 0);
+}
+// Costo de alquiler atribuido a Predio Warnes (gasto de Estructura).
+function _alqTotalPredio(alqObj) {
+  if (!alqObj) return null;
+  if (!alqObj.porObra) return null;
+  return alqObj.porObra.reduce((s, it) => s + (esCentroPredio(it.obra) ? (it.costoArs || 0) : 0), 0);
 }
 
 function computeMargenObrasMes(mes) {
@@ -4221,15 +4229,18 @@ function renderRentabilidad() {
   const moPlantaEstObj = moPlantaReal == null ? getMOEstimadoPlanta(mesActual) : null;
   const moPlanta       = moPlantaReal ?? (moPlantaEstObj ? moPlantaEstObj.monto : null);
 
-  // alqMes: ingreso total del taller (obras + Planta + terceros — "Alquiler de equipos").
+  // alqMes: ingreso total del taller (obras + Planta + Predio Warnes + terceros).
   // alqObrasMes: solo la porción que es costo real de una obra.
   // alqPlantaMes: porción atribuida a Cantera/Planta de Trituración/Planta de Asfalto — costo de PLANTA.
+  // alqPredioMes: porción atribuida a Predio Warnes — costo de ESTRUCTURA.
   // alqExterno: alquiler a terceros ("Alquiler de equipos") — ingreso neto, no cancela con ningún costo interno.
   const alqObj       = ALQUILER_EQUIPOS[mesActual];
   const alqMes       = alqObj ? alqObj.totalArs : null;
   const alqObrasMes  = _alqTotalObras(alqObj);
   const alqPlantaMes = _alqTotalPlanta(alqObj);
-  const alqExterno   = (alqMes != null && alqObrasMes != null) ? alqMes - alqObrasMes - (alqPlantaMes || 0) : 0;
+  const alqPredioMes = _alqTotalPredio(alqObj);
+  const alqExterno   = (alqMes != null && alqObrasMes != null)
+    ? alqMes - alqObrasMes - (alqPlantaMes || 0) - (alqPredioMes || 0) : 0;
   const ocTotalMes  = OC_INSUMOS[mesActual] ? OC_INSUMOS[mesActual].total : null;
   const ocPlantaObj = getOCPlantaInterna(mesActual);
   const ocPlanta    = ocPlantaObj ? ocPlantaObj.total : null;
@@ -4382,12 +4393,13 @@ function renderRentabilidad() {
   const consStatus = consolidadoConocido != null ? (ingPlanta != null ? 'parcial' : 'parcial') : 'pend';
   const consNota   = ingPlanta == null ? 'sin ingresos de planta' : 'sin OC Taller, sin Estructura';
   rows += row('Resultado consolidado conocido', consStatus, consolidadoConocido, 'res', { nota: consNota });
-  rows += row('− Gastos de Estructura', 'pend', null, 'neg', { indent: 1, nota: 'administración, dirección, seguros…' });
+  rows += row('− Gastos de Estructura (Predio Warnes: alquiler equipos) ↕', alqPredioMes > 0 ? 'parcial' : 'pend', alqPredioMes > 0 ? alqPredioMes : null, 'neg', { indent: 1, nota: alqPredioMes > 0 ? 'parcial — faltan sueldos admin., dirección, seguros' : 'administración, dirección, seguros…' });
+  const resultIngecoVal = consolidadoConocido != null ? consolidadoConocido - (alqPredioMes || 0) : null;
   rows += `<tr style="background:#1b3a5c;">
     <td style="padding:10px 8px;font-size:13px;font-weight:800;color:#fff;">= RESULTADO INGECO</td>
     <td style="padding:10px;text-align:center;">${badge('pend')}</td>
-    <td style="padding:10px 12px 10px 0;text-align:right;font-size:16px;font-weight:900;color:${consolidadoConocido != null ? (consolidadoConocido >= 0 ? '#4ade80' : '#f87171') : '#94a3b8'};">
-      ${consolidadoConocido != null ? (consolidadoConocido >= 0 ? '+' : '−') + ' ' + Math.abs(Math.round(consolidadoConocido)).toLocaleString('es-AR') + ' <span style="font-size:11px;font-weight:400;color:#94a3b8;">(sin Planta ingreso ni Estructura)</span>' : '—'}
+    <td style="padding:10px 12px 10px 0;text-align:right;font-size:16px;font-weight:900;color:${resultIngecoVal != null ? (resultIngecoVal >= 0 ? '#4ade80' : '#f87171') : '#94a3b8'};">
+      ${resultIngecoVal != null ? (resultIngecoVal >= 0 ? '+' : '−') + ' ' + Math.abs(Math.round(resultIngecoVal)).toLocaleString('es-AR') + ' <span style="font-size:11px;font-weight:400;color:#94a3b8;">(sin Planta ingreso, Estructura parcial)</span>' : '—'}
     </td>
   </tr>`;
 

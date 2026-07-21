@@ -1104,11 +1104,16 @@ const CENTROS_PLANTA_ALQUILER = ['planta de trituracion', 'cantera', 'planta de 
 function esCentroPlanta(obra) {
   return CENTROS_PLANTA_ALQUILER.includes(_normSinTilde(obra));
 }
+// "Predio Warnes": depósito/predio de INGECO, tampoco es una obra. Su costo de
+// alquiler de equipos es un gasto de Estructura, no de obra ni de Planta.
+function esCentroPredio(obra) {
+  return _normSinTilde(obra) === 'predio warnes';
+}
 // Cualquier bucket de "OBRA GENERAL" que NO es una obra real de INGECO
-// (ni alquiler externo ni centro interno de planta) — no debe imputarse
-// como costo de obra en el prorrateo de alquiler.
+// (ni alquiler externo, ni centro interno de planta, ni Predio Warnes) — no
+// debe imputarse como costo de obra en el prorrateo de alquiler.
 function esAlquilerNoObra(obra) {
-  return esAlquilerExterno(obra) || esCentroPlanta(obra);
+  return esAlquilerExterno(obra) || esCentroPlanta(obra) || esCentroPredio(obra);
 }
 
 function leerAlquilerEquipos() {
@@ -1284,19 +1289,22 @@ function leerAlquilerEquipos() {
       if (Object.keys(porObra).length === 0) continue;
 
       // "Alquiler de equipos" (taller alquilando a OTRAS empresas — ingreso de
-      // taller) y "Planta de Trituración"/"Cantera"/"Planta de Asfalto" (costos
-      // internos de la Planta) NO son obras de INGECO — no deben imputarse como
-      // costo de obra en Margen (por obra / por tipo de contratación).
-      let costoExterno = 0, costoPlanta = 0;
+      // taller), "Planta de Trituración"/"Cantera"/"Planta de Asfalto" (costos
+      // internos de la Planta) y "Predio Warnes" (costo de Estructura) NO son
+      // obras de INGECO — no deben imputarse como costo de obra en Margen
+      // (por obra / por tipo de contratación).
+      let costoExterno = 0, costoPlanta = 0, costoPredio = 0;
       Object.entries(porObra).forEach(([obra, v]) => {
         if (esAlquilerExterno(obra)) costoExterno += v.costoArs;
         else if (esCentroPlanta(obra)) costoPlanta += v.costoArs;
+        else if (esCentroPredio(obra)) costoPredio += v.costoArs;
       });
 
       resultado[mes] = {
         totalArs:    totalMes,
-        totalObras:  totalMes - costoExterno - costoPlanta,
+        totalObras:  totalMes - costoExterno - costoPlanta - costoPredio,
         totalPlanta: costoPlanta,
+        totalPredio: costoPredio,
         tcUsd:      tc,
         porObra:  Object.entries(porObra)
           .map(([obra, v]) => ({
