@@ -2275,6 +2275,10 @@ function computeMargenObrasMes(mes) {
     const obraExtra = { cod_obra: c.cod || c.nombre, nombre: nombreFila, aCobrar: 0 };
     if (sinClasificar) obraExtra.tipo = 'Sin clasificar';
     const r = buildDatosObra(obraExtra, true);
+    // "Otros gastos o salidas": placeholders sin clasificar (Obra no disponible,
+    // Provisión de Pavimax/asfalto frío/caliente, etc.) — no son un contrato de
+    // obra, se listan aparte y sin MO/Margen (ver renderResumenObra).
+    r.otroGasto = sinClasificar;
     if (r.hasData) rows.push(r);
     if (ck) consumido.add(ck);
     if (nk) consumido.add(nk);
@@ -2364,6 +2368,32 @@ function _filaMargenHTML(r, moEsEstim, tnTotalGlobal) {
       <td class="num" style="${cellStyle}" ${hoverTip} onclick="openDetalleCelda('tn','${codEsc2}','${nomEsc}')">${tnCell}</td>
       <td class="num" style="${cellStyle}" ${hoverTip} onclick="openDetalleCelda('alquiler','${codEsc2}','${nomEsc}')">${r.alquiler > 0 ? `<span class="neg-val" style="text-decoration:underline dotted;">${fmt(r.alquiler)}</span>` : '<span class="nd">—</span>'}</td>
       <td class="num" style="background:${r.margen > 0 ? '#f0fdf4' : r.margen < 0 ? '#fef2f2' : 'transparent'};"><strong class="${mgColor}">${fmt(r.margen)}</strong></td>
+    </tr>`;
+}
+
+// Fila para "Otros Gastos o salidas" (placeholders sin clasificar: Obra no
+// disponible, Provisión de Pavimax/asfalto frío/caliente, etc.) — no son un
+// contrato de obra, así que no tiene sentido mostrar MO ni Margen prorrateados.
+// Solo se muestra lo que haya de A Cobrar, Insumos, TN y Alquiler.
+function _filaOtroGastoHTML(r) {
+  const o = r.o;
+  const _tnPartes = [];
+  if (r.tnObra > 0)     _tnPartes.push(fmtTn(r.tnObra) + ' tn');
+  if (r.tnFrioObra > 0) _tnPartes.push(fmtTn(r.tnFrioObra) + ' frío');
+  const tnLabel = _tnPartes.join(' + ');
+  const tnCell = (r.tnObra > 0 || r.tnFrioObra > 0)
+    ? `<span style="font-size:12px;">${tnLabel}</span>`
+    : '<span class="nd">—</span>';
+  const codEsc2 = (o.cod_obra || '').replace(/'/g, "\\'");
+  const nomEsc  = (o.nombre  || '').replace(/'/g, "\\'");
+  return `<tr>
+      <td title="Ver historial de todos los meses" style="cursor:pointer;" onclick="openHistorialObra('${codEsc2}','${nomEsc}')"><code style="font-size:11px;background:#f1f5f9;padding:2px 5px;border-radius:3px;text-decoration:underline dotted;">${o.cod_obra}</code><br><small style="color:var(--muted);font-size:10px;">${o.nombre}</small></td>
+      <td class="num">${r.aCobrar > 0 ? `<strong class="pos-val">${fmt(r.aCobrar)}</strong>` : '<span class="nd">—</span>'}</td>
+      <td class="num">${r.insumos  > 0 ? `<span class="neg-val">${fmt(r.insumos)}</span>`  : '<span class="nd">—</span>'}</td>
+      <td class="num"><span class="nd">—</span></td>
+      <td class="num">${tnCell}</td>
+      <td class="num">${r.alquiler > 0 ? `<span class="neg-val">${fmt(r.alquiler)}</span>` : '<span class="nd">—</span>'}</td>
+      <td class="num"><span class="nd">—</span></td>
     </tr>`;
 }
 
@@ -2496,12 +2526,23 @@ function renderResumenObra() {
       .sort((a, b) => b.margen - a.margen)
       .map(r => _filaMargenHTML(r, moEsEstim, tnTotalGlobal));
 
-    const extras = rows.filter(r => r.extra);
+    const extras = rows.filter(r => r.extra && !r.otroGasto);
     if (extras.length > 0) {
       filas.push(`<tr><td colspan="7" style="background:#f8fafc;padding:5px 12px;font-size:11px;color:var(--muted);border-top:2px solid var(--border);font-style:italic;">
         Con gasto/salida del mes · ${extras.length} obra${extras.length !== 1 ? 's' : ''} con OC de insumos o remitos, sin certificado en obras activas
       </td></tr>`);
       extras.forEach(r => filas.push(_filaMargenHTML(r, moEsEstim, tnTotalGlobal)));
+    }
+
+    // "Otros Gastos o salidas": placeholders sin clasificar (Obra no disponible,
+    // Provisión de Pavimax/asfalto frío/caliente, etc.) — no son un contrato de
+    // obra, se listan aparte y sin MO/Margen (ver _filaOtroGastoHTML).
+    const otrosGastos = rows.filter(r => r.otroGasto);
+    if (otrosGastos.length > 0) {
+      filas.push(`<tr><td colspan="7" style="background:#fef2f2;padding:5px 12px;font-size:11px;color:#92400e;border-top:2px solid var(--border);font-style:italic;">
+        ⚠ Otros Gastos o salidas · ${otrosGastos.length} ítem${otrosGastos.length !== 1 ? 's' : ''} sin clasificar — revisar a qué obra imputar
+      </td></tr>`);
+      otrosGastos.forEach(r => filas.push(_filaOtroGastoHTML(r)));
     }
 
     // Fila total — MO es la suma de la MO prorateada de las obras mostradas (no el
@@ -2598,7 +2639,7 @@ function renderResumenTipoContrato() {
   const cuadros = lista.map((g, i) => {
     const mgColor = g.tot.margen > 0 ? 'pos-val' : g.tot.margen < 0 ? 'neg-val' : '';
     const filas = [...g.rows].sort((a, b) => b.margen - a.margen)
-      .map(r => _filaMargenHTML(r, moEsEstim, tnTotalGlobal));
+      .map(r => r.otroGasto ? _filaOtroGastoHTML(r) : _filaMargenHTML(r, moEsEstim, tnTotalGlobal));
     filas.push(`<tr style="background:#f8fafc;font-weight:700;border-top:2px solid var(--border);">
       <td style="font-size:12px;">TOTAL</td>
       <td class="num pos-val">${fmt(g.tot.aCobrar)}</td>
