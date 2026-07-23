@@ -1441,8 +1441,8 @@
           <div><span style="color:#dc2626;font-weight:700;">−</span> Honorarios</div>
           <div><span style="color:#dc2626;font-weight:700;">−</span> Seguros</div>
           <div><span style="color:#dc2626;font-weight:700;">−</span> Otros gastos generales</div>
-          <div style="padding-left:14px;color:var(--muted);font-size:11px;">⏳ pendiente fuente (TANGO, gastos generales)</div>
-          <div style="margin-top:8px;padding-top:8px;border-top:1px solid #fca5a5;font-weight:700;color:#dc2626;font-size:13px;">= Gastos de Estructura</div>
+          <div style="padding-left:14px;color:var(--muted);font-size:11px;" id="gest-card-fuente">fuente: libro mayor de gastos administrativos</div>
+          <div style="margin-top:8px;padding-top:8px;border-top:1px solid #fca5a5;font-weight:700;color:#dc2626;font-size:13px;display:flex;justify-content:space-between;gap:8px;"><span>= Gastos de Estructura</span><span id="gest-card-total" class="neg-val">—</span></div>
         </div>
       </div>
 
@@ -1455,10 +1455,32 @@
 <!-- TAB: GASTOS DE ESTRUCTURA -->
 <div class="tab-panel" id="tab-gastos-estructura">
   <div class="section">
-    <div class="section-title">Gastos de Estructura <span class="badge">Sin datos aún</span></div>
-    <div class="table-wrap" style="padding:40px 20px;text-align:center;">
-      <p class="nd" style="font-size:13px;">Todavía no hay información cargada para esta sección.</p>
+    <div class="kpi-grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));">
+      <div class="kpi-card neg">
+        <div class="kpi-label">Total Gastos de Estructura</div>
+        <div class="kpi-value neg-val" id="kpi-gest-total">sin dato</div>
+        <div class="kpi-sub" id="kpi-gest-sub">Actualizá datos para cargar</div>
+        <div class="fuente">Libro mayor de gastos administrativos (cuentas ADMIN)</div>
+      </div>
     </div>
+
+    <div class="section-title" style="margin-top:6px;">Gastos de Estructura por cuenta · <span id="mes-label-gest"></span></div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Solo gastos administrativos (ADMIN). No incluye combustible/distribución. Hacé click en una cuenta para ver las facturas.</div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Cuenta</th>
+            <th class="num">N° Facturas</th>
+            <th class="num">Total</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-gest">
+          <tr><td colspan="3" class="nd" style="text-align:center;padding:20px;">Presioná "Actualizar datos" para cargar desde Drive</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="nota-fuente" style="margin-top:6px;">📄 Fuente: libro mayor de gastos (asientos por factura) · agrupado por cuenta contable y mes.</div>
   </div>
 </div>
 
@@ -1663,6 +1685,9 @@ function _obrasSinPeriodo() {
 let ALQUILER_EQUIPOS = {};
 let REMITOS_ASFALTO = {}; // { feb: {caliente, frio, total, porObra: {obraName: {caliente, frio}}}, ... }
 let PRECIO_ASFALTO  = {}; // { feb: {caliente: X, frio: Y}, mar: {...} } — leído desde planilla
+// Gastos de Estructura (libro mayor admin.) — se carga desde Apps Script
+// { jun: { total, porCuenta: [{codigo, nombre, cuenta, total, nFacturas, facturas: [{fecha, proveedor, comprobante, monto}]}] } }
+let GASTOS_ESTRUCTURA = {};
 
 // Ingresos de Planta — ingresados a mano, persisten en localStorage
 let INGRESOS_PLANTA = (function() {
@@ -1856,7 +1881,8 @@ const FUENTES = [
   { archivo: 'REMITOS OFICIALES (Google Sheet)', responsable: 'Roberto', fileKey: 'remitosAsfalto', ultimaActualizacion: '12/05/2026', estado: 'parcial', dato: 'Tn caliente/frío (sin precios cargados)', accion: 'Completar columna PRECIO en sheet' },
   { archivo: 'Maestro de obras NUEVO.xlsx', responsable: 'Adrián / Equipo', fileKey: 'maestroObras', ultimaActualizacion: '07/05/2026', estado: 'real', dato: '60+ obras con código canónico y cliente', accion: '✅ Accesible — cargado' },
   { archivo: 'ENTREGAS DE REPUESTOS ABRIL 2026', responsable: 'Nicolás Dall\'Agata', fileKey: 'repuestosEquipos', ultimaActualizacion: '12/05/2026', estado: 'real', dato: 'Costos reales reparaciones taller abr 2026', accion: '✅ Accesible — datos cargados' },
-  { archivo: 'ÓC Repuestos para Equipos (Alberto Lescano)', responsable: 'Alberto Lescano', fileKey: null, ultimaActualizacion: '29/04/2026', estado: 'parcial', dato: 'OC planta asfalto y equipos', accion: '✅ Accesible — datos cargados' }
+  { archivo: 'ÓC Repuestos para Equipos (Alberto Lescano)', responsable: 'Alberto Lescano', fileKey: null, ultimaActualizacion: '29/04/2026', estado: 'parcial', dato: 'OC planta asfalto y equipos', accion: '✅ Accesible — datos cargados' },
+  { archivo: 'Libro mayor de gastos administrativos (Google Sheet)', responsable: 'Administración', fileKey: 'gastosEstructura', ultimaActualizacion: '23/07/2026', estado: 'real', dato: 'Gastos de Estructura (cuentas ADMIN) por cuenta y mes — jun 2026', accion: '✅ Accesible — datos cargados' }
 ];
 
 // ================================================================
@@ -4255,6 +4281,20 @@ function renderTallerLiq() {
 function renderRentabilidad() {
   const mesLbl = document.getElementById('mes-label-rentabilidad');
   if (mesLbl) mesLbl.textContent = MES[mesActual] || mesActual;
+
+  // Tarjeta "Gastos de Estructura": total real del libro mayor administrativo.
+  const gestEl    = document.getElementById('gest-card-total');
+  const gestFteEl = document.getElementById('gest-card-fuente');
+  const gestMes   = GASTOS_ESTRUCTURA[mesActual];
+  if (gestEl) {
+    if (gestMes && gestMes.total) {
+      gestEl.textContent = '− ' + fmt(gestMes.total);
+      if (gestFteEl) gestFteEl.textContent = 'real · libro mayor de gastos administrativos · ' + (MES[mesActual] || mesActual);
+    } else {
+      gestEl.textContent = '—';
+      if (gestFteEl) gestFteEl.textContent = 'sin datos para este mes — actualizá desde Drive';
+    }
+  }
 
   const el = document.getElementById('rentabilidad-pl');
   if (!el) return;
@@ -6759,6 +6799,105 @@ function _sintetizarTotales() {
       GENERADO_POR_OBRA.obrasPorMes.total = Object.values(porCod).sort((a, b) => b.aCobrar - a.aCobrar);
     }
   }
+
+  // Gastos de Estructura: fusiona por cuenta sumando totales y concatenando facturas
+  delete GASTOS_ESTRUCTURA.total;
+  const mGest = mesesCon(GASTOS_ESTRUCTURA);
+  if (mGest.length > 0) {
+    const porCuenta = {};
+    mGest.forEach(m => (GASTOS_ESTRUCTURA[m].porCuenta || []).forEach(c => {
+      let a = porCuenta[c.cuenta];
+      if (!a) a = porCuenta[c.cuenta] = { codigo: c.codigo, nombre: c.nombre, cuenta: c.cuenta, total: 0, nFacturas: 0, facturas: [] };
+      a.total += c.total || 0;
+      a.nFacturas += c.nFacturas || 0;
+      if (Array.isArray(c.facturas)) a.facturas = a.facturas.concat(c.facturas);
+    }));
+    const cuentas = Object.values(porCuenta)
+      .map(c => { c.facturas.sort((a, b) => b.monto - a.monto); return c; })
+      .sort((a, b) => b.total - a.total);
+    GASTOS_ESTRUCTURA.total = { total: cuentas.reduce((s, c) => s + c.total, 0), porCuenta: cuentas };
+  }
+}
+
+// ================================================================
+// GASTOS DE ESTRUCTURA — libro mayor de gastos administrativos por cuenta/mes
+// ================================================================
+function renderGastosEstructura() {
+  const kpiEl  = document.getElementById('kpi-gest-total');
+  const kpiSub = document.getElementById('kpi-gest-sub');
+  const mesLbl = document.getElementById('mes-label-gest');
+  const tbody  = document.getElementById('tbody-gest');
+  if (mesLbl) mesLbl.textContent = MES[mesActual] || mesActual;
+
+  const datos = GASTOS_ESTRUCTURA[mesActual];
+
+  if (!datos || !datos.total) {
+    if (kpiEl)  { kpiEl.textContent = 'sin dato'; kpiEl.className = 'kpi-value nd'; }
+    if (kpiSub) kpiSub.textContent = 'Sin gastos cargados para este mes';
+    if (tbody)  tbody.innerHTML = '<tr><td colspan="3" class="nd" style="text-align:center;padding:20px;">Sin datos para el mes seleccionado — actualizá desde Drive</td></tr>';
+    return;
+  }
+
+  if (kpiEl)  { kpiEl.textContent = fmt(datos.total); kpiEl.className = 'kpi-value neg-val'; }
+  if (kpiSub) kpiSub.textContent = (datos.porCuenta ? datos.porCuenta.length : 0) + ' cuentas · ' + (MES[mesActual] || mesActual);
+
+  if (!tbody) return;
+  const filas = (datos.porCuenta || []).map(c => {
+    const cuentaEsc = (c.cuenta || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    return `<tr style="cursor:pointer;" onclick="openGastoEstructuraPanel('${cuentaEsc}')" title="Ver facturas de esta cuenta">
+      <td style="font-size:12px;"><span style="text-decoration:underline dotted;color:var(--primary);font-weight:600;">${c.nombre}</span>${c.codigo ? `<br><small style="color:var(--muted);font-size:10px;">Cuenta ${c.codigo}</small>` : ''}</td>
+      <td class="num" style="color:var(--muted);">${c.nFacturas}</td>
+      <td class="num neg-val"><strong>${fmt(c.total)}</strong></td>
+    </tr>`;
+  }).join('');
+  const totalFila = `<tr style="background:#f8fafc;font-weight:700;border-top:2px solid var(--border);">
+    <td>TOTAL</td>
+    <td class="num" style="color:var(--muted);">${(datos.porCuenta || []).reduce((s, c) => s + c.nFacturas, 0)}</td>
+    <td class="num neg-val">${fmt(datos.total)}</td>
+  </tr>`;
+  tbody.innerHTML = filas + totalFila;
+}
+
+function openGastoEstructuraPanel(cuentaFull) {
+  const panel   = document.getElementById('sidePanel');
+  const overlay = document.getElementById('overlay');
+  const content = document.getElementById('panelContent');
+  if (!panel) return;
+
+  const datos = GASTOS_ESTRUCTURA[mesActual];
+  const c = datos && datos.porCuenta ? datos.porCuenta.find(x => x.cuenta === cuentaFull) : null;
+
+  let html;
+  if (!c || !c.facturas || c.facturas.length === 0) {
+    html = '<p class="nd" style="padding:16px;">Sin facturas registradas para esta cuenta.</p>';
+  } else {
+    const filas = c.facturas.map(f => `<tr style="border-bottom:1px solid var(--border);">
+      <td style="padding:8px 10px;font-size:12px;white-space:nowrap;color:var(--muted);">${f.fecha}</td>
+      <td style="padding:8px 10px;font-size:12px;">${f.proveedor || '—'}${f.comprobante ? `<br><small style="color:var(--muted);font-size:10px;font-family:monospace;">${f.comprobante}</small>` : ''}</td>
+      <td style="padding:8px 10px;font-size:12px;text-align:right;white-space:nowrap;" class="neg-val">${fmt(f.monto)}</td>
+    </tr>`).join('');
+    html = `<div style="font-size:12px;color:var(--muted);margin-bottom:10px;">${c.nFacturas} factura${c.nFacturas !== 1 ? 's' : ''} · ${MES[mesActual] || mesActual}${c.codigo ? ' · Cuenta ' + c.codigo : ''}</div>
+      <table style="width:100%;border-collapse:collapse;">
+        <thead><tr style="background:#f8fafc;border-bottom:2px solid var(--border);">
+          <th style="text-align:left;padding:8px 10px;font-size:11px;color:var(--muted);font-weight:600;">FECHA</th>
+          <th style="text-align:left;padding:8px 10px;font-size:11px;color:var(--muted);font-weight:600;">PROVEEDOR</th>
+          <th style="text-align:right;padding:8px 10px;font-size:11px;color:var(--muted);font-weight:600;">MONTO</th>
+        </tr></thead>
+        <tbody>${filas}
+          <tr style="background:#fef2f2;font-weight:700;border-top:2px solid #fca5a5;">
+            <td colspan="2" style="padding:9px 10px;font-size:12px;">TOTAL</td>
+            <td style="padding:9px 10px;font-size:14px;text-align:right;" class="neg-val">${fmt(c.total)}</td>
+          </tr>
+        </tbody>
+      </table>`;
+  }
+
+  content.innerHTML = `
+    <div class="panel-title">${c ? c.nombre : 'Cuenta'}</div>
+    <div class="panel-sub">Gastos de Estructura · ${MES[mesActual] || mesActual}</div>
+    <div style="margin-top:14px;">${html}</div>`;
+  panel.classList.add('open');
+  overlay.classList.add('open');
 }
 
 function renderAll() {
@@ -6779,6 +6918,7 @@ function renderAll() {
   renderTallerLiq();
   renderCtroCosto();
   renderRentabilidad();
+  renderGastosEstructura();
   renderFlujo();
   renderPersonas();
   renderFuentes();
@@ -6887,6 +7027,9 @@ async function refreshData() {
       if (data.precioAsfalto && typeof data.precioAsfalto === 'object') {
         Object.assign(PRECIO_ASFALTO, data.precioAsfalto);
       }
+      if (data.gastosEstructura && typeof data.gastosEstructura === 'object') {
+        Object.assign(GASTOS_ESTRUCTURA, data.gastosEstructura);
+      }
       if (data.fechasFuentes && typeof data.fechasFuentes === 'object') {
         Object.assign(FECHAS_FUENTES, data.fechasFuentes);
       }
@@ -6960,6 +7103,7 @@ function setMes(mes) {
   renderPlanta();
   renderCtroCosto();
   renderRentabilidad();
+  renderGastosEstructura();
   _syncKpiCardsTipo();
 }
 
@@ -7099,6 +7243,9 @@ if (APPS_SCRIPT_URL) {
         }
         if (data.precioAsfalto && typeof data.precioAsfalto === 'object') {
           Object.assign(PRECIO_ASFALTO, data.precioAsfalto);
+        }
+        if (data.gastosEstructura && typeof data.gastosEstructura === 'object') {
+          Object.assign(GASTOS_ESTRUCTURA, data.gastosEstructura);
         }
         if (data.fechasFuentes && typeof data.fechasFuentes === 'object') {
           Object.assign(FECHAS_FUENTES, data.fechasFuentes);

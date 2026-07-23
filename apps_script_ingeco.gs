@@ -32,6 +32,7 @@ const FILE_IDS = {
   remitosAsfalto:   '1_c6El5XDWoy84J7UAe8xlA1WC03IdklQyraMZEbQiEs',  // REMITOS OFICIALES (Roberto)
   ajusteStock:    '1yZArsIKYMfq9UPUXyiASXtDNXyubTjFx3PPW2VjG-uA',  // Formulario Ingreso Asfalto Agustín
   precioAsfalto:  '1lqKTXtDLT2FxyXurxjU1uE4epDOKs5SP8AXu5wAUsJ4',  // Precio de mercado asfalto $/tn por mes
+  gastosEstructura: '1beFIrKD6ljPKjjssuWP-_TmTH8vr1TktBnVDuX9nxyM', // Libro mayor de gastos admin. (Gastos de Estructura)
 };
 
 // Tipo de cambio USD → ARS oficial promedio mensual (Banco Nación Argentina)
@@ -109,6 +110,10 @@ function doGet(e) {
         const cachedPrecio = PROPS.getProperty(CACHE_KEY + '_precio');
         if (cachedPrecio) data.precioAsfalto = JSON.parse(cachedPrecio);
       }
+      if (data && !data.gastosEstructura) {
+        const cachedGest = PROPS.getProperty(CACHE_KEY + '_gest');
+        if (cachedGest) data.gastosEstructura = JSON.parse(cachedGest);
+      }
       if (data && !data.fechasFuentes) {
         const cachedFechas = PROPS.getProperty(CACHE_KEY + '_fechas');
         if (cachedFechas) data.fechasFuentes = JSON.parse(cachedFechas);
@@ -146,6 +151,9 @@ function doGet(e) {
       try {
         if (data.precioAsfalto) PROPS.setProperty(CACHE_KEY + '_precio', JSON.stringify(data.precioAsfalto));
       } catch(ce) { Logger.log('Cache write (precio) error: ' + ce); }
+      try {
+        if (data.gastosEstructura) PROPS.setProperty(CACHE_KEY + '_gest', JSON.stringify(data.gastosEstructura));
+      } catch(ce) { Logger.log('Cache write (gest) error: ' + ce); }
       try {
         if (data.fechasFuentes) PROPS.setProperty(CACHE_KEY + '_fechas', JSON.stringify(data.fechasFuentes));
       } catch(ce) { Logger.log('Cache write (fechas) error: ' + ce); }
@@ -190,6 +198,7 @@ function actualizarNocturno() {
     if (data.cobrosEsteban)   PROPS.setProperty(CACHE_KEY + '_cobros_est', JSON.stringify(data.cobrosEsteban));
     if (data.stockAsfalto)    PROPS.setProperty(CACHE_KEY + '_stock',    JSON.stringify(data.stockAsfalto));
     if (data.precioAsfalto)   PROPS.setProperty(CACHE_KEY + '_precio',   JSON.stringify(data.precioAsfalto));
+    if (data.gastosEstructura) PROPS.setProperty(CACHE_KEY + '_gest',    JSON.stringify(data.gastosEstructura));
     if (data.fechasFuentes)   PROPS.setProperty(CACHE_KEY + '_fechas',   JSON.stringify(data.fechasFuentes));
     Logger.log('Cache actualizado: ' + data.timestamp);
   } catch (err) {
@@ -227,6 +236,8 @@ function buildData() {
   catch(e) { Logger.log('stockAsfalto error: ' + e); result.stockAsfalto = null; }
   try { result.precioAsfalto = leerPrecioAsfalto(); }
   catch(e) { Logger.log('precioAsfalto error: ' + e); result.precioAsfalto = null; }
+  try { result.gastosEstructura = leerGastosEstructura(); }
+  catch(e) { Logger.log('gastosEstructura error: ' + e); result.gastosEstructura = null; }
   try { result.fechasFuentes = leerFechasFuentes(); }
   catch(e) { Logger.log('fechasFuentes error: ' + e); result.fechasFuentes = null; }
   return result;
@@ -241,7 +252,7 @@ function leerFechasFuentes() {
   const resultado = {};
   const claves = ['ocInsumos', 'maestroObras', 'fernandoObras', 'estebanSheet',
     'equiposFlota', 'usageEquipos', 'repuestosEquipos', 'remitosAsfalto',
-    'ajusteStock', 'precioAsfalto'];
+    'ajusteStock', 'precioAsfalto', 'gastosEstructura'];
   claves.forEach(function(k) {
     try {
       resultado[k] = DriveApp.getFileById(FILE_IDS[k]).getLastUpdated().toISOString();
@@ -1423,6 +1434,120 @@ function leerPrecioAsfalto() {
 
   } catch (e) {
     Logger.log('leerPrecioAsfalto error: ' + e);
+    return null;
+  }
+}
+
+// ============================================================
+// GASTOS DE ESTRUCTURA — libro mayor de gastos administrativos
+// Fuente: Google Sheet (1beFIr...) — columnas:
+//   Cuenta | Fecha | Modelo | Tipo comprobante | Numero Comprobante |
+//   Proveedor | Razón social | Exportado | Debe | Haber | Categoria
+// Solo se toma la porción ADMINISTRATIVA (cuentas "... - ADMIN: ..."):
+// se excluye el combustible/distribución (cuenta 806 - DIST: COMBUST...).
+// Agrupado por MES (de la Fecha) y por CUENTA contable.
+// ============================================================
+function leerGastosEstructura() {
+  try {
+    const ss    = SpreadsheetApp.openById(FILE_IDS.gastosEstructura);
+    const sheet = ss.getSheets()[0];
+    const rows  = sheet.getDataRange().getValues();
+    if (!rows || rows.length < 2) return null;
+
+    // Detectar encabezado (primera fila con "cuenta" y "debe")
+    let hdr = -1;
+    for (let i = 0; i < Math.min(5, rows.length); i++) {
+      const cells = rows[i].map(c => String(c).toLowerCase().trim());
+      if (cells.some(c => c === 'cuenta') && cells.some(c => c === 'debe')) { hdr = i; break; }
+    }
+    if (hdr < 0) hdr = 0;
+
+    const H = rows[hdr].map(c => String(c).toLowerCase().trim());
+    const iCuenta = _findCol(H, ['cuenta']);
+    const iFecha  = _findCol(H, ['fecha']);
+    const iComp   = _findCol(H, ['numero comprobante', 'nro comprobante', 'comprobante']);
+    const iProv   = _findCol(H, ['razón social', 'razon social', 'proveedor']);
+    const iDebe   = _findCol(H, ['debe']);
+    const iHaber  = _findCol(H, ['haber']);
+    if (iCuenta == null || iFecha == null || iDebe == null) {
+      Logger.log('gastosEstructura: faltan columnas clave — cuenta/fecha/debe');
+      return null;
+    }
+
+    const _num = function(v) {
+      if (typeof v === 'number') return v;
+      if (v == null || v === '') return 0;
+      // Formato exportado US: coma=miles, punto=decimal → sacar comas
+      const n = parseFloat(String(v).replace(/,/g, '').replace(/[^\d.\-]/g, ''));
+      return isNaN(n) ? 0 : n;
+    };
+
+    // Separa "670 - ADMIN: GTOS LICIT. EN TRAMITE" → { codigo:'670', nombre:'Gtos Licit. En Tramite' }
+    const _parseCuenta = function(raw) {
+      const s = String(raw || '').trim();
+      const mCod = s.match(/^(\d+)\s*-\s*/);
+      const codigo = mCod ? mCod[1] : '';
+      let nombre = s.replace(/^\d+\s*-\s*/, '');       // saca "670 - "
+      nombre = nombre.replace(/^ADMIN\s*:\s*/i, '');    // saca "ADMIN: "
+      return { codigo: codigo, nombre: nombre.trim() || s, full: s };
+    };
+
+    // acum[mes][cuentaFull] = { codigo, nombre, full, total, facturas: [...] }
+    const acum = {};
+    for (let i = hdr + 1; i < rows.length; i++) {
+      const row = rows[i];
+      const cuentaRaw = String(row[iCuenta] || '').trim();
+      if (!cuentaRaw) continue;
+
+      // Solo ADMINISTRATIVO — se filtra por el nombre de cuenta (robusto ante el
+      // typo de la col Categoria, que etiqueta mal "698 - ADMIN: ATENCION MEDICA").
+      // Se excluye "DIST: COMBUST..." (combustible/distribución).
+      if (!/ADMIN/i.test(cuentaRaw)) continue;
+
+      const mes = parsearMes(row[iFecha]);
+      if (!mes) continue;
+
+      const monto = _num(row[iDebe]) - (iHaber != null ? _num(row[iHaber]) : 0);
+      if (monto === 0) continue;
+
+      const c = _parseCuenta(cuentaRaw);
+      if (!acum[mes]) acum[mes] = {};
+      if (!acum[mes][c.full]) acum[mes][c.full] = { codigo: c.codigo, nombre: c.nombre, full: c.full, total: 0, facturas: [] };
+      const g = acum[mes][c.full];
+      g.total += monto;
+      g.facturas.push({
+        fecha:       row[iFecha] instanceof Date
+                       ? Utilities.formatDate(row[iFecha], 'America/Argentina/Buenos_Aires', 'dd/MM/yyyy')
+                       : String(row[iFecha] || ''),
+        proveedor:   iProv != null ? String(row[iProv] || '').trim() : '',
+        comprobante: iComp != null ? String(row[iComp] || '').trim() : '',
+        monto:       Math.round(monto),
+      });
+    }
+
+    // Armar salida por mes: cuentas ordenadas por total desc, con subtotal y total del mes
+    const resultado = {};
+    Object.keys(acum).forEach(function(mes) {
+      const cuentas = Object.keys(acum[mes]).map(function(k) {
+        const g = acum[mes][k];
+        return {
+          codigo:   g.codigo,
+          nombre:   g.nombre,
+          cuenta:   g.full,
+          total:    Math.round(g.total),
+          nFacturas: g.facturas.length,
+          facturas: g.facturas.sort(function(a, b) { return b.monto - a.monto; }),
+        };
+      }).sort(function(a, b) { return b.total - a.total; });
+      const total = cuentas.reduce(function(s, c) { return s + c.total; }, 0);
+      resultado[mes] = { total: total, porCuenta: cuentas };
+    });
+
+    Logger.log('gastosEstructura — meses: ' + Object.keys(resultado).join(', '));
+    return resultado;
+
+  } catch (e) {
+    Logger.log('leerGastosEstructura error: ' + e);
     return null;
   }
 }
