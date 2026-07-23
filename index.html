@@ -604,6 +604,10 @@
     </div>
     <div class="nota-fuente">A Cobrar: Fernando Solís · Insumos: OC Guillermo Konicek · Alquiler: Partes diarios Adrián Caram · MO: TANGO (total mensual estimado, no atribuible por obra)</div>
 
+    <!-- Otros Gastos o salidas: placeholders sin clasificar, NO son obras — se
+         muestran aparte con un formato bien distinto a la tabla de arriba -->
+    <div id="otros-gastos-obra"></div>
+
     <!-- Gráficos de barras por categoría -->
     <div id="charts-por-obra" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:20px;"></div>
   </div>
@@ -671,6 +675,10 @@
     <div id="container-margen-tipo">
       <div class="nd" style="text-align:center;padding:20px;font-size:13px;">Presioná "Actualizar datos" para cargar desde Drive</div>
     </div>
+
+    <!-- Otros Gastos o salidas: placeholders sin clasificar, NO son obras — no
+         entran en ningún tipo de contratación, se muestran aparte -->
+    <div id="otros-gastos-tipo"></div>
   </div>
 </div>
 
@@ -2371,30 +2379,41 @@ function _filaMargenHTML(r, moEsEstim, tnTotalGlobal) {
     </tr>`;
 }
 
-// Fila para "Otros Gastos o salidas" (placeholders sin clasificar: Obra no
-// disponible, Provisión de Pavimax/asfalto frío/caliente, etc.) — no son un
-// contrato de obra, así que no tiene sentido mostrar MO ni Margen prorrateados.
-// Solo se muestra lo que haya de A Cobrar, Insumos, TN y Alquiler.
-function _filaOtroGastoHTML(r) {
+// "Otros Gastos o salidas" (placeholders sin clasificar: Obra no disponible,
+// Provisión de Pavimax/asfalto frío/caliente, etc.) — NO son un contrato de
+// obra. Se renderizan como un bloque aparte (no como filas de tabla) para que
+// se note a simple vista que es otra cosa: un detalle a tener en cuenta, no
+// una obra más. Solo se muestra lo que haya de A Cobrar, Insumos, TN y
+// Alquiler — sin MO ni Margen, que no tienen sentido acá.
+function _itemOtroGastoHTML(r) {
   const o = r.o;
   const _tnPartes = [];
   if (r.tnObra > 0)     _tnPartes.push(fmtTn(r.tnObra) + ' tn');
   if (r.tnFrioObra > 0) _tnPartes.push(fmtTn(r.tnFrioObra) + ' frío');
   const tnLabel = _tnPartes.join(' + ');
-  const tnCell = (r.tnObra > 0 || r.tnFrioObra > 0)
-    ? `<span style="font-size:12px;">${tnLabel}</span>`
-    : '<span class="nd">—</span>';
   const codEsc2 = (o.cod_obra || '').replace(/'/g, "\\'");
   const nomEsc  = (o.nombre  || '').replace(/'/g, "\\'");
-  return `<tr>
-      <td title="Ver historial de todos los meses" style="cursor:pointer;" onclick="openHistorialObra('${codEsc2}','${nomEsc}')"><code style="font-size:11px;background:#f1f5f9;padding:2px 5px;border-radius:3px;text-decoration:underline dotted;">${o.cod_obra}</code><br><small style="color:var(--muted);font-size:10px;">${o.nombre}</small></td>
-      <td class="num">${r.aCobrar > 0 ? `<strong class="pos-val">${fmt(r.aCobrar)}</strong>` : '<span class="nd">—</span>'}</td>
-      <td class="num">${r.insumos  > 0 ? `<span class="neg-val">${fmt(r.insumos)}</span>`  : '<span class="nd">—</span>'}</td>
-      <td class="num"><span class="nd">—</span></td>
-      <td class="num">${tnCell}</td>
-      <td class="num">${r.alquiler > 0 ? `<span class="neg-val">${fmt(r.alquiler)}</span>` : '<span class="nd">—</span>'}</td>
-      <td class="num"><span class="nd">—</span></td>
-    </tr>`;
+  const dato = (label, val) => val ? `<span style="margin-right:16px;"><span style="color:var(--muted);">${label}:</span> <strong>${val}</strong></span>` : '';
+  const datos = [
+    dato('A Cobrar', r.aCobrar > 0 ? fmt(r.aCobrar) : ''),
+    dato('Insumos', r.insumos > 0 ? fmt(r.insumos) : ''),
+    dato('TN', tnLabel),
+    dato('Alquiler', r.alquiler > 0 ? fmt(r.alquiler) : ''),
+  ].filter(Boolean).join('');
+  return `<div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding:9px 4px;border-bottom:1px dashed #fca5a5;">
+    <span style="cursor:pointer;font-size:13px;font-weight:600;color:#92400e;text-decoration:underline dotted;" title="Ver historial de todos los meses" onclick="openHistorialObra('${codEsc2}','${nomEsc}')">${o.cod_obra}</span>
+    <span style="font-size:12px;">${datos || '<span class="nd">Sin montos este mes</span>'}</span>
+  </div>`;
+}
+
+// Construye el bloque completo de "Otros Gastos o salidas" — un card con fondo
+// distinto (no una tabla), compartido entre "por obra" y "por tipo de contratación".
+function _renderOtrosGastosBlock(otrosGastos) {
+  if (!otrosGastos || otrosGastos.length === 0) return '';
+  return `<div style="margin-top:16px;background:#fef2f2;border:1.5px dashed #fca5a5;border-radius:10px;padding:12px 16px;">
+    <div style="font-size:12px;font-weight:700;color:#92400e;margin-bottom:6px;">⚠ Otros Gastos o salidas <span style="font-weight:400;">· ${otrosGastos.length} ítem${otrosGastos.length !== 1 ? 's' : ''} sin clasificar — no son obras, revisar a qué imputar</span></div>
+    ${otrosGastos.map(r => _itemOtroGastoHTML(r)).join('')}
+  </div>`;
 }
 
 // ================================================================
@@ -2498,11 +2517,14 @@ function renderResumenObra() {
 
   const datos = computeMargenFilas();
   const busq = BUSQUEDA_OBRA.obra;
+  const otrosGastosDivEl = document.getElementById('otros-gastos-obra');
   if (tbody && !datos) {
     tbody.innerHTML = '<tr><td colspan="7" class="nd" style="text-align:center;padding:20px;">Presioná "Actualizar datos" para cargar desde Drive</td></tr>';
+    if (otrosGastosDivEl) otrosGastosDivEl.innerHTML = '';
   } else if (tbody && busq && !datos.rows.some(r => _obraMatchBusqueda(r.o, busq))) {
     tbody.innerHTML = `<tr><td colspan="7" class="nd" style="text-align:center;padding:20px;">Sin obras que coincidan con "${busq}" en este período</td></tr>`;
     renderChartsObra({ insumos: [], mo: [], alquiler: [], tn: [] });
+    if (otrosGastosDivEl) otrosGastosDivEl.innerHTML = '';
   } else if (tbody) {
     const rows = busq ? datos.rows.filter(r => _obraMatchBusqueda(r.o, busq)) : datos.rows;
     const { moEsEstim, tnTotalGlobal } = datos;
@@ -2536,14 +2558,8 @@ function renderResumenObra() {
 
     // "Otros Gastos o salidas": placeholders sin clasificar (Obra no disponible,
     // Provisión de Pavimax/asfalto frío/caliente, etc.) — no son un contrato de
-    // obra, se listan aparte y sin MO/Margen (ver _filaOtroGastoHTML).
-    const otrosGastos = rows.filter(r => r.otroGasto);
-    if (otrosGastos.length > 0) {
-      filas.push(`<tr><td colspan="7" style="background:#fef2f2;padding:5px 12px;font-size:11px;color:#92400e;border-top:2px solid var(--border);font-style:italic;">
-        ⚠ Otros Gastos o salidas · ${otrosGastos.length} ítem${otrosGastos.length !== 1 ? 's' : ''} sin clasificar — revisar a qué obra imputar
-      </td></tr>`);
-      otrosGastos.forEach(r => filas.push(_filaOtroGastoHTML(r)));
-    }
+    // obra. Van en un bloque aparte (fuera de la tabla), no como filas más.
+    if (otrosGastosDivEl) otrosGastosDivEl.innerHTML = _renderOtrosGastosBlock(rows.filter(r => r.otroGasto));
 
     // Fila total — MO es la suma de la MO prorateada de las obras mostradas (no el
     // total de la empresa vía TANGO), para que coincida exactamente con la suma de
@@ -2586,13 +2602,21 @@ function renderResumenTipoContrato() {
   if (!cont) return;
 
   const datos = computeMargenFilas();
+  const otrosGastosDivTipo = document.getElementById('otros-gastos-tipo');
   if (!datos) {
     cont.innerHTML = '<div class="nd" style="text-align:center;padding:20px;font-size:13px;">Presioná "Actualizar datos" para cargar desde Drive</div>';
+    if (otrosGastosDivTipo) otrosGastosDivTipo.innerHTML = '';
     return;
   }
   const { moEsEstim, tnTotalGlobal } = datos;
   const busq = BUSQUEDA_OBRA.tipo;
-  const rows = busq ? datos.rows.filter(r => _obraMatchBusqueda(r.o, busq)) : datos.rows;
+  const rowsConBusq = busq ? datos.rows.filter(r => _obraMatchBusqueda(r.o, busq)) : datos.rows;
+
+  // "Otros Gastos o salidas" (placeholders sin clasificar) no entran en ningún
+  // tipo de contratación — van en su propio bloque, no como un tipo más.
+  const rows = rowsConBusq.filter(r => !r.otroGasto);
+  const otrosGastosTipo = rowsConBusq.filter(r => r.otroGasto);
+  if (otrosGastosDivTipo) otrosGastosDivTipo.innerHTML = _renderOtrosGastosBlock(otrosGastosTipo);
 
   // Las obras "Interno" ya vienen excluidas de `rows` (computeMargenObrasMes/Total),
   // así el total de esta pestaña coincide siempre con el de "Contribución marginal
@@ -2658,11 +2682,16 @@ function renderResumenTipoContrato() {
     </div>`;
   }).join('');
 
-  // Total general (suma de los márgenes por obra de todos los tipos)
+  // Total general (suma de los márgenes por obra de todos los tipos + Otros
+  // Gastos o salidas) — así coincide con el TOTAL de "Contribución marginal por obra"
   const totG = { aCobrar: 0, insumos: 0, mo: 0, alquiler: 0, margen: 0 };
   lista.forEach(g => {
     totG.aCobrar += g.tot.aCobrar; totG.insumos += g.tot.insumos; totG.mo += g.tot.mo;
     totG.alquiler += g.tot.alquiler; totG.margen += g.tot.margen;
+  });
+  otrosGastosTipo.forEach(r => {
+    totG.aCobrar += r.aCobrar; totG.insumos += r.insumos; totG.mo += r.moObra || 0;
+    totG.alquiler += r.alquiler; totG.margen += r.margen;
   });
   const mgG = totG.margen > 0 ? 'pos-val' : totG.margen < 0 ? 'neg-val' : '';
   const footer = `<div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-top:16px;font-size:13px;display:flex;flex-wrap:wrap;gap:8px 24px;">
