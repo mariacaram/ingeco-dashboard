@@ -1605,7 +1605,7 @@
   <!-- Evolución mensual del resultado de cada unidad -->
   <div class="section">
     <div class="section-title">Resultado mensual por unidad · 2026</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">Cada barra es el resultado del mes: <span style="color:#16a34a;font-weight:700;">verde</span> = ganó, <span style="color:#dc2626;font-weight:700;">rojo</span> = perdió. Los meses sin barra aún no tienen datos suficientes.</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">Cada barra es el resultado del mes: <span style="color:#16a34a;font-weight:700;">verde</span> = ganó, <span style="color:#dc2626;font-weight:700;">rojo</span> = perdió. Los meses sin barra aún no tienen datos suficientes. <strong>Hacé click en un mes para ir al detalle de esa sección.</strong></div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px;">
       <div class="chart-card"><h3 style="color:#15803d;">🏗 Margen Obras</h3><div style="height:200px;"><canvas id="chart-rent-obras"></canvas></div></div>
       <div class="chart-card"><h3 style="color:#92400e;">🔧 Resultado Taller</h3><div style="height:200px;"><canvas id="chart-rent-taller"></canvas></div></div>
@@ -4506,7 +4506,7 @@ function _fmtEjeRent(v) {
 }
 
 const _rentCharts = {};
-function _rentBarChart(canvasId, meses, valores) {
+function _rentBarChart(canvasId, meses, valores, targetTab) {
   const cv = document.getElementById(canvasId);
   if (!cv || typeof Chart === 'undefined') return;
   if (_rentCharts[canvasId]) _rentCharts[canvasId].destroy();
@@ -4518,9 +4518,19 @@ function _rentBarChart(canvasId, meses, valores) {
     options: {
       responsive: true, maintainAspectRatio: false,
       animation: { duration: 500 },
+      // Click en un mes → ir a esa sección con ese mes seleccionado
+      onClick: (evt, elements) => {
+        if (!targetTab || !elements || elements.length === 0) return;
+        const mes = meses[elements[0].index];
+        if (mes) { setMes(mes); openTab(targetTab); }
+      },
+      onHover: (evt, elements) => { if (evt.native && evt.native.target) evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; },
       plugins: {
         legend: { display: false },
-        tooltip: { callbacks: { label: c => c.raw == null ? 'sin datos suficientes' : fmt(c.raw) } }
+        tooltip: { callbacks: {
+          label: c => c.raw == null ? 'sin datos suficientes' : fmt(c.raw),
+          footer: () => targetTab ? 'Click para ver el detalle del mes' : ''
+        } }
       },
       scales: {
         x: { grid: { display: false }, ticks: { font: { size: 11, weight: '600' }, color: '#64748b' } },
@@ -4536,10 +4546,10 @@ function renderRentabilidadCharts() {
   const hoyIdx = (new Date().getFullYear() === 2026) ? new Date().getMonth() : 11;
   const meses = MES_ORDER.slice(0, hoyIdx + 1);
   const res = meses.map(m => _resultadoUnidadesMes(m));
-  _rentBarChart('chart-rent-obras',      meses, res.map(r => r.margenObras));
-  _rentBarChart('chart-rent-taller',     meses, res.map(r => r.resultTaller));
-  _rentBarChart('chart-rent-planta',     meses, res.map(r => r.resultPlanta));
-  _rentBarChart('chart-rent-estructura', meses, res.map(r => r.gastosEstructura));
+  _rentBarChart('chart-rent-obras',      meses, res.map(r => r.margenObras),      'margen');
+  _rentBarChart('chart-rent-taller',     meses, res.map(r => r.resultTaller),     'taller');
+  _rentBarChart('chart-rent-planta',     meses, res.map(r => r.resultPlanta),     'planta');
+  _rentBarChart('chart-rent-estructura', meses, res.map(r => r.gastosEstructura), 'gastos-estructura');
 }
 
 function renderRentabilidad() {
