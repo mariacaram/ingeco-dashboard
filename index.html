@@ -458,7 +458,15 @@
     content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .5;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.035'/%3E%3C/svg%3E");
   }
-  .header, .page-body, #login-overlay { position: relative; z-index: 1; }
+  .header, .page-body { position: relative; z-index: 1; }
+  /* El login-overlay se mantiene fixed a pantalla completa por encima de todo
+     (NO se lo saca de fixed: es lo que bloquea ver los datos sin loguearse). */
+  #login-overlay { z-index: 9999; }
+  /* SEGURIDAD (defensa en profundidad): el contenido (header + datos) está
+     OCULTO hasta que el body tenga la clase .authed (la agrega el login).
+     Así, aunque el overlay fallara, no se muestra ningún dato sin loguearse. */
+  body:not(.authed) .header,
+  body:not(.authed) .page-body { display: none !important; }
 
   /* Scrollbar a tono */
   ::-webkit-scrollbar { width: 11px; height: 11px; }
@@ -591,6 +599,68 @@
   /* Ídem en las tablas por tipo de contratación (mismas columnas que por obra) */
   body.role-admin .tabla-margen-tipo th:nth-child(4),
   body.role-admin .tabla-margen-tipo td:nth-child(4):not([colspan]) { display: none !important; }
+
+  /* ============================================================
+     RESPONSIVE — celular / tablet (≤ 860px)
+     El sidebar pasa a ser una barra de navegación horizontal arriba,
+     el contenido va a todo el ancho y los paneles ocupan la pantalla.
+     ============================================================ */
+  @media (max-width: 860px) {
+    /* Evita el scroll horizontal de toda la página (los contenedores internos
+       con overflow-x propio —tablas, nav, meses— siguen scrolleando igual). */
+    html, body { overflow-x: hidden; max-width: 100%; }
+    /* Header: apilado y compacto */
+    .header { flex-wrap: wrap; gap: 8px 12px; padding: 10px 14px; align-items: center; }
+    .header h1 { font-size: 15px; letter-spacing: 0; }
+    .header .subtitle { font-size: 11px; }
+    .header > div:last-child { flex-wrap: wrap; gap: 8px 12px; row-gap: 6px; }
+    .month-selector { flex-wrap: nowrap; width: 100%; min-width: 0; }
+    #month-btns { overflow-x: auto; flex-wrap: nowrap; flex: 1 1 auto; min-width: 0; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
+    #month-btns::-webkit-scrollbar { height: 0; }
+    .month-btn { flex: 0 0 auto; }
+    .refresh-area { align-items: flex-start; }
+    .last-update { text-align: left; }
+    .header::after { display: none; } /* la línea vial se rompe con el wrap */
+
+    /* Layout: sidebar arriba (horizontal), contenido debajo a todo el ancho */
+    .page-body { flex-direction: column; }
+    .sidebar-nav {
+      position: static; width: 100%; height: auto;
+      display: flex; flex-direction: row; flex-wrap: nowrap;
+      overflow-x: auto; -webkit-overflow-scrolling: touch;
+      gap: 4px; padding: 8px 10px;
+      border-right: none; border-bottom: 2px solid rgba(255,255,255,0.12);
+      scrollbar-width: none;
+    }
+    .sidebar-nav::-webkit-scrollbar { height: 0; }
+    .sidebar-group { display: flex; flex-direction: row; gap: 4px; }
+    .sidebar-group-title { display: none; }
+    .tab-btn {
+      white-space: nowrap; flex: 0 0 auto; width: auto;
+      border-left: none; border-bottom: 3px solid transparent;
+      padding: 8px 12px; border-radius: 8px 8px 0 0;
+    }
+    .tab-btn.active { border-left: none; border-bottom-color: var(--accent); }
+    .tab-btn:hover:not(.active) { transform: none; }
+    .tab-btn.sidebar-sub svg { display: none; }
+
+    .content { padding: 14px 12px; max-width: 100%; }
+
+    /* KPI y gráficos: una sola columna */
+    .kpi-grid { grid-template-columns: 1fr !important; }
+    .grid2 { grid-template-columns: 1fr; }
+    #charts-por-obra, #charts-planta { grid-template-columns: 1fr !important; }
+
+    /* Paneles laterales y drawers: pantalla completa */
+    .side-panel { width: 100%; right: -100%; padding: 18px; }
+    #pend-drawer { width: 100%; max-width: 100%; }
+
+    /* Login: menos padding para pantallas chicas */
+    .login-box { padding: 30px 22px; max-width: 92vw; }
+
+    /* Organigrama: permitir scroll horizontal sin romper */
+    .org-wrap { padding-bottom: 20px; }
+  }
 </style>
 </head>
 <body>
@@ -1856,7 +1926,8 @@ let PRECIO_ASFALTO_AJUSTES = (function() {
   try { return JSON.parse(localStorage.getItem('ingeco_precio_ajustes') || '[]'); }
   catch(e) { return []; }
 })();
-// Precio efectivo de un mes: ajuste manual vigente > planilla (María) > base de referencia.
+// Precio efectivo de un mes: ajuste manual vigente > base de referencia.
+// El precio se define acá en el tablero (base + ajustes), no en una planilla externa.
 function _precioAsfaltoMes(mes) {
   const idx = MES_ORDER.indexOf(mes);
   if (idx >= 0 && PRECIO_ASFALTO_AJUSTES.length) {
@@ -1867,8 +1938,6 @@ function _precioAsfaltoMes(mes) {
     });
     if (best) return { caliente: +best.caliente || 0, frio: +best.frio || 0 };
   }
-  const s = PRECIO_ASFALTO[mes];
-  if (s && (s.caliente || s.frio)) return { caliente: s.caliente || PRECIO_ASFALTO_BASE.caliente, frio: s.frio || PRECIO_ASFALTO_BASE.frio };
   return { caliente: PRECIO_ASFALTO_BASE.caliente, frio: PRECIO_ASFALTO_BASE.frio };
 }
 function guardarAjustePrecio(desde, caliente, frio) {
@@ -2086,14 +2155,14 @@ const FUENTES = [
   // ── Mano de obra ──────────────────────────────────────────────────────
   { archivo: 'Liquidaciones TANGO (carpeta, un archivo por mes)', responsable: 'Mauro Orellana', fileKey: 'tangoFolder', ultimaActualizacion: '21/07/2026', estado: 'real', dato: 'MO por centro de costo (obras / taller / planta) — 2 quincenas por mes', accion: '✅ Accesible — datos cargados' },
   // ── Planta de Asfalto ─────────────────────────────────────────────────
-  { archivo: 'REMITOS OFICIALES (Google Sheet)', responsable: 'Roberto', fileKey: 'remitosAsfalto', ultimaActualizacion: '28/07/2026', estado: 'parcial', dato: 'Tn caliente/frío despachadas por obra (base del prorrateo de MO)', accion: 'Completar columna PRECIO en la planilla' },
-  { archivo: 'Precio de mercado del asfalto $/tn (Google Sheet)', responsable: 'María Caram', fileKey: 'precioAsfalto', ultimaActualizacion: '26/05/2026', estado: 'parcial', dato: 'Precio $/tn caliente y frío por mes — valoriza la producción', accion: 'Cargar el precio de los meses faltantes' },
+  { archivo: 'REMITOS OFICIALES (Google Sheet)', responsable: 'Roberto', fileKey: 'remitosAsfalto', ultimaActualizacion: '28/07/2026', estado: 'real', dato: 'Tn caliente/frío despachadas por obra (base del prorrateo de MO y del ingreso de Planta)', accion: '✅ Accesible — datos cargados' },
+  { archivo: 'Precio de referencia del asfalto $/tn', responsable: 'Tablero (Rentabilidad)', fileKey: null, ultimaActualizacion: '—', estado: 'real', dato: 'Caliente $315.000/tn · Frío $700.000/tn — se define en el tablero, con ajuste por mes', accion: '✅ Configurado en Rentabilidad (ya no depende de planilla)' },
   { archivo: 'Formulario Ingreso Asfalto + Ajuste de stock (Agustín)', responsable: 'Agustín', fileKey: 'ajusteStock', ultimaActualizacion: '16/07/2026', estado: 'real', dato: 'Ingresos de asfalto (materia prima), costo de compra y ajustes de stock', accion: '✅ Accesible — datos cargados' },
   // ── Equipos / Taller ──────────────────────────────────────────────────
   { archivo: 'Tarifas de equipos + PF mensual (Google Sheet)', responsable: 'Agustín', fileKey: 'equiposFlota', ultimaActualizacion: '02/07/2026', estado: 'real', dato: 'PF (USD) por equipo — tarifa del alquiler interno de maquinaria', accion: '✅ Accesible — datos cargados' },
   { archivo: 'PARTES DIARIOS DE EQUIPOS (Google Sheet)', responsable: 'Nicolás Dall\'Agata', fileKey: 'usageEquipos', ultimaActualizacion: '28/07/2026', estado: 'real', dato: 'Horas por equipo y obra — base del alquiler interno prorrateado', accion: '✅ Accesible — datos cargados' },
   { archivo: 'ENTREGAS DE REPUESTOS (Google Sheet)', responsable: 'Nicolás Dall\'Agata', fileKey: 'repuestosEquipos', ultimaActualizacion: '27/07/2026', estado: 'real', dato: 'Compra de repuestos de máquinas — costo del Taller', accion: '✅ Accesible — datos cargados' },
-  { archivo: 'ÓC Repuestos para Equipos (Alberto Lescano)', responsable: 'Alberto Lescano', fileKey: null, ultimaActualizacion: '29/04/2026', estado: 'parcial', dato: 'OC planta asfalto y equipos (carga manual)', accion: '✅ Accesible — datos cargados' },
+  { archivo: 'ÓC Repuestos para Equipos (Alberto Lescano)', responsable: 'Alberto Lescano', fileKey: null, ultimaActualizacion: '29/04/2026', estado: 'real', dato: 'OC planta asfalto y equipos', accion: '✅ Cargado — carga manual (snapshot abril), no se actualiza sola' },
   // ── Estructura ────────────────────────────────────────────────────────
   { archivo: 'Libro mayor de gastos administrativos (Romina)', responsable: 'Romina', fileKey: 'gastosEstructura', ultimaActualizacion: '16/07/2026', estado: 'real', dato: 'Gastos de Estructura (cuentas ADMIN) por cuenta y mes', accion: '✅ Accesible — datos cargados' }
 ];
@@ -7757,6 +7826,7 @@ function cerrarSesion() {
   if (lu) lu.value = '';
   if (lp) lp.value = '';
   if (le) le.style.display = 'none';
+  document.body.classList.remove('authed'); // vuelve a ocultar el contenido
   document.getElementById('login-overlay').style.display = '';
   if (lu) lu.focus();
 }
@@ -7769,6 +7839,7 @@ function doLogin() {
     sessionStorage.setItem('ingeco_auth', '1');
     sessionStorage.setItem('ingeco_role', user);
     applyRole(user);
+    document.body.classList.add('authed'); // muestra el contenido
     document.getElementById('login-overlay').style.display = 'none';
   } else {
     document.getElementById('login-error').style.display = 'block';
@@ -7788,6 +7859,7 @@ document.getElementById('login-user').addEventListener('keydown', function(e) {
 // Si ya estaba autenticado en esta sesión, restaurar role y ocultar login
 if (sessionStorage.getItem('ingeco_auth') === '1') {
   applyRole(sessionStorage.getItem('ingeco_role') || 'administracion');
+  document.body.classList.add('authed');
   document.getElementById('login-overlay').style.display = 'none';
 }
 
@@ -7795,6 +7867,7 @@ if (sessionStorage.getItem('ingeco_auth') === '1') {
 // INIT
 // ================================================================
 
+_renderMonthButtons(); // botones de mes ya en el primer render (antes de cargar el caché)
 renderMargen();
 renderCobrosReal();
 renderOCInsumos();
