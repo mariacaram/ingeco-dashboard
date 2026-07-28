@@ -1375,7 +1375,8 @@
           <div class="org-name">Romina</div>
           <div class="org-role">Administración</div>
           <div class="org-tasks">
-            <div class="org-task">Gastos administrativos</div>
+            <div class="org-task"><a href="https://docs.google.com/spreadsheets/d/1beFIrKD6ljPKjjssuWP-_TmTH8vr1TktBnVDuX9nxyM/edit?gid=0#gid=0" target="_blank">Gastos administrativos</a></div>
+            <div class="org-task">Carga de gastos de estructura por cuenta</div>
           </div>
         </div>
 
@@ -1612,13 +1613,13 @@
       </div>
     </div>
 
-    <div class="section-title" style="margin-top:6px;">Gastos de Estructura por cuenta · <span id="mes-label-gest"></span></div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Solo gastos administrativos (ADMIN). No incluye combustible/distribución. Hacé click en una cuenta para ver las facturas.</div>
+    <div class="section-title" style="margin-top:6px;">Gastos de Estructura por categoría · <span id="mes-label-gest"></span></div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Solo gastos administrativos (ADMIN). No incluye combustible/distribución. Agrupados por categoría; hacé click en una cuenta para ver las facturas.</div>
     <div class="table-wrap">
       <table>
         <thead>
           <tr>
-            <th>Cuenta</th>
+            <th>Categoría / Cuenta</th>
             <th class="num">N° Facturas</th>
             <th class="num">Total</th>
           </tr>
@@ -1628,7 +1629,7 @@
         </tbody>
       </table>
     </div>
-    <div class="nota-fuente" style="margin-top:6px;">📄 Fuente: libro mayor de gastos (asientos por factura) · agrupado por cuenta contable y mes.</div>
+    <div class="nota-fuente" style="margin-top:6px;">📄 Fuente: libro mayor de gastos administrativos (Romina) · asientos por factura, agrupados por categoría y mes.</div>
   </div>
 </div>
 
@@ -6981,6 +6982,21 @@ function _sintetizarTotales() {
 // ================================================================
 // GASTOS DE ESTRUCTURA — libro mayor de gastos administrativos por cuenta/mes
 // ================================================================
+// Categoría de alto nivel de una cuenta de gastos administrativos: consolida
+// cuentas afines (ej. las 3 de honorarios) para ordenar la sección por categoría.
+function _catGastoEstructura(nombre) {
+  const n = (nombre || '').toLowerCase();
+  if (n.includes('honorario'))                       return 'Honorarios';
+  if (n.includes('viatico') || n.includes('movilidad')) return 'Viáticos y movilidad';
+  if (n.includes('servicio'))                        return 'Servicios (luz, gas, tel.)';
+  if (n.includes('mantenimiento'))                   return 'Mantenimiento';
+  if (n.includes('refrigerio'))                      return 'Refrigerios';
+  if (n.includes('licit'))                           return 'Gastos de licitación';
+  if (n.includes('medic'))                           return 'Atención médica';
+  if (n.includes('gastos varios') || n.includes('varios')) return 'Gastos varios';
+  return nombre || 'Otros';
+}
+
 function renderGastosEstructura() {
   const kpiEl  = document.getElementById('kpi-gest-total');
   const kpiSub = document.getElementById('kpi-gest-sub');
@@ -6997,22 +7013,47 @@ function renderGastosEstructura() {
     return;
   }
 
+  // Agrupar las cuentas por categoría de alto nivel
+  const catMap = {};
+  (datos.porCuenta || []).forEach(c => {
+    const cat = _catGastoEstructura(c.nombre);
+    if (!catMap[cat]) catMap[cat] = { categoria: cat, total: 0, nFacturas: 0, cuentas: [] };
+    catMap[cat].total += c.total; catMap[cat].nFacturas += c.nFacturas; catMap[cat].cuentas.push(c);
+  });
+  const cats = Object.values(catMap)
+    .map(g => { g.cuentas.sort((a, b) => b.total - a.total); return g; })
+    .sort((a, b) => b.total - a.total);
+
   if (kpiEl)  { kpiEl.textContent = fmt(datos.total); kpiEl.className = 'kpi-value neg-val'; }
-  if (kpiSub) kpiSub.textContent = (datos.porCuenta ? datos.porCuenta.length : 0) + ' cuentas · ' + (MES[mesActual] || mesActual);
+  if (kpiSub) kpiSub.textContent = cats.length + ' categorías · ' + (datos.porCuenta ? datos.porCuenta.length : 0) + ' cuentas · ' + (MES[mesActual] || mesActual);
 
   if (!tbody) return;
-  const filas = (datos.porCuenta || []).map(c => {
-    const cuentaEsc = (c.cuenta || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-    return `<tr style="cursor:pointer;" onclick="openGastoEstructuraPanel('${cuentaEsc}')" title="Ver facturas de esta cuenta">
-      <td style="font-size:12px;"><span style="text-decoration:underline dotted;color:var(--primary);font-weight:600;">${c.nombre}</span>${c.codigo ? `<br><small style="color:var(--muted);font-size:10px;">Cuenta ${c.codigo}</small>` : ''}</td>
-      <td class="num" style="color:var(--muted);">${c.nFacturas}</td>
-      <td class="num neg-val"><strong>${fmt(c.total)}</strong></td>
+  const filas = cats.map(g => {
+    // Categoría con 1 sola cuenta cuyo nombre coincide → una fila simple (evita repetir)
+    const cuentaUnica = g.cuentas.length === 1;
+    const headEsc = cuentaUnica ? (g.cuentas[0].cuenta || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'") : '';
+    let html = `<tr style="background:#f8fafc;border-top:2px solid var(--border);${cuentaUnica ? 'cursor:pointer;' : ''}"${cuentaUnica ? ` onclick="openGastoEstructuraPanel('${headEsc}')" title="Ver facturas"` : ''}>
+      <td style="font-size:12px;font-weight:700;color:var(--primary);">${g.categoria}${cuentaUnica && g.cuentas[0].codigo ? `<br><small style="color:var(--muted);font-weight:400;font-size:10px;">Cuenta ${g.cuentas[0].codigo}</small>` : ''}</td>
+      <td class="num" style="color:var(--muted);font-weight:700;">${g.nFacturas}</td>
+      <td class="num neg-val"><strong>${fmt(g.total)}</strong></td>
     </tr>`;
+    // Categoría con varias cuentas → subfilas indentadas por cuenta
+    if (!cuentaUnica) {
+      html += g.cuentas.map(c => {
+        const cuentaEsc = (c.cuenta || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        return `<tr style="cursor:pointer;" onclick="openGastoEstructuraPanel('${cuentaEsc}')" title="Ver facturas de esta cuenta">
+          <td style="font-size:12px;padding-left:26px;"><span style="text-decoration:underline dotted;color:var(--primary);">${c.nombre}</span>${c.codigo ? ` <small style="color:var(--muted);font-size:10px;">· ${c.codigo}</small>` : ''}</td>
+          <td class="num" style="color:var(--muted);">${c.nFacturas}</td>
+          <td class="num neg-val">${fmt(c.total)}</td>
+        </tr>`;
+      }).join('');
+    }
+    return html;
   }).join('');
-  const totalFila = `<tr style="background:#f8fafc;font-weight:700;border-top:2px solid var(--border);">
-    <td>TOTAL</td>
-    <td class="num" style="color:var(--muted);">${(datos.porCuenta || []).reduce((s, c) => s + c.nFacturas, 0)}</td>
-    <td class="num neg-val">${fmt(datos.total)}</td>
+  const totalFila = `<tr style="background:var(--primary);color:#fff;font-weight:700;">
+    <td style="color:#fff;">TOTAL GASTOS DE ESTRUCTURA</td>
+    <td class="num" style="color:#cbd5e1;">${(datos.porCuenta || []).reduce((s, c) => s + c.nFacturas, 0)}</td>
+    <td class="num" style="color:#fff;">${fmt(datos.total)}</td>
   </tr>`;
   tbody.innerHTML = filas + totalFila;
 }
