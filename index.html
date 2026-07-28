@@ -1892,6 +1892,7 @@ function getMOEstimadoGenerico(mesKey, getFn) {
 }
 function getMOEstimado(mesKey) { return getMOEstimadoGenerico(mesKey, getMOObra); }
 function getMOTaller(mes) { return getMO(mes).filter(r => r.clasificacion === 'Taller'); }
+function getMOEstimadoTaller(mesKey) { return getMOEstimadoGenerico(mesKey, getMOTaller); }
 function getMOPlanta(mes) { return getMO(mes).filter(r => r.clasificacion === 'Pta. Asfalto'); }
 function getMOEstimadoPlanta(mesKey) { return getMOEstimadoGenerico(mesKey, getMOPlanta); }
 
@@ -6791,9 +6792,19 @@ function renderMOClasif() {
       kpiTaller.className = 'kpi-value neg-val';
       if (kpiTallerSub) kpiTallerSub.textContent = tallerArr.map(r => r.centro).join(', ');
     } else {
-      kpiTaller.textContent = 'sin dato';
-      kpiTaller.className = 'kpi-value nd';
-      if (kpiTallerSub) kpiTallerSub.textContent = 'Actualizá datos para cargar desde TANGO';
+      // Sin datos del mes → estimar prorrateando el último mes con Taller cargado
+      // (misma lógica que Contribución marginal). Clasificación Taller = col S de
+      // ambas quincenas de las planillas de Mauro Orellana.
+      const est = getMOEstimadoTaller(mesActual);
+      if (est) {
+        kpiTaller.textContent = '~' + fmt(est.monto);
+        kpiTaller.className = 'kpi-value neg-val';
+        if (kpiTallerSub) kpiTallerSub.textContent = 'Estimado — prorrateo desde ' + (MES[est.refMes] || est.refMes);
+      } else {
+        kpiTaller.textContent = 'sin dato';
+        kpiTaller.className = 'kpi-value nd';
+        if (kpiTallerSub) kpiTallerSub.textContent = 'Actualizá datos para cargar desde TANGO';
+      }
     }
   }
 
