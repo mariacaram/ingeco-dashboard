@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Dashboard Ejecutivo INGECO — 2026</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231b3a5c'/%3E%3Cpath d='M9 22 L15 10 L23 22' stroke='%23e8a100' stroke-width='2.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cline x1='11.5' y1='17' x2='20.5' y2='17' stroke='%23e8a100' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.min.js"></script>
 <style>
   :root {
@@ -18,9 +22,23 @@
     --muted: #64748b;
     --nd-bg: #f1f5f9;
     --nd-text: #94a3b8;
+    /* Sombras tintadas al azul del navy (no negro plano) — dan profundidad premium */
+    --sh-sm: 0 1px 2px rgba(27,58,92,.06), 0 1px 3px rgba(27,58,92,.08);
+    --sh-md: 0 4px 12px rgba(27,58,92,.09), 0 2px 4px rgba(27,58,92,.06);
+    --sh-lg: 0 18px 40px -12px rgba(27,58,92,.22), 0 8px 16px -8px rgba(27,58,92,.14);
+    --sh-gold: 0 10px 30px -10px rgba(232,161,0,.32);
+    --ease-out: cubic-bezier(.22,.68,.28,1);
+    --ease-spring: cubic-bezier(.34,1.56,.64,1);
+    --r-sm: 8px; --r-md: 12px; --r-lg: 16px;
+    --font-display: 'Space Grotesk', 'Segoe UI', system-ui, sans-serif;
+    --font-body: 'Inter', 'Segoe UI', system-ui, sans-serif;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+  html { scroll-behavior: smooth; }
+  body { font-family: var(--font-body); background: var(--bg); color: var(--text); font-size: 14px; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+  /* Cifras alineadas en columnas — clave en un tablero de datos */
+  .num, .kpi-value, table td, table th, code { font-variant-numeric: tabular-nums; }
+  h1, h2, h3, .kpi-value, .section-title, .brand { font-family: var(--font-display); }
 
   /* ATRIBUCIÓN DE FUENTE */
   .fuente {
@@ -431,6 +449,136 @@
     padding: 8px 12px; text-align: center;
   }
 
+  /* ============================================================
+     CAPA PREMIUM — animaciones, interacciones y textura (asfalto)
+     ============================================================ */
+
+  /* Textura sutil de grano — rompe la planitud digital, evoca superficie de asfalto */
+  body::before {
+    content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .5;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.035'/%3E%3C/svg%3E");
+  }
+  .header, .page-body, #login-overlay { position: relative; z-index: 1; }
+
+  /* Scrollbar a tono */
+  ::-webkit-scrollbar { width: 11px; height: 11px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #c3d0df; border-radius: 20px; border: 3px solid var(--bg); }
+  ::-webkit-scrollbar-thumb:hover { background: #9fb3c9; }
+
+  /* Keyframes */
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes popIn { 0% { opacity: 0; transform: scale(.94); } 60% { transform: scale(1.02); } 100% { opacity: 1; transform: scale(1); } }
+  @keyframes roadDash { to { background-position: -34px 0; } }
+  @keyframes sheen { to { transform: translateX(240%); } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Línea vial dorada (marca de ruta) bajo el header — guiño al rubro asfalto */
+  .header::after {
+    content: ''; position: absolute; left: 0; right: 0; bottom: -3px; height: 3px;
+    background: repeating-linear-gradient(90deg, var(--accent) 0 20px, transparent 20px 34px);
+    animation: roadDash 1.1s linear infinite; opacity: .85;
+  }
+  .header h1 { font-weight: 700; letter-spacing: -.02em; }
+
+  /* Entrada escalonada del contenido al abrir cada pestaña */
+  .tab-panel.active > .section,
+  .tab-panel.active > .kpi-grid { animation: fadeUp .5s var(--ease-out) both; }
+  .tab-panel.active > *:nth-child(1) { animation-delay: .02s; }
+  .tab-panel.active > *:nth-child(2) { animation-delay: .08s; }
+  .tab-panel.active > *:nth-child(3) { animation-delay: .14s; }
+  .tab-panel.active > *:nth-child(4) { animation-delay: .20s; }
+  .tab-panel.active > *:nth-child(5) { animation-delay: .26s; }
+
+  /* Scroll reveal (clase añadida por JS; por defecto todo visible si el JS falla) */
+  .reveal { opacity: 0; transform: translateY(20px); }
+  .reveal.is-visible { opacity: 1; transform: none; transition: opacity .6s var(--ease-out), transform .6s var(--ease-out); }
+
+  /* KPI cards — elevación e interacción */
+  .kpi-card {
+    position: relative; overflow: hidden; border-radius: var(--r-md);
+    box-shadow: var(--sh-sm);
+    transition: transform .35s var(--ease-spring), box-shadow .35s var(--ease-out), border-color .35s var(--ease-out);
+    will-change: transform;
+  }
+  .kpi-card::after {
+    content: ''; position: absolute; top: 0; left: -60%; width: 45%; height: 100%;
+    background: linear-gradient(100deg, transparent, rgba(255,255,255,.55), transparent);
+    transform: skewX(-18deg); opacity: 0; pointer-events: none;
+  }
+  .kpi-card:hover { transform: translateY(-6px) scale(1.015); box-shadow: var(--sh-lg); border-color: #b9c8db; }
+  .kpi-card:hover::after { opacity: 1; animation: sheen .8s var(--ease-out); }
+  .kpi-card .kpi-value { transition: transform .35s var(--ease-spring); }
+  .kpi-card:hover .kpi-value { transform: scale(1.04); transform-origin: left; }
+  .kpi-grid > .kpi-card { animation: popIn .5s var(--ease-out) both; }
+  .kpi-grid > .kpi-card:nth-child(2) { animation-delay: .06s; }
+  .kpi-grid > .kpi-card:nth-child(3) { animation-delay: .12s; }
+  .kpi-grid > .kpi-card:nth-child(4) { animation-delay: .18s; }
+  .kpi-grid > .kpi-card:nth-child(5) { animation-delay: .24s; }
+  .kpi-grid > .kpi-card:nth-child(6) { animation-delay: .30s; }
+
+  /* Tarjetas genéricas (chart, org, period) — misma física de elevación */
+  .chart-card, .flujo-period-card, .persona-card {
+    border-radius: var(--r-md); box-shadow: var(--sh-sm);
+    transition: transform .35s var(--ease-spring), box-shadow .35s var(--ease-out), border-color .3s;
+  }
+  .chart-card:hover, .persona-card:hover { transform: translateY(-4px); box-shadow: var(--sh-md); border-color: #b9c8db; }
+  .clickable-panel { cursor: pointer; }
+  .clickable-panel:hover { transform: translateY(-6px) scale(1.015) !important; box-shadow: var(--sh-lg) !important; }
+  .org-node { transition: transform .3s var(--ease-spring), box-shadow .3s var(--ease-out); }
+  .org-node:hover { transform: translateY(-3px) scale(1.03); box-shadow: var(--sh-md); z-index: 2; }
+
+  /* Contenedores de tabla */
+  .table-wrap { box-shadow: var(--sh-sm); transition: box-shadow .3s var(--ease-out); }
+  .table-wrap:hover { box-shadow: var(--sh-md); }
+  tbody tr { transition: background .15s ease; }
+
+  /* Botones interactivos — hover + press físico + focus accesible */
+  button, .month-btn, .btn-refresh, .tab-btn, .mp-chip, .login-btn { transition: transform .18s var(--ease-out), background .2s var(--ease-out), box-shadow .2s var(--ease-out), color .2s, border-color .2s; }
+  button:active, .month-btn:active, .btn-refresh:active, .mp-chip:active, .login-btn:active { transform: scale(.96); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+
+  .month-btn { font-family: var(--font-body); font-weight: 600; }
+  .month-btn:hover:not(.active) { transform: translateY(-2px); }
+  .month-btn.active { box-shadow: 0 4px 14px -4px rgba(232,161,0,.6); transform: translateY(-1px); }
+  .btn-refresh:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 16px -6px rgba(0,0,0,.4); }
+  .login-btn:hover { transform: translateY(-2px); box-shadow: var(--sh-gold); }
+
+  /* Sidebar — íconos, indicador animado, hover con deslizamiento */
+  .tab-btn { display: flex; align-items: center; gap: 11px; }
+  .tab-btn svg { width: 17px; height: 17px; flex: 0 0 auto; opacity: .7; transition: opacity .2s, transform .25s var(--ease-spring); }
+  .tab-btn:hover svg { opacity: 1; transform: scale(1.12); }
+  .tab-btn.active svg { opacity: 1; color: var(--accent); }
+  .tab-btn:hover:not(.active) { transform: translateX(3px); }
+  .tab-btn.sidebar-sub svg { width: 6px; height: 6px; }
+  .sidebar-nav { scrollbar-width: thin; }
+
+  /* Chips de mes / filtros con leve elevación */
+  .mp-chip:hover { transform: translateY(-2px); box-shadow: var(--sh-sm); }
+
+  /* Panel lateral — sombra tintada más rica */
+  .side-panel { box-shadow: -12px 0 40px -12px rgba(27,58,92,.3); }
+  .panel-close { transition: transform .2s var(--ease-spring), color .2s; }
+  .panel-close:hover { transform: rotate(90deg); color: var(--neg); }
+
+  /* Spinner del botón de refresh cuando está en curso */
+  .btn-refresh.loading::before { content: ''; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,.4); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; }
+
+  /* Login — entrada con pop */
+  .login-box { animation: popIn .5s var(--ease-out) both; box-shadow: 0 30px 80px -20px rgba(0,0,0,.6); }
+  #login-overlay::after {
+    content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 5px;
+    background: repeating-linear-gradient(90deg, var(--accent) 0 26px, transparent 26px 44px);
+    animation: roadDash 1.4s linear infinite; opacity: .7;
+  }
+
+  /* Respeto por usuarios que prefieren menos movimiento */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+    .reveal { opacity: 1 !important; transform: none !important; }
+  }
+
   /* CONTROL DE ACCESO POR ROL — admin no ve sueldos/MO */
   body.role-admin [data-restrict="sueldos"] { display: none !important; }
   /* Oculta la columna "MO (prorrateada)" (4ta) en la tabla de contribución por obra */
@@ -492,17 +640,17 @@
 <nav class="sidebar-nav" id="sidebar-nav">
   <div class="sidebar-group" id="sidebar-group-margen">
     <div class="sidebar-group-title">Contribución marginal</div>
-    <button class="tab-btn sidebar-sub active" onclick="openTab('margen')">Por obra</button>
-    <button class="tab-btn sidebar-sub" onclick="openTab('margen-tipo')">Por tipo de contratación</button>
+    <button class="tab-btn sidebar-sub active" onclick="openTab('margen')"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="12"/></svg>Por obra</button>
+    <button class="tab-btn sidebar-sub" onclick="openTab('margen-tipo')"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="12"/></svg>Por tipo de contratación</button>
   </div>
-  <button class="tab-btn" onclick="openTab('cobros')">Estado financiero</button>
-  <button class="tab-btn" onclick="openTab('planta')">Planta de Asfalto</button>
-  <button class="tab-btn" data-restrict="sueldos" onclick="openTab('taller')">Taller Mecánico</button>
-  <button class="tab-btn" onclick="openTab('gastos-estructura')">Gastos de Estructura</button>
-  <button class="tab-btn" onclick="openTab('metodologia')">Rentabilidad</button>
-  <button class="tab-btn" onclick="openTab('estructura')">Organigrama y datos</button>
-  <button class="tab-btn" onclick="openTab('manual')">Manual de tareas/instructivos</button>
-  <button class="tab-btn" onclick="openTab('fuentes')">Fuentes de Datos</button>
+  <button class="tab-btn" onclick="openTab('cobros')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6" width="19" height="13" rx="2.5"/><path d="M2.5 10h19"/><path d="M6 15h4"/></svg>Estado financiero</button>
+  <button class="tab-btn" onclick="openTab('planta')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20V10l5 3V10l5 3V9l5 3v8z"/><path d="M3 20h18"/><path d="M6 7V4"/></svg>Planta de Asfalto</button>
+  <button class="tab-btn" data-restrict="sueldos" onclick="openTab('taller')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.2 5.2L4 17l3 3 5.5-5.5a4 4 0 0 0 5.2-5.2l-2.6 2.6-2.2-.4-.4-2.2z"/></svg>Taller Mecánico</button>
+  <button class="tab-btn" onclick="openTab('gastos-estructura')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16"/><path d="M16 8h2a2 2 0 0 1 2 2v11"/><path d="M2 21h20"/><path d="M8 7h2M8 11h2M8 15h2"/></svg>Gastos de Estructura</button>
+  <button class="tab-btn" onclick="openTab('metodologia')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M17 7h4v4"/></svg>Rentabilidad</button>
+  <button class="tab-btn" onclick="openTab('estructura')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="5" rx="1.2"/><rect x="3" y="16" width="6" height="5" rx="1.2"/><rect x="15" y="16" width="6" height="5" rx="1.2"/><path d="M12 8v4M6 16v-2h12v2"/></svg>Organigrama y datos</button>
+  <button class="tab-btn" onclick="openTab('manual')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M8 7h7M8 11h7"/></svg>Manual de tareas/instructivos</button>
+  <button class="tab-btn" onclick="openTab('fuentes')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5.5" rx="7" ry="2.8"/><path d="M5 5.5v6c0 1.5 3.1 2.8 7 2.8s7-1.3 7-2.8v-6"/><path d="M5 11.5v6c0 1.5 3.1 2.8 7 2.8s7-1.3 7-2.8v-6"/></svg>Fuentes de Datos</button>
 </nav>
 
 <!-- CONTENT -->
@@ -6975,8 +7123,8 @@ async function fetchJSONP(url) {
 async function refreshData() {
   const btn = document.getElementById('btn-refresh');
   btn.disabled = true;
-  btn.className = 'btn-refresh';
-  btn.textContent = '⏳ Leyendo Drive...';
+  btn.className = 'btn-refresh loading';
+  btn.textContent = 'Leyendo Drive…';
 
   if (!APPS_SCRIPT_URL) {
     renderAll();
@@ -7072,6 +7220,31 @@ window.addEventListener('load', _syncSidebarOffset);
 window.addEventListener('resize', _syncSidebarOffset);
 _syncSidebarOffset();
 
+// ── Scroll reveal ──────────────────────────────────────────────────────
+// Enriquece con una entrada al hacer scroll. Es puramente aditivo: si el JS
+// falla o no hay IntersectionObserver, todo queda visible (nunca se oculta
+// nada por defecto en el HTML — sólo el JS agrega la clase .reveal, y sólo a
+// elementos que arrancan fuera de la vista, para no tapar lo de arriba).
+const _prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+let _revealObs = null;
+if (!_prefersReduced && 'IntersectionObserver' in window) {
+  _revealObs = new IntersectionObserver((entries) => {
+    entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('is-visible'); _revealObs.unobserve(e.target); } });
+  }, { rootMargin: '0px 0px -8% 0px', threshold: 0.08 });
+}
+function _armScrollReveal() {
+  if (!_revealObs) return;
+  const panel = document.querySelector('.tab-panel.active');
+  if (!panel) return;
+  const vh = window.innerHeight || 800;
+  panel.querySelectorAll('.section, .chart-card').forEach(el => {
+    if (el.classList.contains('reveal')) return;
+    const top = el.getBoundingClientRect().top;
+    if (top > vh * 0.9) { el.classList.add('reveal'); _revealObs.observe(el); }
+  });
+}
+window.addEventListener('load', () => setTimeout(_armScrollReveal, 60));
+
 function openTab(id) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -7086,6 +7259,8 @@ function openTab(id) {
       if (grupo) grupo.classList.add('has-active');
     }
   });
+  window.scrollTo({ top: 0, behavior: 'auto' });
+  setTimeout(_armScrollReveal, 40);
 }
 
 function setMes(mes) {
