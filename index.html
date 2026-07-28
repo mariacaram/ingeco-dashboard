@@ -524,6 +524,10 @@
     transition: transform .35s var(--ease-spring), box-shadow .35s var(--ease-out), border-color .3s;
   }
   .chart-card:hover, .persona-card:hover { transform: translateY(-4px); box-shadow: var(--sh-md); border-color: #b9c8db; }
+  /* Barras de Gastos de Estructura — reaccionan al hover */
+  .gest-bar:hover { background: #f4f7fb; }
+  .gest-bar .gest-bar-fill { transition: width .5s var(--ease-out), filter .2s ease; }
+  .gest-bar:hover .gest-bar-fill { filter: brightness(1.1) saturate(1.1); }
   .clickable-panel { cursor: pointer; }
   .clickable-panel:hover { transform: translateY(-6px) scale(1.015) !important; box-shadow: var(--sh-lg) !important; }
   .org-node { transition: transform .3s var(--ease-spring), box-shadow .3s var(--ease-out); }
@@ -1614,22 +1618,11 @@
     </div>
 
     <div class="section-title" style="margin-top:6px;">Gastos de Estructura por categoría · <span id="mes-label-gest"></span></div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Solo gastos administrativos (ADMIN). No incluye combustible/distribución. Agrupados por categoría; hacé click en una cuenta para ver las facturas.</div>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Categoría / Cuenta</th>
-            <th class="num">N° Facturas</th>
-            <th class="num">Total</th>
-          </tr>
-        </thead>
-        <tbody id="tbody-gest">
-          <tr><td colspan="3" class="nd" style="text-align:center;padding:20px;">Presioná "Actualizar datos" para cargar desde Drive</td></tr>
-        </tbody>
-      </table>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">Solo gastos administrativos (ADMIN). No incluye combustible/distribución. Hacé click en una categoría para ver el detalle.</div>
+    <div class="chart-card" id="gest-chart" style="padding:22px 24px;">
+      <div class="nd" style="text-align:center;padding:20px;font-size:13px;">Presioná "Actualizar datos" para cargar desde Drive</div>
     </div>
-    <div class="nota-fuente" style="margin-top:6px;">📄 Fuente: libro mayor de gastos administrativos (Romina) · asientos por factura, agrupados por categoría y mes.</div>
+    <div class="nota-fuente" style="margin-top:8px;">📄 Fuente: libro mayor de gastos administrativos (Romina) · asientos por factura, agrupados por categoría y mes.</div>
   </div>
 </div>
 
@@ -6997,11 +6990,27 @@ function _catGastoEstructura(nombre) {
   return nombre || 'Otros';
 }
 
+// Paleta por categoría (tonos sobrios, coherentes con la marca)
+const GEST_COLORS = ['#1b3a5c', '#2f6ca8', '#e8a100', '#0f766e', '#9a3412', '#6d28d9', '#be123c', '#0891b2', '#4d7c0f', '#64748b'];
+
+// Agrupa las cuentas del mes por categoría de alto nivel, ordenadas por total desc.
+function _gestCategorias(datos) {
+  const catMap = {};
+  (datos.porCuenta || []).forEach(c => {
+    const cat = _catGastoEstructura(c.nombre);
+    if (!catMap[cat]) catMap[cat] = { categoria: cat, total: 0, nFacturas: 0, cuentas: [] };
+    catMap[cat].total += c.total; catMap[cat].nFacturas += c.nFacturas; catMap[cat].cuentas.push(c);
+  });
+  return Object.values(catMap)
+    .map(g => { g.cuentas.sort((a, b) => b.total - a.total); return g; })
+    .sort((a, b) => b.total - a.total);
+}
+
 function renderGastosEstructura() {
   const kpiEl  = document.getElementById('kpi-gest-total');
   const kpiSub = document.getElementById('kpi-gest-sub');
   const mesLbl = document.getElementById('mes-label-gest');
-  const tbody  = document.getElementById('tbody-gest');
+  const chart  = document.getElementById('gest-chart');
   if (mesLbl) mesLbl.textContent = MES[mesActual] || mesActual;
 
   const datos = GASTOS_ESTRUCTURA[mesActual];
@@ -7009,53 +7018,91 @@ function renderGastosEstructura() {
   if (!datos || !datos.total) {
     if (kpiEl)  { kpiEl.textContent = 'sin dato'; kpiEl.className = 'kpi-value nd'; }
     if (kpiSub) kpiSub.textContent = 'Sin gastos cargados para este mes';
-    if (tbody)  tbody.innerHTML = '<tr><td colspan="3" class="nd" style="text-align:center;padding:20px;">Sin datos para el mes seleccionado — actualizá desde Drive</td></tr>';
+    if (chart)  chart.innerHTML = '<div class="nd" style="text-align:center;padding:20px;font-size:13px;">Sin datos para el mes seleccionado — actualizá desde Drive</div>';
     return;
   }
 
-  // Agrupar las cuentas por categoría de alto nivel
-  const catMap = {};
-  (datos.porCuenta || []).forEach(c => {
-    const cat = _catGastoEstructura(c.nombre);
-    if (!catMap[cat]) catMap[cat] = { categoria: cat, total: 0, nFacturas: 0, cuentas: [] };
-    catMap[cat].total += c.total; catMap[cat].nFacturas += c.nFacturas; catMap[cat].cuentas.push(c);
-  });
-  const cats = Object.values(catMap)
-    .map(g => { g.cuentas.sort((a, b) => b.total - a.total); return g; })
-    .sort((a, b) => b.total - a.total);
+  const cats = _gestCategorias(datos);
+  const max  = cats.length ? cats[0].total : 1;
 
   if (kpiEl)  { kpiEl.textContent = fmt(datos.total); kpiEl.className = 'kpi-value neg-val'; }
   if (kpiSub) kpiSub.textContent = cats.length + ' categorías · ' + (datos.porCuenta ? datos.porCuenta.length : 0) + ' cuentas · ' + (MES[mesActual] || mesActual);
 
-  if (!tbody) return;
-  const filas = cats.map(g => {
-    // Categoría con 1 sola cuenta cuyo nombre coincide → una fila simple (evita repetir)
-    const cuentaUnica = g.cuentas.length === 1;
-    const headEsc = cuentaUnica ? (g.cuentas[0].cuenta || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'") : '';
-    let html = `<tr style="background:#f8fafc;border-top:2px solid var(--border);${cuentaUnica ? 'cursor:pointer;' : ''}"${cuentaUnica ? ` onclick="openGastoEstructuraPanel('${headEsc}')" title="Ver facturas"` : ''}>
-      <td style="font-size:12px;font-weight:700;color:var(--primary);">${g.categoria}${cuentaUnica && g.cuentas[0].codigo ? `<br><small style="color:var(--muted);font-weight:400;font-size:10px;">Cuenta ${g.cuentas[0].codigo}</small>` : ''}</td>
-      <td class="num" style="color:var(--muted);font-weight:700;">${g.nFacturas}</td>
-      <td class="num neg-val"><strong>${fmt(g.total)}</strong></td>
-    </tr>`;
-    // Categoría con varias cuentas → subfilas indentadas por cuenta
-    if (!cuentaUnica) {
-      html += g.cuentas.map(c => {
-        const cuentaEsc = (c.cuenta || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-        return `<tr style="cursor:pointer;" onclick="openGastoEstructuraPanel('${cuentaEsc}')" title="Ver facturas de esta cuenta">
-          <td style="font-size:12px;padding-left:26px;"><span style="text-decoration:underline dotted;color:var(--primary);">${c.nombre}</span>${c.codigo ? ` <small style="color:var(--muted);font-size:10px;">· ${c.codigo}</small>` : ''}</td>
-          <td class="num" style="color:var(--muted);">${c.nFacturas}</td>
-          <td class="num neg-val">${fmt(c.total)}</td>
-        </tr>`;
-      }).join('');
-    }
-    return html;
+  if (!chart) return;
+  const barras = cats.map((g, i) => {
+    const color = GEST_COLORS[i % GEST_COLORS.length];
+    const pct   = Math.max(1.5, Math.round((g.total / max) * 100));
+    const share = datos.total > 0 ? Math.round((g.total / datos.total) * 100) : 0;
+    const catEsc = (g.categoria || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    const sub = g.cuentas.length > 1
+      ? g.cuentas.length + ' cuentas · ' + g.nFacturas + ' facturas'
+      : 'Cuenta ' + (g.cuentas[0].codigo || '—') + ' · ' + g.nFacturas + ' facturas';
+    return `
+      <div class="gest-bar" onclick="openGastoCategoriaPanel('${catEsc}')" title="Ver detalle de ${g.categoria}"
+           style="cursor:pointer;padding:9px 8px;border-radius:8px;transition:background .15s;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:5px;">
+          <span style="font-size:13px;font-weight:600;color:var(--text);">${g.categoria}</span>
+          <span style="font-size:14px;font-weight:800;color:${color};white-space:nowrap;font-variant-numeric:tabular-nums;">${fmt(g.total)} <span style="font-size:11px;font-weight:600;color:var(--muted);">${share}%</span></span>
+        </div>
+        <div style="height:12px;border-radius:6px;background:#eef2f7;overflow:hidden;">
+          <div class="gest-bar-fill" style="height:100%;width:${pct}%;background:linear-gradient(90deg,${color},${color}cc);border-radius:6px;box-shadow:0 1px 4px ${color}55;"></div>
+        </div>
+        <div style="font-size:10.5px;color:var(--muted);margin-top:4px;">${sub}</div>
+      </div>`;
   }).join('');
-  const totalFila = `<tr style="background:var(--primary);color:#fff;font-weight:700;">
-    <td style="color:#fff;">TOTAL GASTOS DE ESTRUCTURA</td>
-    <td class="num" style="color:#cbd5e1;">${(datos.porCuenta || []).reduce((s, c) => s + c.nFacturas, 0)}</td>
-    <td class="num" style="color:#fff;">${fmt(datos.total)}</td>
-  </tr>`;
-  tbody.innerHTML = filas + totalFila;
+
+  chart.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px;flex-wrap:wrap;gap:6px;">
+      <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">Distribución por categoría</div>
+      <div style="font-size:12px;color:var(--muted);">Total <strong class="neg-val" style="font-size:14px;">${fmt(datos.total)}</strong> · ${MES[mesActual] || mesActual}</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:4px;">${barras}</div>`;
+}
+
+// Panel de detalle de una categoría: si tiene 1 cuenta abre sus facturas directo;
+// si agrupa varias (ej. Honorarios) lista las cuentas, cada una clickeable.
+function openGastoCategoriaPanel(catNombre) {
+  const datos = GASTOS_ESTRUCTURA[mesActual];
+  if (!datos) return;
+  const cats = _gestCategorias(datos);
+  const g = cats.find(c => c.categoria === catNombre);
+  if (!g) return;
+
+  // Categoría de una sola cuenta → directo a las facturas
+  if (g.cuentas.length === 1) { openGastoEstructuraPanel(g.cuentas[0].cuenta); return; }
+
+  const panel = document.getElementById('sidePanel');
+  const overlay = document.getElementById('overlay');
+  const content = document.getElementById('panelContent');
+  if (!panel) return;
+
+  const maxC = g.cuentas[0].total || 1;
+  const filas = g.cuentas.map((c, i) => {
+    const color = GEST_COLORS[i % GEST_COLORS.length];
+    const pct = Math.max(2, Math.round((c.total / maxC) * 100));
+    const cuentaEsc = (c.cuenta || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    return `<div onclick="openGastoEstructuraPanel('${cuentaEsc}')" title="Ver facturas de ${c.nombre}"
+        style="cursor:pointer;padding:10px 8px;border-radius:8px;transition:background .15s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='transparent'">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:4px;">
+        <span style="font-size:12.5px;font-weight:600;color:var(--primary);text-decoration:underline dotted;">${c.nombre}</span>
+        <span style="font-size:13px;font-weight:700;color:${color};white-space:nowrap;">${fmt(c.total)}</span>
+      </div>
+      <div style="height:9px;border-radius:5px;background:#eef2f7;overflow:hidden;"><div style="height:100%;width:${pct}%;background:${color};border-radius:5px;"></div></div>
+      <div style="font-size:10px;color:var(--muted);margin-top:3px;">Cuenta ${c.codigo || '—'} · ${c.nFacturas} factura${c.nFacturas !== 1 ? 's' : ''}</div>
+    </div>`;
+  }).join('');
+
+  content.innerHTML = `
+    <div class="panel-title">${g.categoria}</div>
+    <div class="panel-sub">Gastos de Estructura · ${MES[mesActual] || mesActual} · ${g.cuentas.length} cuentas</div>
+    <div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:10px 14px;margin:14px 0;display:flex;justify-content:space-between;align-items:center;">
+      <span style="font-size:12px;font-weight:600;color:#92400e;">Total ${g.categoria}</span>
+      <span class="neg-val" style="font-size:18px;font-weight:800;">${fmt(g.total)}</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">Hacé click en una cuenta para ver sus facturas.</div>
+    ${filas}`;
+  panel.classList.add('open');
+  overlay.classList.add('open');
 }
 
 function openGastoEstructuraPanel(cuentaFull) {
