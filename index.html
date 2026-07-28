@@ -1602,6 +1602,19 @@
     </div>
   </div>
 
+  <!-- Evolución mensual del resultado de cada unidad -->
+  <div class="section">
+    <div class="section-title">Resultado mensual por unidad · 2026</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">Cada barra es el resultado del mes: <span style="color:#16a34a;font-weight:700;">verde</span> = ganó, <span style="color:#dc2626;font-weight:700;">rojo</span> = perdió. Los meses sin barra aún no tienen datos suficientes.</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px;">
+      <div class="chart-card"><h3 style="color:#15803d;">🏗 Margen Obras</h3><div style="height:200px;"><canvas id="chart-rent-obras"></canvas></div></div>
+      <div class="chart-card"><h3 style="color:#92400e;">🔧 Resultado Taller</h3><div style="height:200px;"><canvas id="chart-rent-taller"></canvas></div></div>
+      <div class="chart-card"><h3 style="color:#1d4ed8;">🏭 Resultado Planta</h3><div style="height:200px;"><canvas id="chart-rent-planta"></canvas></div></div>
+      <div class="chart-card"><h3 style="color:#dc2626;">🏢 Gastos de Estructura</h3><div style="height:200px;"><canvas id="chart-rent-estructura"></canvas></div></div>
+    </div>
+    <div class="nota-fuente" style="margin-top:8px;">📄 Resultado por unidad = ingresos − costos de esa unidad, mes a mes. MO estimada donde TANGO aún no cargó. Gastos de Estructura se muestran como valor negativo (son costo).</div>
+  </div>
+
 </div>
 
 <!-- ================================================================ -->
@@ -4421,9 +4434,105 @@ function renderTallerLiq() {
   if (el) el.textContent = fmt(total);
 }
 
+// Resultado de cada unidad de negocio para UN mes — misma lógica que las
+// tarjetas de Rentabilidad, parametrizada por mes (para los gráficos de evolución).
+// Devuelve { margenObras, resultTaller, resultPlanta, gastosEstructura } (null si no computable).
+function _resultadoUnidadesMes(mes) {
+  // Margen Obras = TOTAL de Contribución marginal por obra de ese mes
+  let margenObras = null;
+  const dObras = computeMargenObrasMes(mes);
+  if (dObras && dObras.rows) margenObras = dObras.rows.reduce((s, r) => s + r.margen, 0);
+
+  const alqObj = ALQUILER_EQUIPOS[mes];
+  const alqMes = alqObj ? alqObj.totalArs : null;
+
+  // Resultado Taller = alquiler total (obras + planta + predio + externo) − MO taller (estimada si falta)
+  const moTArr = getMOTaller(mes);
+  const moTReal = moTArr.length > 0 ? moTArr.reduce((s, r) => s + r.monto, 0) : null;
+  const moTEst  = moTReal == null ? getMOEstimadoTaller(mes) : null;
+  const moTaller = moTReal != null ? moTReal : (moTEst ? moTEst.monto : 0);
+  const resultTaller = alqMes != null ? alqMes - moTaller : null;
+
+  // Resultado Planta = ingreso planta − (MO planta + OC planta + alquiler planta)
+  const moPArr = getMOPlanta(mes);
+  const moPReal = moPArr.length > 0 ? moPArr.reduce((s, r) => s + r.monto, 0) : null;
+  const moPEst  = moPReal == null ? getMOEstimadoPlanta(mes) : null;
+  const moPlanta = moPReal != null ? moPReal : (moPEst ? moPEst.monto : 0);
+  const ocPObj   = getOCPlantaInterna(mes);
+  const ocPlanta = ocPObj ? ocPObj.total : 0;
+  const alqPlanta = _alqTotalPlanta(alqObj) || 0;
+  const remM   = REMITOS_ASFALTO[mes];
+  const tnCal  = remM && remM.caliente > 0 ? remM.caliente : 0;
+  const tnFrio = remM && remM.frio     > 0 ? remM.frio     : 0;
+  const precioM = PRECIO_ASFALTO[mes] || null;
+  const pCal   = precioM && precioM.caliente > 0 ? precioM.caliente : 0;
+  const pFrio  = precioM && precioM.frio     > 0 ? precioM.frio     : 0;
+  const ingAsf = (pCal > 0 && tnCal > 0) || (pFrio > 0 && tnFrio > 0) ? Math.round(tnCal * pCal + tnFrio * pFrio) : null;
+  const ingPlanta = ingAsf != null ? ingAsf : (INGRESOS_PLANTA[mes] != null ? INGRESOS_PLANTA[mes] : null);
+  const egresosPlanta = moPlanta + ocPlanta + alqPlanta;
+  let resultPlanta = null;
+  if (ingPlanta != null) resultPlanta = ingPlanta - egresosPlanta;
+  else if (egresosPlanta > 0) resultPlanta = -egresosPlanta;
+
+  // Gastos de Estructura — costo (siempre negativo)
+  const gest = GASTOS_ESTRUCTURA[mes];
+  const gastosEstructura = (gest && gest.total) ? -gest.total : null;
+
+  return { margenObras, resultTaller, resultPlanta, gastosEstructura };
+}
+
+// Eje Y compacto para los gráficos ($5M, -$1M, $500k)
+function _fmtEjeRent(v) {
+  if (v === 0) return '0';
+  const a = Math.abs(v), sg = v < 0 ? '-' : '';
+  if (a >= 1e6) return sg + '$' + (a / 1e6).toFixed(a >= 1e7 ? 0 : 1).replace('.0', '') + 'M';
+  if (a >= 1e3) return sg + '$' + Math.round(a / 1e3) + 'k';
+  return sg + '$' + a;
+}
+
+const _rentCharts = {};
+function _rentBarChart(canvasId, meses, valores) {
+  const cv = document.getElementById(canvasId);
+  if (!cv || typeof Chart === 'undefined') return;
+  if (_rentCharts[canvasId]) _rentCharts[canvasId].destroy();
+  const labels = meses.map(m => (MES[m] || m).replace(' 2026', '').slice(0, 3));
+  const bg = valores.map(v => v == null ? 'rgba(0,0,0,0)' : (v >= 0 ? '#22c55e' : '#ef4444'));
+  _rentCharts[canvasId] = new Chart(cv.getContext('2d'), {
+    type: 'bar',
+    data: { labels, datasets: [{ data: valores, backgroundColor: bg, borderRadius: 5, borderSkipped: false, maxBarThickness: 38 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      animation: { duration: 500 },
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: c => c.raw == null ? 'sin datos suficientes' : fmt(c.raw) } }
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 11, weight: '600' }, color: '#64748b' } },
+        y: { grid: { color: '#eef2f7' }, ticks: { font: { size: 10 }, color: '#94a3b8', callback: _fmtEjeRent }, beginAtZero: true }
+      }
+    }
+  });
+}
+
+// 4 gráficos de evolución mensual del resultado por unidad (bueno/malo por mes)
+function renderRentabilidadCharts() {
+  if (typeof Chart === 'undefined') return;
+  const hoyIdx = (new Date().getFullYear() === 2026) ? new Date().getMonth() : 11;
+  const meses = MES_ORDER.slice(0, hoyIdx + 1);
+  const res = meses.map(m => _resultadoUnidadesMes(m));
+  _rentBarChart('chart-rent-obras',      meses, res.map(r => r.margenObras));
+  _rentBarChart('chart-rent-taller',     meses, res.map(r => r.resultTaller));
+  _rentBarChart('chart-rent-planta',     meses, res.map(r => r.resultPlanta));
+  _rentBarChart('chart-rent-estructura', meses, res.map(r => r.gastosEstructura));
+}
+
 function renderRentabilidad() {
   const mesLbl = document.getElementById('mes-label-rentabilidad');
   if (mesLbl) mesLbl.textContent = MES[mesActual] || mesActual;
+
+  // Gráficos de evolución mensual por unidad (independientes del mes seleccionado)
+  try { renderRentabilidadCharts(); } catch(e) { console.warn('renderRentabilidadCharts', e); }
 
   // Tarjeta "Gastos de Estructura": total real del libro mayor administrativo.
   const gestEl    = document.getElementById('gest-card-total');
