@@ -2034,14 +2034,25 @@ let FECHAS_FUENTES = {};
 // vía leerFechasFuentes() en el .gs). "ÓC Repuestos..." no tiene fileKey
 // porque su dato (OC_PLANTA) todavía es una carga manual, no lectura de Drive.
 const FUENTES = [
-  { archivo: 'Cobros Ingeco Feb-Mar-Abr 2026.xlsx', responsable: 'Esteban', fileKey: 'estebanSheet', ultimaActualizacion: '07/05/2026', estado: 'real', dato: 'Cobros reales Feb/Mar/Abr — 37 registros', accion: '✅ Accesible — datos cargados' },
-  { archivo: '1° Quinc. Abril 2026 - LIQ TANGO.xlsx', responsable: 'Mauro Orellana', fileKey: 'tangoFolder', ultimaActualizacion: '29/04/2026', estado: 'real', dato: 'MO por centro de costo — taller y obras', accion: '✅ Accesible — datos cargados' },
-  { archivo: 'ÓRDENES DE COMPRA DE INSUMOS PARA OBRAS (GUILLERMO KONICEK)', responsable: 'Guillermo Konicek', fileKey: 'ocInsumos', ultimaActualizacion: '13/05/2026', estado: 'real', dato: 'OC insumos Feb $549M / Mar $515M / Abr $183M (parcial) — 294 órdenes 2026', accion: '✅ Accesible — carpeta Guillermo (Drive) — datos cargados' },
-  { archivo: 'REMITOS OFICIALES (Google Sheet)', responsable: 'Roberto', fileKey: 'remitosAsfalto', ultimaActualizacion: '12/05/2026', estado: 'parcial', dato: 'Tn caliente/frío (sin precios cargados)', accion: 'Completar columna PRECIO en sheet' },
-  { archivo: 'Maestro de obras NUEVO.xlsx', responsable: 'Adrián / Equipo', fileKey: 'maestroObras', ultimaActualizacion: '07/05/2026', estado: 'real', dato: '60+ obras con código canónico y cliente', accion: '✅ Accesible — cargado' },
-  { archivo: 'ENTREGAS DE REPUESTOS ABRIL 2026', responsable: 'Nicolás Dall\'Agata', fileKey: 'repuestosEquipos', ultimaActualizacion: '12/05/2026', estado: 'real', dato: 'Costos reales reparaciones taller abr 2026', accion: '✅ Accesible — datos cargados' },
-  { archivo: 'ÓC Repuestos para Equipos (Alberto Lescano)', responsable: 'Alberto Lescano', fileKey: null, ultimaActualizacion: '29/04/2026', estado: 'parcial', dato: 'OC planta asfalto y equipos', accion: '✅ Accesible — datos cargados' },
-  { archivo: 'Libro mayor de gastos administrativos (Google Sheet)', responsable: 'Administración', fileKey: 'gastosEstructura', ultimaActualizacion: '23/07/2026', estado: 'real', dato: 'Gastos de Estructura (cuentas ADMIN) por cuenta y mes — jun 2026', accion: '✅ Accesible — datos cargados' }
+  // ── Obras: certificaciones e insumos ──────────────────────────────────
+  { archivo: 'Obras activas / Certificaciones (Fernando Solís)', responsable: 'Fernando Solís', fileKey: 'fernandoObras', ultimaActualizacion: '28/07/2026', estado: 'real', dato: 'Certificados por obra (A Cobrar): Municipio, Vialidad, Otros ingresos', accion: '✅ Accesible — alimenta Contribución marginal e ingresos' },
+  { archivo: 'Maestro de obras NUEVO.xlsx', responsable: 'Adrián / Equipo', fileKey: 'maestroObras', ultimaActualizacion: '16/07/2026', estado: 'real', dato: '60+ obras con código canónico, cliente y tipo de contratación', accion: '✅ Accesible — cargado' },
+  { archivo: 'ÓRDENES DE COMPRA DE INSUMOS PARA OBRAS (Guillermo Konicek)', responsable: 'Guillermo Konicek', fileKey: 'ocInsumos', ultimaActualizacion: '28/07/2026', estado: 'real', dato: 'OC de insumos por obra — costo de materiales', accion: '✅ Accesible — carpeta Guillermo (Drive)' },
+  // ── Estado financiero ─────────────────────────────────────────────────
+  { archivo: 'Cobros Ingeco (Google Sheet)', responsable: 'Esteban', fileKey: 'estebanSheet', ultimaActualizacion: '27/07/2026', estado: 'real', dato: 'Cobros reales, facturado y pendiente — una pestaña por mes', accion: '✅ Accesible — datos cargados' },
+  // ── Mano de obra ──────────────────────────────────────────────────────
+  { archivo: 'Liquidaciones TANGO (carpeta, un archivo por mes)', responsable: 'Mauro Orellana', fileKey: 'tangoFolder', ultimaActualizacion: '21/07/2026', estado: 'real', dato: 'MO por centro de costo (obras / taller / planta) — 2 quincenas por mes', accion: '✅ Accesible — datos cargados' },
+  // ── Planta de Asfalto ─────────────────────────────────────────────────
+  { archivo: 'REMITOS OFICIALES (Google Sheet)', responsable: 'Roberto', fileKey: 'remitosAsfalto', ultimaActualizacion: '28/07/2026', estado: 'parcial', dato: 'Tn caliente/frío despachadas por obra (base del prorrateo de MO)', accion: 'Completar columna PRECIO en la planilla' },
+  { archivo: 'Precio de mercado del asfalto $/tn (Google Sheet)', responsable: 'María Caram', fileKey: 'precioAsfalto', ultimaActualizacion: '26/05/2026', estado: 'parcial', dato: 'Precio $/tn caliente y frío por mes — valoriza la producción', accion: 'Cargar el precio de los meses faltantes' },
+  { archivo: 'Formulario Ingreso Asfalto + Ajuste de stock (Agustín)', responsable: 'Agustín', fileKey: 'ajusteStock', ultimaActualizacion: '16/07/2026', estado: 'real', dato: 'Ingresos de asfalto (materia prima), costo de compra y ajustes de stock', accion: '✅ Accesible — datos cargados' },
+  // ── Equipos / Taller ──────────────────────────────────────────────────
+  { archivo: 'Tarifas de equipos + PF mensual (Google Sheet)', responsable: 'Agustín', fileKey: 'equiposFlota', ultimaActualizacion: '02/07/2026', estado: 'real', dato: 'PF (USD) por equipo — tarifa del alquiler interno de maquinaria', accion: '✅ Accesible — datos cargados' },
+  { archivo: 'PARTES DIARIOS DE EQUIPOS (Google Sheet)', responsable: 'Nicolás Dall\'Agata', fileKey: 'usageEquipos', ultimaActualizacion: '28/07/2026', estado: 'real', dato: 'Horas por equipo y obra — base del alquiler interno prorrateado', accion: '✅ Accesible — datos cargados' },
+  { archivo: 'ENTREGAS DE REPUESTOS (Google Sheet)', responsable: 'Nicolás Dall\'Agata', fileKey: 'repuestosEquipos', ultimaActualizacion: '27/07/2026', estado: 'real', dato: 'Compra de repuestos de máquinas — costo del Taller', accion: '✅ Accesible — datos cargados' },
+  { archivo: 'ÓC Repuestos para Equipos (Alberto Lescano)', responsable: 'Alberto Lescano', fileKey: null, ultimaActualizacion: '29/04/2026', estado: 'parcial', dato: 'OC planta asfalto y equipos (carga manual)', accion: '✅ Accesible — datos cargados' },
+  // ── Estructura ────────────────────────────────────────────────────────
+  { archivo: 'Libro mayor de gastos administrativos (Romina)', responsable: 'Romina', fileKey: 'gastosEstructura', ultimaActualizacion: '16/07/2026', estado: 'real', dato: 'Gastos de Estructura (cuentas ADMIN) por cuenta y mes', accion: '✅ Accesible — datos cargados' }
 ];
 
 // ================================================================
