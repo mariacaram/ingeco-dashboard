@@ -609,17 +609,20 @@
     /* Evita el scroll horizontal de toda la página (los contenedores internos
        con overflow-x propio —tablas, nav, meses— siguen scrolleando igual). */
     html, body { overflow-x: hidden; max-width: 100%; }
-    /* Header: apilado y compacto */
-    .header { flex-wrap: wrap; gap: 8px 12px; padding: 10px 14px; align-items: center; }
-    .header h1 { font-size: 15px; letter-spacing: 0; }
-    .header .subtitle { font-size: 11px; }
-    .header > div:last-child { flex-wrap: wrap; gap: 8px 12px; row-gap: 6px; }
-    .month-selector { flex-wrap: nowrap; width: 100%; min-width: 0; }
+    /* Header: compacto, apilado por filas, sin cortar botones */
+    .header { flex-wrap: wrap; gap: 6px 12px; padding: 10px 14px; align-items: center; }
+    .header > div:first-child { flex: 1 1 auto; min-width: 0; }
+    .header h1 { font-size: 16px; letter-spacing: 0; line-height: 1.15; }
+    .header .subtitle { font-size: 11px; margin-top: 0; }
+    .header > div:last-child { display: flex; flex-wrap: wrap; width: 100%; gap: 8px 10px; align-items: center; }
+    .month-selector { order: 1; width: 100%; flex-wrap: nowrap; min-width: 0; }
     #month-btns { overflow-x: auto; flex-wrap: nowrap; flex: 1 1 auto; min-width: 0; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
     #month-btns::-webkit-scrollbar { height: 0; }
-    .month-btn { flex: 0 0 auto; }
-    .refresh-area { align-items: flex-start; }
-    .last-update { text-align: left; }
+    .month-btn { flex: 0 0 auto; padding: 7px 12px; }
+    .refresh-area { order: 2; align-items: flex-start; flex: 0 1 auto; }
+    .last-update { text-align: left; font-size: 10px; white-space: normal; max-width: 210px; line-height: 1.3; }
+    .header > div:last-child > div:last-child { order: 3; margin-left: auto; align-items: flex-end; }
+    #rol-actual { font-size: 10px; }
     .header::after { display: none; } /* la línea vial se rompe con el wrap */
 
     /* Layout: sidebar arriba (horizontal), contenido debajo a todo el ancho */
@@ -650,10 +653,22 @@
     .kpi-grid { grid-template-columns: 1fr !important; }
     .grid2 { grid-template-columns: 1fr; }
     #charts-por-obra, #charts-planta { grid-template-columns: 1fr !important; }
+    .content > .section { margin-bottom: 18px; }
+    .section-title { font-size: 12.5px; }
+
+    /* Tablas: más compactas para que entren más columnas y se lean mejor */
+    table { font-size: 12px; }
+    th { padding: 8px 8px; font-size: 10px; }
+    td { padding: 8px 8px; font-size: 12px; }
+    .table-wrap { -webkit-overflow-scrolling: touch; }
+    /* Buscador de obra a todo el ancho, cómodo para el pulgar */
+    #busqueda-obra-input, #busqueda-tipo-input { font-size: 16px; padding: 11px 34px; } /* 16px evita el zoom de iOS */
+    input, select { font-size: 16px; } /* iOS no hace zoom al enfocar si es ≥16px */
 
     /* Paneles laterales y drawers: pantalla completa */
     .side-panel { width: 100%; right: -100%; padding: 18px; }
     #pend-drawer { width: 100%; max-width: 100%; }
+    .panel-close { top: 12px; right: 12px; width: 40px; height: 40px; font-size: 24px; } /* tap target */
 
     /* Login: menos padding para pantallas chicas */
     .login-box { padding: 30px 22px; max-width: 92vw; }
@@ -7758,6 +7773,12 @@ function openTab(id) {
       if (grupo) grupo.classList.add('has-active');
     }
   });
+  // En mobile, centrar la pestaña activa dentro de la barra horizontal
+  if (window.innerWidth <= 860) {
+    const nav = document.querySelector('.sidebar-nav');
+    const act = document.querySelector('.sidebar-nav .tab-btn.active');
+    if (nav && act) nav.scrollTo({ left: act.offsetLeft - (nav.clientWidth - act.clientWidth) / 2, behavior: 'smooth' });
+  }
   window.scrollTo({ top: 0, behavior: 'auto' });
   setTimeout(_armScrollReveal, 40);
 }
