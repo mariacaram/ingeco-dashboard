@@ -114,6 +114,10 @@ function doGet(e) {
         const cachedGest = PROPS.getProperty(CACHE_KEY + '_gest');
         if (cachedGest) data.gastosEstructura = JSON.parse(cachedGest);
       }
+      if (data && !data.repuestosEquipos) {
+        const cachedRep = PROPS.getProperty(CACHE_KEY + '_repuestos');
+        if (cachedRep) data.repuestosEquipos = JSON.parse(cachedRep);
+      }
       if (data && !data.fechasFuentes) {
         const cachedFechas = PROPS.getProperty(CACHE_KEY + '_fechas');
         if (cachedFechas) data.fechasFuentes = JSON.parse(cachedFechas);
@@ -154,6 +158,9 @@ function doGet(e) {
       try {
         if (data.gastosEstructura) PROPS.setProperty(CACHE_KEY + '_gest', JSON.stringify(data.gastosEstructura));
       } catch(ce) { Logger.log('Cache write (gest) error: ' + ce); }
+      try {
+        if (data.repuestosEquipos) PROPS.setProperty(CACHE_KEY + '_repuestos', JSON.stringify(data.repuestosEquipos));
+      } catch(ce) { Logger.log('Cache write (repuestos) error: ' + ce); }
       try {
         if (data.fechasFuentes) PROPS.setProperty(CACHE_KEY + '_fechas', JSON.stringify(data.fechasFuentes));
       } catch(ce) { Logger.log('Cache write (fechas) error: ' + ce); }
@@ -199,6 +206,7 @@ function actualizarNocturno() {
     if (data.stockAsfalto)    PROPS.setProperty(CACHE_KEY + '_stock',    JSON.stringify(data.stockAsfalto));
     if (data.precioAsfalto)   PROPS.setProperty(CACHE_KEY + '_precio',   JSON.stringify(data.precioAsfalto));
     if (data.gastosEstructura) PROPS.setProperty(CACHE_KEY + '_gest',    JSON.stringify(data.gastosEstructura));
+    if (data.repuestosEquipos) PROPS.setProperty(CACHE_KEY + '_repuestos', JSON.stringify(data.repuestosEquipos));
     if (data.fechasFuentes)   PROPS.setProperty(CACHE_KEY + '_fechas',   JSON.stringify(data.fechasFuentes));
     Logger.log('Cache actualizado: ' + data.timestamp);
   } catch (err) {

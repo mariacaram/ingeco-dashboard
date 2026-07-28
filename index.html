@@ -1562,8 +1562,8 @@
           <div><span style="color:#15803d;font-weight:700;">+</span> Alquiler cobrado a obras <span style="font-size:10px;color:#6b7280;">↕ interna</span></div>
           <div style="padding-left:14px;color:var(--muted);font-size:11px;">Adrián — PF mensual × horas usadas</div>
           <div><span style="color:#dc2626;font-weight:700;">−</span> Mano de obra Taller (TANGO)</div>
-          <div><span style="color:#dc2626;font-weight:700;">−</span> OC Taller (repuestos, etc.)</div>
-          <div style="padding-left:14px;color:var(--muted);font-size:11px;">⏳ pendiente clasificación en OC</div>
+          <div><span style="color:#dc2626;font-weight:700;">−</span> Repuestos de máquinas</div>
+          <div style="padding-left:14px;color:var(--muted);font-size:11px;">fuente: entregas de repuestos (Nico)</div>
           <div style="margin-top:8px;padding-top:8px;border-top:1px solid #fde68a;font-weight:700;color:#92400e;font-size:13px;">= Resultado Taller</div>
         </div>
         <div style="margin-top:8px;background:#fef3c7;border-radius:6px;padding:5px 9px;font-size:10px;color:#92400e;line-height:1.5;">
@@ -1843,6 +1843,9 @@ let PRECIO_ASFALTO  = {}; // { feb: {caliente: X, frio: Y}, mar: {...} } — le�
 // Gastos de Estructura (libro mayor admin.) — se carga desde Apps Script
 // { jun: { total, porCuenta: [{codigo, nombre, cuenta, total, nFacturas, facturas: [{fecha, proveedor, comprobante, monto}]}] } }
 let GASTOS_ESTRUCTURA = {};
+// Compra de repuestos de máquinas (Nico) — costo del Taller. Desde Apps Script.
+// { abr: { total, items: [{codEq, costo}] }, ... }
+let REPUESTOS_EQUIPOS = {};
 
 // Ingresos de Planta — ingresados a mano, persisten en localStorage
 let INGRESOS_PLANTA = (function() {
@@ -4446,12 +4449,13 @@ function _resultadoUnidadesMes(mes) {
   const alqObj = ALQUILER_EQUIPOS[mes];
   const alqMes = alqObj ? alqObj.totalArs : null;
 
-  // Resultado Taller = alquiler total (obras + planta + predio + externo) − MO taller (estimada si falta)
+  // Resultado Taller = alquiler total (obras + planta + predio + externo) − MO taller (estimada si falta) − repuestos
   const moTArr = getMOTaller(mes);
   const moTReal = moTArr.length > 0 ? moTArr.reduce((s, r) => s + r.monto, 0) : null;
   const moTEst  = moTReal == null ? getMOEstimadoTaller(mes) : null;
   const moTaller = moTReal != null ? moTReal : (moTEst ? moTEst.monto : 0);
-  const resultTaller = alqMes != null ? alqMes - moTaller : null;
+  const repTaller = REPUESTOS_EQUIPOS[mes] ? (REPUESTOS_EQUIPOS[mes].total || 0) : 0;
+  const resultTaller = alqMes != null ? alqMes - moTaller - repTaller : null;
 
   // Resultado Planta = ingreso planta − (MO planta + OC planta + alquiler planta)
   const moPArr = getMOPlanta(mes);
@@ -4636,9 +4640,10 @@ function renderRentabilidad() {
   const margenObras = ingObras != null ? ingObras - costoObras : null;
 
   // Resultado Taller: revenue = alquiler cobrado a obras (interno) + alquiler a
-  // terceros (externo); costo = MO taller
+  // terceros (externo); costo = MO taller + repuestos de máquinas (Nico)
+  const repTallerMes = REPUESTOS_EQUIPOS[mesActual] ? (REPUESTOS_EQUIPOS[mesActual].total || 0) : null;
   const resultTaller = alqMes != null
-    ? alqMes - (moTaller != null ? moTaller : 0)
+    ? alqMes - (moTaller != null ? moTaller : 0) - (repTallerMes || 0)
     : null;
 
   // Resultado Planta
@@ -4723,8 +4728,8 @@ function renderRentabilidad() {
   rows += row('+ Alquiler cobrado a obras ↕', alqObrasMes != null ? 'real' : 'pend', alqObrasMes, '', { nota: 'cancela con costo de Obras' });
   rows += row('+ Alquiler a terceros (Alquiler de equipos)', alqExterno > 0 ? 'real' : 'pend', alqExterno > 0 ? alqExterno : null, '', { nota: 'ingreso real, no cancela' });
   rows += row('− Mano de obra Taller', moTaller != null ? 'real' : 'pend', moTaller, 'neg', { indent: 1 });
-  rows += row('− OC Taller (repuestos, etc.)', 'pend', null, 'neg', { indent: 1, nota: 'pendiente clasificación' });
-  rows += row('= Resultado Taller', resultTaller != null ? 'parcial' : 'pend', resultTaller, 'res', { isTotal: true, nota: 'sin OC Taller' });
+  rows += row('− Repuestos de máquinas', repTallerMes != null ? 'real' : 'pend', repTallerMes, 'neg', { indent: 1, nota: repTallerMes != null ? 'entregas de repuestos (Nico)' : 'sin datos del mes' });
+  rows += row('= Resultado Taller', resultTaller != null ? (repTallerMes != null ? 'parcial' : 'parcial') : 'pend', resultTaller, 'res', { isTotal: true, nota: repTallerMes != null ? 'incluye repuestos' : 'sin repuestos del mes' });
 
   // PLANTA
   const ingPlantaStatus = ingPlantaAsf != null ? 'real' : (ingPlantaManual != null ? 'aprox' : 'pend');
@@ -7079,6 +7084,15 @@ function _sintetizarTotales() {
       .sort((a, b) => b.total - a.total);
     GASTOS_ESTRUCTURA.total = { total: cuentas.reduce((s, c) => s + c.total, 0), porCuenta: cuentas };
   }
+
+  // Repuestos de máquinas: suma el total de todos los meses para el filtro TOTAL
+  delete REPUESTOS_EQUIPOS.total;
+  const mRep = mesesCon(REPUESTOS_EQUIPOS);
+  if (mRep.length > 0) {
+    let tRep = 0, itemsRep = [];
+    mRep.forEach(m => { tRep += REPUESTOS_EQUIPOS[m].total || 0; if (Array.isArray(REPUESTOS_EQUIPOS[m].items)) itemsRep = itemsRep.concat(REPUESTOS_EQUIPOS[m].items); });
+    REPUESTOS_EQUIPOS.total = { total: tRep, items: itemsRep };
+  }
 }
 
 // ================================================================
@@ -7386,6 +7400,9 @@ async function refreshData() {
       if (data.gastosEstructura && typeof data.gastosEstructura === 'object') {
         Object.assign(GASTOS_ESTRUCTURA, data.gastosEstructura);
       }
+      if (data.repuestosEquipos && typeof data.repuestosEquipos === 'object') {
+        Object.assign(REPUESTOS_EQUIPOS, data.repuestosEquipos);
+      }
       if (data.fechasFuentes && typeof data.fechasFuentes === 'object') {
         Object.assign(FECHAS_FUENTES, data.fechasFuentes);
       }
@@ -7629,6 +7646,9 @@ if (APPS_SCRIPT_URL) {
         }
         if (data.gastosEstructura && typeof data.gastosEstructura === 'object') {
           Object.assign(GASTOS_ESTRUCTURA, data.gastosEstructura);
+        }
+        if (data.repuestosEquipos && typeof data.repuestosEquipos === 'object') {
+          Object.assign(REPUESTOS_EQUIPOS, data.repuestosEquipos);
         }
         if (data.fechasFuentes && typeof data.fechasFuentes === 'object') {
           Object.assign(FECHAS_FUENTES, data.fechasFuentes);
