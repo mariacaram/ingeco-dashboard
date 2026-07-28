@@ -1615,6 +1615,12 @@
     <div class="nota-fuente" style="margin-top:8px;">📄 Resultado por unidad = ingresos − costos de esa unidad, mes a mes. MO estimada donde TANGO aún no cargó. Gastos de Estructura se muestran como valor negativo (son costo).</div>
   </div>
 
+  <!-- Precio del asfalto para valorizar el ingreso de Planta -->
+  <div class="section">
+    <div class="section-title">Precio del asfalto — valoriza el ingreso de Planta</div>
+    <div id="precio-asfalto-ui"></div>
+  </div>
+
 </div>
 
 <!-- ================================================================ -->
@@ -1840,6 +1846,43 @@ function _obrasSinPeriodo() {
 let ALQUILER_EQUIPOS = {};
 let REMITOS_ASFALTO = {}; // { feb: {caliente, frio, total, porObra: {obraName: {caliente, frio}}}, ... }
 let PRECIO_ASFALTO  = {}; // { feb: {caliente: X, frio: Y}, mar: {...} } — leído desde planilla
+// Precio de referencia del asfalto ($/tn) usado cuando no hay ajuste manual.
+// Caliente = Mezcla Asfáltica $315.000/tn. Frío = Pavimax $35.000 la bolsa de
+// 50 kg → $700.000/tn (20 bolsas por tonelada).
+const PRECIO_ASFALTO_BASE = { caliente: 315000, frio: 700000 };
+// Ajustes de precio, vigentes desde un mes en adelante (persisten en el navegador).
+// [{ desde: 'jun', caliente: 340000, frio: 720000 }]
+let PRECIO_ASFALTO_AJUSTES = (function() {
+  try { return JSON.parse(localStorage.getItem('ingeco_precio_ajustes') || '[]'); }
+  catch(e) { return []; }
+})();
+// Precio efectivo de un mes: ajuste manual vigente > planilla (María) > base de referencia.
+function _precioAsfaltoMes(mes) {
+  const idx = MES_ORDER.indexOf(mes);
+  if (idx >= 0 && PRECIO_ASFALTO_AJUSTES.length) {
+    let best = null, bi = -1;
+    PRECIO_ASFALTO_AJUSTES.forEach(a => {
+      const ai = MES_ORDER.indexOf(a.desde);
+      if (ai >= 0 && ai <= idx && ai > bi) { best = a; bi = ai; }
+    });
+    if (best) return { caliente: +best.caliente || 0, frio: +best.frio || 0 };
+  }
+  const s = PRECIO_ASFALTO[mes];
+  if (s && (s.caliente || s.frio)) return { caliente: s.caliente || PRECIO_ASFALTO_BASE.caliente, frio: s.frio || PRECIO_ASFALTO_BASE.frio };
+  return { caliente: PRECIO_ASFALTO_BASE.caliente, frio: PRECIO_ASFALTO_BASE.frio };
+}
+function guardarAjustePrecio(desde, caliente, frio) {
+  if (!desde) return;
+  PRECIO_ASFALTO_AJUSTES = PRECIO_ASFALTO_AJUSTES.filter(a => a.desde !== desde);
+  PRECIO_ASFALTO_AJUSTES.push({ desde: desde, caliente: Math.round(+caliente) || 0, frio: Math.round(+frio) || 0 });
+  try { localStorage.setItem('ingeco_precio_ajustes', JSON.stringify(PRECIO_ASFALTO_AJUSTES)); } catch(e) {}
+  renderRentabilidad();
+}
+function borrarAjustePrecio(desde) {
+  PRECIO_ASFALTO_AJUSTES = PRECIO_ASFALTO_AJUSTES.filter(a => a.desde !== desde);
+  try { localStorage.setItem('ingeco_precio_ajustes', JSON.stringify(PRECIO_ASFALTO_AJUSTES)); } catch(e) {}
+  renderRentabilidad();
+}
 // Gastos de Estructura (libro mayor admin.) — se carga desde Apps Script
 // { jun: { total, porCuenta: [{codigo, nombre, cuenta, total, nFacturas, facturas: [{fecha, proveedor, comprobante, monto}]}] } }
 let GASTOS_ESTRUCTURA = {};
@@ -4494,7 +4537,7 @@ function _resultadoUnidadesMes(mes) {
   const remM   = REMITOS_ASFALTO[mes];
   const tnCal  = remM && remM.caliente > 0 ? remM.caliente : 0;
   const tnFrio = remM && remM.frio     > 0 ? remM.frio     : 0;
-  const precioM = PRECIO_ASFALTO[mes] || null;
+  const precioM = _precioAsfaltoMes(mes); // precio efectivo: ajuste > planilla > base
   const pCal   = precioM && precioM.caliente > 0 ? precioM.caliente : 0;
   const pFrio  = precioM && precioM.frio     > 0 ? precioM.frio     : 0;
   const ingAsf = (pCal > 0 && tnCal > 0) || (pFrio > 0 && tnFrio > 0) ? Math.round(tnCal * pCal + tnFrio * pFrio) : null;
@@ -4646,12 +4689,59 @@ function renderRentabilidadCharts() {
   _rentBarChart('chart-rent-estructura', meses, res.map(r => r.gastosEstructura), 'estructura');
 }
 
+// UI de precio del asfalto: precio base, precio vigente del mes y ajuste con vigencia
+function renderPrecioAsfaltoUI() {
+  const el = document.getElementById('precio-asfalto-ui');
+  if (!el) return;
+  const pm = _precioAsfaltoMes(mesActual);
+  const ajustes = [...PRECIO_ASFALTO_AJUSTES].sort((a, b) => MES_ORDER.indexOf(a.desde) - MES_ORDER.indexOf(b.desde));
+  const mesSel = mesActual === 'total' ? MES_ORDER[new Date().getMonth()] : mesActual;
+  const mesOpts = MES_ORDER.map(m => `<option value="${m}" ${m === mesSel ? 'selected' : ''}>${(MES[m] || m).replace(' 2026', '')}</option>`).join('');
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;">
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:14px 16px;">
+        <div style="font-size:11px;font-weight:700;color:#1d4ed8;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;">Precio base de referencia</div>
+        <div style="font-size:13px;line-height:1.9;">
+          <div>🔥 Caliente (Mezcla Asfáltica): <strong>$${PRECIO_ASFALTO_BASE.caliente.toLocaleString('es-AR')}/tn</strong></div>
+          <div>❄️ Frío (Pavimax): <strong>$${PRECIO_ASFALTO_BASE.frio.toLocaleString('es-AR')}/tn</strong> <span style="color:var(--muted);font-size:11px;">($35.000 la bolsa de 50 kg × 20)</span></div>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:8px;">Se aplica a todos los meses salvo que haya un ajuste vigente.</div>
+      </div>
+      <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:14px 16px;">
+        <div style="font-size:11px;font-weight:700;color:#15803d;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;">Precio vigente en ${(MES[mesActual] || mesActual)}</div>
+        <div style="font-size:13px;line-height:1.9;">
+          <div>🔥 Caliente: <strong>$${(pm.caliente || 0).toLocaleString('es-AR')}/tn</strong></div>
+          <div>❄️ Frío: <strong>$${(pm.frio || 0).toLocaleString('es-AR')}/tn</strong></div>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:8px;">Ingreso Planta = (tn caliente × precio) + (tn frío × precio) de los remitos del mes.</div>
+      </div>
+    </div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-top:14px;">
+      <div style="font-size:12px;font-weight:700;margin-bottom:10px;">✏️ Ajustar precio desde un mes</div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">
+        <label style="font-size:11px;color:var(--muted);">Desde<br><select id="precio-aj-desde" style="margin-top:3px;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;">${mesOpts}</select></label>
+        <label style="font-size:11px;color:var(--muted);">Caliente $/tn<br><input id="precio-aj-cal" type="number" min="0" value="${pm.caliente || ''}" style="margin-top:3px;width:130px;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;text-align:right;"></label>
+        <label style="font-size:11px;color:var(--muted);">Frío $/tn<br><input id="precio-aj-frio" type="number" min="0" value="${pm.frio || ''}" style="margin-top:3px;width:130px;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;text-align:right;"></label>
+        <button onclick="guardarAjustePrecio(document.getElementById('precio-aj-desde').value, document.getElementById('precio-aj-cal').value, document.getElementById('precio-aj-frio').value)" style="background:var(--primary);color:#fff;border:none;border-radius:6px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;">Guardar ajuste</button>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:8px;">El ajuste rige desde ese mes en adelante (hasta el próximo ajuste). El ingreso de Planta se recalcula solo.</div>
+      ${ajustes.length ? `<div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px;">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px;">Ajustes cargados</div>
+        ${ajustes.map(a => `<div style="display:flex;justify-content:space-between;align-items:center;font-size:12.5px;padding:4px 0;">
+          <span>Desde <strong>${(MES[a.desde] || a.desde).replace(' 2026', '')}</strong>: caliente $${(+a.caliente).toLocaleString('es-AR')}/tn · frío $${(+a.frio).toLocaleString('es-AR')}/tn</span>
+          <button onclick="borrarAjustePrecio('${a.desde}')" style="background:none;border:none;color:var(--neg);cursor:pointer;font-size:12px;">✕ quitar</button>
+        </div>`).join('')}
+      </div>` : ''}
+    </div>`;
+}
+
 function renderRentabilidad() {
   const mesLbl = document.getElementById('mes-label-rentabilidad');
   if (mesLbl) mesLbl.textContent = MES[mesActual] || mesActual;
 
   // Gráficos de evolución mensual por unidad (independientes del mes seleccionado)
   try { renderRentabilidadCharts(); } catch(e) { console.warn('renderRentabilidadCharts', e); }
+  try { renderPrecioAsfaltoUI(); } catch(e) { console.warn('renderPrecioAsfaltoUI', e); }
 
   // Tarjeta "Gastos de Estructura": total real del libro mayor administrativo.
   const gestEl    = document.getElementById('gest-card-total');
@@ -4729,7 +4819,7 @@ function renderRentabilidad() {
   const remitosM      = REMITOS_ASFALTO[mesActual];
   const tnCalienteMes = remitosM && remitosM.caliente > 0 ? remitosM.caliente : null;
   const tnFrioMes     = remitosM && remitosM.frio     > 0 ? remitosM.frio     : null;
-  const precioMes     = PRECIO_ASFALTO[mesActual] || null;
+  const precioMes     = _precioAsfaltoMes(mesActual);
   const pCal          = precioMes && precioMes.caliente > 0 ? precioMes.caliente : null;
   const pFrio         = precioMes && precioMes.frio     > 0 ? precioMes.frio     : null;
   const ingPlantaAsf  = (pCal != null && tnCalienteMes != null) || (pFrio != null && tnFrioMes != null)
@@ -5151,7 +5241,7 @@ function openDetalleCelda(tipo, codObra, nombreObra) {
       const entry = Object.entries(remitosMes.porObra).find(([k]) => k.toLowerCase()===nk||k.toLowerCase()===ck);
       if (entry) { tnCal = entry[1].caliente||0; tnFrio = entry[1].frio||0; }
     }
-    const precio = PRECIO_ASFALTO[mesActual] || null;
+    const precio = _precioAsfaltoMes(mesActual);
     const costoTotal = precio ? Math.round(tnCal*(precio.caliente||0)+tnFrio*(precio.frio||0)) : null;
     html = `<div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Remitos de producción · ${mes} · Fuente: Roberto</div>
       <div style="display:grid;gap:8px;">
