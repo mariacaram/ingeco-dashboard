@@ -1605,7 +1605,7 @@
   <!-- Evolución mensual del resultado de cada unidad -->
   <div class="section">
     <div class="section-title">Resultado mensual por unidad · 2026</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">Cada barra es el resultado del mes: <span style="color:#16a34a;font-weight:700;">verde</span> = ganó, <span style="color:#dc2626;font-weight:700;">rojo</span> = perdió. Los meses sin barra aún no tienen datos suficientes. <strong>Hacé click en un mes para ir al detalle de esa sección.</strong></div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">Cada barra es el resultado del mes: <span style="color:#16a34a;font-weight:700;">verde</span> = ganó, <span style="color:#dc2626;font-weight:700;">rojo</span> = perdió. Los meses sin barra aún no tienen datos suficientes. <strong>Hacé click en un mes para ver cómo se forma (ingreso − egreso).</strong></div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px;">
       <div class="chart-card"><h3 style="color:#15803d;">🏗 Margen Obras</h3><div style="height:200px;"><canvas id="chart-rent-obras"></canvas></div></div>
       <div class="chart-card"><h3 style="color:#92400e;">🔧 Resultado Taller</h3><div style="height:200px;"><canvas id="chart-rent-taller"></canvas></div></div>
@@ -2060,10 +2060,17 @@ const FUENTES = [
 // ================================================================
 
 function fmt(n) {
-  if (n == null) return '—';
-  // Siempre en millones (M), nunca billones (B)
-  if (n >= 1e6) return '$' + (n/1e6).toLocaleString('es-AR', {minimumFractionDigits: 1, maximumFractionDigits: 1}) + 'M';
-  return '$' + n.toLocaleString('es-AR', {minimumFractionDigits: 0, maximumFractionDigits: 0});
+  if (n == null || isNaN(n)) return '—';
+  // Formato unificado: todo abreviado por magnitud, siempre con sufijo.
+  //   ≥ 1 millón  → "$28,6M"   (1 decimal)
+  //   ≥ 1 mil     → "$350,9 mil" (hasta 1 decimal)
+  //   < 1 mil     → "$850"
+  // Los negativos usan el mismo formato con "-" adelante (antes se mostraban completos).
+  const sg = n < 0 ? '-' : '';
+  const a  = Math.abs(n);
+  if (a >= 1e6) return sg + '$' + (a/1e6).toLocaleString('es-AR', {minimumFractionDigits: 1, maximumFractionDigits: 1}) + 'M';
+  if (a >= 1e3) return sg + '$' + (a/1e3).toLocaleString('es-AR', {minimumFractionDigits: 0, maximumFractionDigits: 1}) + ' mil';
+  return sg + '$' + Math.round(a).toLocaleString('es-AR');
 }
 
 function fmtFull(n) {
@@ -4455,7 +4462,14 @@ function _resultadoUnidadesMes(mes) {
   // Margen Obras = TOTAL de Contribución marginal por obra de ese mes
   let margenObras = null;
   const dObras = computeMargenObrasMes(mes);
-  if (dObras && dObras.rows) margenObras = dObras.rows.reduce((s, r) => s + r.margen, 0);
+  let obACobrar = 0, obInsumos = 0, obMO = 0, obAsf = 0, obAlq = 0;
+  if (dObras && dObras.rows) {
+    margenObras = dObras.rows.reduce((s, r) => s + r.margen, 0);
+    dObras.rows.forEach(r => {
+      obACobrar += r.aCobrar || 0; obInsumos += r.insumos || 0;
+      obMO += r.moObra || 0; obAsf += r.costoAsfObra || 0; obAlq += r.alquiler || 0;
+    });
+  }
 
   const alqObj = ALQUILER_EQUIPOS[mes];
   const alqMes = alqObj ? alqObj.totalArs : null;
@@ -4473,6 +4487,7 @@ function _resultadoUnidadesMes(mes) {
   const moPReal = moPArr.length > 0 ? moPArr.reduce((s, r) => s + r.monto, 0) : null;
   const moPEst  = moPReal == null ? getMOEstimadoPlanta(mes) : null;
   const moPlanta = moPReal != null ? moPReal : (moPEst ? moPEst.monto : 0);
+  const moPlantaEstim = moPReal == null && moPEst != null;
   const ocPObj   = getOCPlantaInterna(mes);
   const ocPlanta = ocPObj ? ocPObj.total : 0;
   const alqPlanta = _alqTotalPlanta(alqObj) || 0;
@@ -4483,7 +4498,8 @@ function _resultadoUnidadesMes(mes) {
   const pCal   = precioM && precioM.caliente > 0 ? precioM.caliente : 0;
   const pFrio  = precioM && precioM.frio     > 0 ? precioM.frio     : 0;
   const ingAsf = (pCal > 0 && tnCal > 0) || (pFrio > 0 && tnFrio > 0) ? Math.round(tnCal * pCal + tnFrio * pFrio) : null;
-  const ingPlanta = ingAsf != null ? ingAsf : (INGRESOS_PLANTA[mes] != null ? INGRESOS_PLANTA[mes] : null);
+  const ingManual = INGRESOS_PLANTA[mes] != null ? INGRESOS_PLANTA[mes] : null;
+  const ingPlanta = ingAsf != null ? ingAsf : ingManual;
   const egresosPlanta = moPlanta + ocPlanta + alqPlanta;
   let resultPlanta = null;
   if (ingPlanta != null) resultPlanta = ingPlanta - egresosPlanta;
@@ -4493,7 +4509,85 @@ function _resultadoUnidadesMes(mes) {
   const gest = GASTOS_ESTRUCTURA[mes];
   const gastosEstructura = (gest && gest.total) ? -gest.total : null;
 
-  return { margenObras, resultTaller, resultPlanta, gastosEstructura };
+  // Desglose ingreso − egreso por unidad (para el panel de detalle al clickear)
+  const notaIngPlanta = ingAsf != null
+    ? (tnCal > 0 ? fmtTn(tnCal) + ' tn cal × $' + pCal.toLocaleString('es-AR') : '')
+      + (tnFrio > 0 && pFrio > 0 ? (tnCal > 0 ? ' + ' : '') + fmtTn(tnFrio) + ' tn frío × $' + pFrio.toLocaleString('es-AR') : '')
+    : (ingManual != null ? 'ingresado a mano' : 'pendiente criterio de valorización (falta precio × tn)');
+  const detalle = {
+    obras: { titulo: 'Margen Obras', color: '#15803d', tab: 'margen', resultado: margenObras,
+      ingresos: [{ l: 'Certificado / A cobrar', v: obACobrar, nota: 'Fernando Solís' }],
+      egresos: [
+        { l: 'OC Insumos de obra', v: obInsumos, nota: 'Guillermo Konicek' },
+        { l: 'Mano de obra Obras', v: obMO, nota: dObras && dObras.moEsEstim ? 'estimada' : 'TANGO' },
+        { l: 'Costo asfalto', v: obAsf, nota: 'tn × precio' },
+        { l: 'Alquiler interno máquinas', v: obAlq, nota: 'Partes diarios' },
+      ] },
+    taller: { titulo: 'Resultado Taller', color: '#92400e', tab: 'taller', resultado: resultTaller,
+      ingresos: [{ l: 'Alquiler de equipos (a obras + terceros)', v: alqMes || 0, nota: 'Partes diarios × tarifa' }],
+      egresos: [
+        { l: 'Mano de obra Taller', v: moTaller, nota: moTReal == null ? 'estimada' : 'TANGO' },
+        { l: 'Repuestos de máquinas', v: repTaller, nota: repTaller ? 'entregas (Nico)' : 'sin datos del mes' },
+      ] },
+    planta: { titulo: 'Resultado Planta', color: '#1d4ed8', tab: 'planta', resultado: resultPlanta,
+      ingresos: [{ l: 'Venta interna de mezcla', v: ingPlanta, nota: notaIngPlanta, pendiente: ingPlanta == null }],
+      egresos: [
+        { l: 'OC Insumos planta', v: ocPlanta, nota: 'asfalto, FO, etc.' },
+        { l: 'Mano de obra Planta', v: moPlanta, nota: moPlantaEstim ? 'estimada' : 'TANGO' },
+        { l: 'Alquiler equipos (Cantera / Trituración / Planta)', v: alqPlanta, nota: 'Partes diarios' },
+      ] },
+    estructura: { titulo: 'Gastos de Estructura', color: '#dc2626', tab: 'gastos-estructura', resultado: gastosEstructura,
+      ingresos: [],
+      egresos: [{ l: 'Gastos administrativos (cuentas ADMIN)', v: gest && gest.total ? gest.total : 0, nota: 'libro mayor (Romina)' }] },
+  };
+
+  return { margenObras, resultTaller, resultPlanta, gastosEstructura, detalle };
+}
+
+// Panel de detalle: cómo se forma el resultado de una unidad en un mes (ingreso − egreso)
+function openResultadoUnidadPanel(unidad, mes) {
+  const panel = document.getElementById('sidePanel');
+  const overlay = document.getElementById('overlay');
+  const content = document.getElementById('panelContent');
+  if (!panel) return;
+  const d = _resultadoUnidadesMes(mes).detalle[unidad];
+  if (!d) return;
+  const mesLbl = MES[mes] || mes;
+
+  const fila = (item, signo) => {
+    const pend = item.pendiente || (item.v == null);
+    const color = signo === '+' ? '#16a34a' : '#dc2626';
+    const valTxt = pend ? '<span class="nd">pendiente</span>' : (signo === '−' ? '− ' : '') + fmt(item.v || 0);
+    return `<tr style="border-bottom:1px solid #f1f5f9;">
+      <td style="padding:8px 4px;font-size:12.5px;color:#334155;">${signo === '+' ? '<span style="color:#16a34a;font-weight:700;">+</span> ' : '<span style="color:#dc2626;font-weight:700;">−</span> '}${item.l}${item.nota ? `<br><span style="font-size:10px;color:var(--muted);padding-left:14px;">${item.nota}</span>` : ''}</td>
+      <td style="padding:8px 4px;text-align:right;font-size:12.5px;font-weight:600;color:${pend ? 'var(--nd-text)' : color};white-space:nowrap;">${valTxt}</td>
+    </tr>`;
+  };
+
+  const totIng = d.ingresos.reduce((s, i) => s + (i.v || 0), 0);
+  const totEgr = d.egresos.reduce((s, i) => s + (i.v || 0), 0);
+  const resColor = d.resultado == null ? 'var(--nd-text)' : (d.resultado >= 0 ? '#16a34a' : '#dc2626');
+  const hayIngPend = d.ingresos.some(i => i.pendiente || i.v == null);
+
+  content.innerHTML = `
+    <div class="panel-title" style="color:${d.color};">${d.titulo}</div>
+    <div class="panel-sub">${mesLbl} · cómo se forma el resultado</div>
+    <table style="width:100%;border-collapse:collapse;margin-top:14px;">
+      ${d.ingresos.length ? `<tr><td colspan="2" style="padding:8px 4px 4px;font-size:11px;font-weight:800;letter-spacing:.05em;color:#15803d;text-transform:uppercase;">Ingresos</td></tr>` : ''}
+      ${d.ingresos.map(i => fila(i, '+')).join('')}
+      ${d.ingresos.length ? `<tr style="border-top:1px solid var(--border);"><td style="padding:6px 4px;font-size:12px;font-weight:700;">Total ingresos</td><td style="padding:6px 4px;text-align:right;font-weight:700;color:#16a34a;">${hayIngPend && totIng === 0 ? '<span class="nd">pendiente</span>' : fmt(totIng)}</td></tr>` : ''}
+      <tr><td colspan="2" style="padding:14px 4px 4px;font-size:11px;font-weight:800;letter-spacing:.05em;color:#dc2626;text-transform:uppercase;">Egresos</td></tr>
+      ${d.egresos.map(i => fila(i, '−')).join('')}
+      <tr style="border-top:1px solid var(--border);"><td style="padding:6px 4px;font-size:12px;font-weight:700;">Total egresos</td><td style="padding:6px 4px;text-align:right;font-weight:700;color:#dc2626;">− ${fmt(totEgr)}</td></tr>
+    </table>
+    <div style="margin-top:16px;background:${d.resultado != null && d.resultado >= 0 ? '#f0fdf4' : '#fef2f2'};border:1.5px solid ${resColor};border-radius:10px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;">
+      <span style="font-size:13px;font-weight:700;">= ${d.titulo}</span>
+      <span style="font-size:22px;font-weight:800;color:${resColor};">${d.resultado == null ? '—' : fmt(d.resultado)}</span>
+    </div>
+    ${hayIngPend ? `<div class="nota" style="margin-top:12px;">⏳ El ingreso de esta unidad todavía no está valorizado (falta el criterio de precio × tn). Por eso el resultado del mes refleja solo los egresos. Cuando se cargue el precio, el ingreso se suma automáticamente.</div>` : ''}
+    <button onclick="closePanel(); setMes('${mes}'); openTab('${d.tab}');" style="margin-top:16px;width:100%;background:${d.color};color:#fff;border:none;border-radius:8px;padding:11px;font-size:13px;font-weight:700;cursor:pointer;">Ver la sección completa de ${mesLbl} →</button>`;
+  panel.classList.add('open');
+  overlay.classList.add('open');
 }
 
 // Eje Y compacto para los gráficos ($5M, -$1M, $500k)
@@ -4506,7 +4600,7 @@ function _fmtEjeRent(v) {
 }
 
 const _rentCharts = {};
-function _rentBarChart(canvasId, meses, valores, targetTab) {
+function _rentBarChart(canvasId, meses, valores, unidad) {
   const cv = document.getElementById(canvasId);
   if (!cv || typeof Chart === 'undefined') return;
   if (_rentCharts[canvasId]) _rentCharts[canvasId].destroy();
@@ -4518,18 +4612,18 @@ function _rentBarChart(canvasId, meses, valores, targetTab) {
     options: {
       responsive: true, maintainAspectRatio: false,
       animation: { duration: 500 },
-      // Click en un mes → ir a esa sección con ese mes seleccionado
+      // Click en un mes → panel con el desglose ingreso − egreso de ese mes
       onClick: (evt, elements) => {
-        if (!targetTab || !elements || elements.length === 0) return;
+        if (!unidad || !elements || elements.length === 0) return;
         const mes = meses[elements[0].index];
-        if (mes) { setMes(mes); openTab(targetTab); }
+        if (mes) openResultadoUnidadPanel(unidad, mes);
       },
       onHover: (evt, elements) => { if (evt.native && evt.native.target) evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; },
       plugins: {
         legend: { display: false },
         tooltip: { callbacks: {
           label: c => c.raw == null ? 'sin datos suficientes' : fmt(c.raw),
-          footer: () => targetTab ? 'Click para ver el detalle del mes' : ''
+          footer: () => unidad ? 'Click: ver cómo se forma (ingreso − egreso)' : ''
         } }
       },
       scales: {
@@ -4546,10 +4640,10 @@ function renderRentabilidadCharts() {
   const hoyIdx = (new Date().getFullYear() === 2026) ? new Date().getMonth() : 11;
   const meses = MES_ORDER.slice(0, hoyIdx + 1);
   const res = meses.map(m => _resultadoUnidadesMes(m));
-  _rentBarChart('chart-rent-obras',      meses, res.map(r => r.margenObras),      'margen');
+  _rentBarChart('chart-rent-obras',      meses, res.map(r => r.margenObras),      'obras');
   _rentBarChart('chart-rent-taller',     meses, res.map(r => r.resultTaller),     'taller');
   _rentBarChart('chart-rent-planta',     meses, res.map(r => r.resultPlanta),     'planta');
-  _rentBarChart('chart-rent-estructura', meses, res.map(r => r.gastosEstructura), 'gastos-estructura');
+  _rentBarChart('chart-rent-estructura', meses, res.map(r => r.gastosEstructura), 'estructura');
 }
 
 function renderRentabilidad() {
