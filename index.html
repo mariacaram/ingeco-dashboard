@@ -740,6 +740,7 @@
   <button class="tab-btn" onclick="openTab('estructura')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="5" rx="1.2"/><rect x="3" y="16" width="6" height="5" rx="1.2"/><rect x="15" y="16" width="6" height="5" rx="1.2"/><path d="M12 8v4M6 16v-2h12v2"/></svg>Organigrama y datos</button>
   <button class="tab-btn" onclick="openTab('manual')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M8 7h7M8 11h7"/></svg>Manual de tareas/instructivos</button>
   <button class="tab-btn" onclick="openTab('fuentes')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5.5" rx="7" ry="2.8"/><path d="M5 5.5v6c0 1.5 3.1 2.8 7 2.8s7-1.3 7-2.8v-6"/><path d="M5 11.5v6c0 1.5 3.1 2.8 7 2.8s7-1.3 7-2.8v-6"/></svg>Fuentes de Datos</button>
+  <button class="tab-btn" data-restrict="sueldos" onclick="openTab('auditorias')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.5-3.2 7.7-8 9-4.8-1.3-8-4.5-8-9V6z"/><path d="M12 8v4"/><path d="M12 15.5h.01"/></svg>Auditorías<span id="audit-nav-badge" style="display:none;margin-left:auto;background:#dc2626;color:#fff;font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;"></span></button>
 </nav>
 
 <!-- CONTENT -->
@@ -1607,6 +1608,24 @@
         <tbody id="tbody-fuentes"></tbody>
       </table>
     </div>
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- TAB: AUDITORÍAS (solo directorio) -->
+<!-- ================================================================ -->
+<div class="tab-panel" id="tab-auditorias" data-restrict="sueldos">
+  <div class="section">
+    <div class="section-title" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      Auditoría de consistencia entre archivos
+      <button onclick="copiarAuditorias(this)" style="margin-left:auto;font-size:12px;padding:6px 14px;border:1px solid var(--border);border-radius:8px;background:#fff;cursor:pointer;font-weight:600;">📋 Copiar informe</button>
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin:-4px 0 14px;">
+      Chequeos automáticos que cruzan el archivo de certificados de Julia contra la programación de cobranzas de Esteban.
+      Se recalculan cada vez que se actualizan los datos: cuando una inconsistencia se corrige en los archivos, desaparece sola de esta lista.
+    </div>
+    <div id="audit-resumen" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;"></div>
+    <div id="audit-list"></div>
   </div>
 </div>
 
@@ -5168,6 +5187,261 @@ function renderFuentes() {
 }
 
 // ================================================================
+// AUDITORÍAS — chequeos automáticos Julia (certificados) vs Esteban (cobranzas)
+// ================================================================
+
+// Mapa de equivalencia de nombres: obra de Julia -> nombres con que aparece en
+// el archivo de Esteban. Se amplía a mano cuando aparece una obra nueva con
+// nombre distinto en cada archivo (no hay código de obra común entre planillas).
+const MAPA_OBRAS_AUDIT = {
+  'Avenida Nestor Kirchner': ['ROCA', 'Av. Roca'],
+  'Avenida Mitre': ['MITRE', 'Av. Mitre', 'Pintura Av. Mitre'],
+  'Papa Francisco': ['Papa Francisco', 'PAPA FRANCISCO'],
+  'Ruta 357 - Quilmes': ['Ruta 357 - Quilmes'],
+  'Bacheo SMT': ['bacheo area central', 'Bacheo Munic.- Etapa 2'],
+  'Provisión de asfalto caliente': ['Venta de asfalto caliente', 'Provisión Asfalto p/Obras varias'],
+  'CERTIFICADO DE OBRA  Nº 1 - 81976-A': ['Obra Licit. Nº 81976', 'Licitación hormigon'],
+  'CERTIFICADO DE OBRA  Nº 1 - 81982-A': ['Obra Licit. Nº 81982'],
+  'Redeterminación': ['Redeterminación'],
+  'Cantero Soldati': ['Canteros Av. Soldati'],
+  'Provisión de hormigon': ['Provisión de hormigon para veredas', 'Provisión Hormigón p/Obras varias'],
+  'Fondo de reparo': ['Fondo de reparo'],
+  'Avenida Belgrano': ['Pintura Av. Belgrano', 'PINTURA BELGRANO'],
+  'Country Pilar': ['Country Pilar'],
+  '9 de Julio y Perez Palavecino': ['Pérez Palavecino'],
+  'Ruta 307 - Ampliación - Certificado N1': ['Ruta 307 (Ampliación)', 'Ruta 307'],
+  'Provisión de mezcla asfáltica en caliente y riego de liga': ['Venta de asfalto frío'],
+};
+
+const AUDIT_TOLERANCIA = 5e6; // diferencias menores a $5M no se reportan
+const AUDIT_GRAVE = 100e6;    // monto en juego a partir del cual es "grave"
+const AUDIT_CATS_PEND = ['facturados', 'noCobrados', 'sinFecha', 'menosProbable'];
+const ES_FONDO_REPARO = t => /fdo\.?\s*rep|fondo\s+de\s+reparo/i.test(t || '');
+
+let AUDIT_RESULTADOS = [];
+
+// Último mes con datos en el archivo de Esteban
+function _auditMesEsteban() {
+  const meses = MES_ORDER.filter(m => COBROS_ESTEBAN[m]);
+  return meses.length ? meses[meses.length - 1] : null;
+}
+
+function runAuditorias() {
+  AUDIT_RESULTADOS = [];
+  const mesE = _auditMesEsteban();
+  const obrasJ = (GENERADO_POR_OBRA && GENERADO_POR_OBRA.obras) || [];
+  if (!mesE || !obrasJ.length) return; // sin datos suficientes, no se audita
+
+  const cobros = COBROS_ESTEBAN[mesE];
+
+  // Pendiente y cobrado de Esteban agrupado por obra, con ítems
+  const estPend = {}, estCob = {};
+  AUDIT_CATS_PEND.forEach(cat => (cobros[cat] || []).forEach(it => {
+    const o = it.obra || '(sin obra)';
+    (estPend[o] = estPend[o] || { total: 0, items: [] });
+    estPend[o].total += it.importe || 0;
+    estPend[o].items.push({ txt: it.concepto || '(sin concepto)', monto: it.importe || 0, cat });
+  }));
+  (cobros.cobrados || []).forEach(it => {
+    const o = it.obra || '(sin obra)';
+    (estCob[o] = estCob[o] || { total: 0, items: [] });
+    estCob[o].total += it.importe || 0;
+    estCob[o].items.push({ txt: it.concepto || '(sin concepto)', monto: it.importe || 0, cat: 'cobrado' });
+  });
+
+  const usadosEsteban = new Set();
+
+  // ── Chequeo 1: pendiente Julia vs pendiente Esteban por obra ──
+  obrasJ.forEach(oj => {
+    if (!oj.items) return;
+    const nombres = MAPA_OBRAS_AUDIT[oj.nombre];
+    if (!nombres) return; // sin mapeo -> lo cubre el chequeo de huérfanas
+    nombres.forEach(n => usadosEsteban.add(n));
+    const pendJ = oj.items.filter(i => i.estado === 'A Cobrar').reduce((s, i) => s + (i.monto || 0), 0);
+    const pendE = nombres.reduce((s, n) => s + (estPend[n] ? estPend[n].total : 0), 0);
+    const dif = pendJ - pendE;
+    if (Math.abs(dif) <= AUDIT_TOLERANCIA) return;
+    const itemsJ = oj.items.filter(i => i.estado === 'A Cobrar').map(i => ({ txt: i.nombre, monto: i.monto || 0, cat: 'Julia · A Cobrar' }));
+    const itemsE = nombres.flatMap(n => (estPend[n] ? estPend[n].items : []).map(i => ({ ...i, cat: 'Esteban · ' + i.cat })));
+    AUDIT_RESULTADOS.push({
+      chequeo: 'Julia vs Esteban',
+      titulo: oj.nombre,
+      monto: Math.abs(dif),
+      grave: Math.abs(dif) >= AUDIT_GRAVE,
+      resumen: dif > 0
+        ? `Julia tiene ${fmt(dif)} más de pendiente que Esteban (Julia ${fmt(pendJ)} vs Esteban ${fmt(pendE)}). ¿Esteban dejó de seguir algo o Julia tiene ítems ya cobrados?`
+        : `A Julia le faltan ${fmt(-dif)} de pendiente que Esteban sí registra (Julia ${fmt(pendJ)} vs Esteban ${fmt(pendE)}). Probable atraso de carga o fondo de reparo sin desglosar.`,
+      responsable: dif > 0 ? 'Esteban / Julia' : 'Julia',
+      items: itemsJ.concat(itemsE),
+    });
+  });
+
+  // ── Chequeo 2: obras huérfanas (en un archivo y no en el otro) ──
+  Object.keys(estPend).forEach(o => {
+    if (usadosEsteban.has(o) || estPend[o].total <= AUDIT_TOLERANCIA) return;
+    AUDIT_RESULTADOS.push({
+      chequeo: 'Obra huérfana',
+      titulo: o,
+      monto: estPend[o].total,
+      grave: estPend[o].total >= AUDIT_GRAVE,
+      resumen: `Está en el archivo de Esteban con ${fmt(estPend[o].total)} pendiente pero no existe (o no está mapeada) en el archivo de Julia.`,
+      responsable: 'Julia',
+      items: estPend[o].items.map(i => ({ ...i, cat: 'Esteban · ' + i.cat })),
+    });
+  });
+  obrasJ.forEach(oj => {
+    if (oj.items || !(oj.aCobrar > AUDIT_TOLERANCIA)) return;
+    // fila agregada sin ítems (ej. "Obra sin asignación de código")
+    AUDIT_RESULTADOS.push({
+      chequeo: 'Sin código de obra',
+      titulo: oj.nombre,
+      monto: oj.aCobrar,
+      grave: oj.aCobrar >= AUDIT_GRAVE,
+      resumen: `${fmt(oj.aCobrar)} registrados sin código de obra asignado: imposible saber a qué obra corresponden ni cruzarlos con cobranzas.`,
+      responsable: 'Julia',
+      items: [],
+    });
+  });
+
+  // ── Chequeo 3: ítems sin estado en Julia ──
+  obrasJ.forEach(oj => {
+    if (!oj.items || ES_FONDO_REPARO(oj.nombre)) return;
+    const sinEstado = oj.items.filter(i => !i.estado);
+    const tot = sinEstado.reduce((s, i) => s + (i.monto || 0), 0);
+    if (tot <= AUDIT_TOLERANCIA) return;
+    AUDIT_RESULTADOS.push({
+      chequeo: 'Sin estado',
+      titulo: oj.nombre,
+      monto: tot,
+      grave: tot >= AUDIT_GRAVE,
+      resumen: `${sinEstado.length} certificado(s) por ${fmt(tot)} sin estado cargado: no se sabe si están cobrados o pendientes.`,
+      responsable: 'Julia',
+      items: sinEstado.map(i => ({ txt: i.nombre, monto: i.monto || 0, cat: 'Julia · sin estado' })),
+    });
+  });
+
+  // ── Chequeo 4: fondos de reparo que Esteban sigue y Julia no ──
+  const fondosJ = [];
+  obrasJ.forEach(oj => (oj.items || []).forEach(i => {
+    if (ES_FONDO_REPARO(oj.nombre) || ES_FONDO_REPARO(i.nombre)) fondosJ.push(i.nombre.toLowerCase());
+  }));
+  const fondosEsolo = [];
+  Object.keys(estPend).forEach(o => estPend[o].items.forEach(i => {
+    if (!ES_FONDO_REPARO(o) && !ES_FONDO_REPARO(i.txt)) return;
+    // ¿existe algo parecido en Julia? matching laxo por números de certificado
+    const nums = (i.txt.match(/\d+/g) || []).join(' ');
+    const hay = fondosJ.some(fj => {
+      const nj = (fj.match(/\d+/g) || []).join(' ');
+      return nums && nj === nums;
+    });
+    if (!hay) fondosEsolo.push({ txt: `${o} — ${i.txt}`, monto: i.monto, cat: 'Esteban · ' + i.cat });
+  }));
+  const totFsolo = fondosEsolo.reduce((s, i) => s + i.monto, 0);
+  if (totFsolo > AUDIT_TOLERANCIA) {
+    AUDIT_RESULTADOS.push({
+      chequeo: 'Fondo de reparo',
+      titulo: 'Fondos de reparo sin espejo en Julia',
+      monto: totFsolo,
+      grave: totFsolo >= AUDIT_GRAVE,
+      resumen: `Esteban tiene ${fondosEsolo.length} fondo(s) de reparo pendientes por ${fmt(totFsolo)} que no aparecen desglosados en el archivo de Julia.`,
+      responsable: 'Julia',
+      items: fondosEsolo,
+    });
+  }
+
+  AUDIT_RESULTADOS.sort((a, b) => (b.grave - a.grave) || (b.monto - a.monto));
+}
+
+function renderAuditorias() {
+  const list = document.getElementById('audit-list');
+  const resumen = document.getElementById('audit-resumen');
+  const badge = document.getElementById('audit-nav-badge');
+  if (!list) return;
+
+  runAuditorias();
+  const mesE = _auditMesEsteban();
+
+  if (!mesE || !(GENERADO_POR_OBRA && GENERADO_POR_OBRA.obras)) {
+    resumen.innerHTML = '';
+    list.innerHTML = `<div class="alert info" style="font-size:13px;">Sin datos suficientes para auditar — presioná <strong>Actualizar datos</strong> para cargar los archivos de Julia y Esteban.</div>`;
+    if (badge) badge.style.display = 'none';
+    return;
+  }
+
+  const graves = AUDIT_RESULTADOS.filter(r => r.grave).length;
+  const enJuego = AUDIT_RESULTADOS.reduce((s, r) => s + r.monto, 0);
+
+  if (badge) {
+    badge.style.display = AUDIT_RESULTADOS.length ? '' : 'none';
+    badge.textContent = AUDIT_RESULTADOS.length;
+  }
+
+  resumen.innerHTML = `
+    <div style="flex:1;min-width:150px;background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 16px;">
+      <div style="font-size:11px;color:var(--muted);font-weight:600;">INCONSISTENCIAS</div>
+      <div style="font-size:24px;font-weight:800;">${AUDIT_RESULTADOS.length}</div>
+    </div>
+    <div style="flex:1;min-width:150px;background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 16px;">
+      <div style="font-size:11px;color:var(--muted);font-weight:600;">🔴 GRAVES (>${fmt(AUDIT_GRAVE)})</div>
+      <div style="font-size:24px;font-weight:800;color:${graves ? '#dc2626' : 'inherit'};">${graves}</div>
+    </div>
+    <div style="flex:1;min-width:150px;background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 16px;">
+      <div style="font-size:11px;color:var(--muted);font-weight:600;">MONTO EN JUEGO</div>
+      <div style="font-size:24px;font-weight:800;">${fmt(enJuego)}</div>
+    </div>
+    <div style="flex:1;min-width:150px;background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 16px;">
+      <div style="font-size:11px;color:var(--muted);font-weight:600;">COMPARADO CONTRA</div>
+      <div style="font-size:15px;font-weight:700;padding-top:6px;">Esteban · ${MES[mesE] || mesE}</div>
+    </div>`;
+
+  if (!AUDIT_RESULTADOS.length) {
+    list.innerHTML = `<div class="alert info" style="font-size:13px;background:#dcfce7;border-color:#86efac;color:#166534;">✅ Sin inconsistencias por encima de ${fmt(AUDIT_TOLERANCIA)} entre los archivos de Julia y Esteban.</div>`;
+    return;
+  }
+
+  list.innerHTML = AUDIT_RESULTADOS.map(r => `
+    <details style="background:#fff;border:1px solid ${r.grave ? '#fecaca' : 'var(--border)'};border-left:4px solid ${r.grave ? '#dc2626' : '#f59e0b'};border-radius:10px;padding:0;margin-bottom:10px;overflow:hidden;">
+      <summary style="list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:13px 16px;flex-wrap:wrap;">
+        <span>${r.grave ? '🔴' : '🟡'}</span>
+        <span class="status-badge ${r.grave ? 'pendiente' : 'parcial'}" style="font-size:10px;">${r.chequeo}</span>
+        <strong style="font-size:13px;">${r.titulo}</strong>
+        <span style="margin-left:auto;font-weight:800;font-size:14px;">${fmt(r.monto)}</span>
+      </summary>
+      <div style="padding:0 16px 14px;border-top:1px solid var(--border);">
+        <div style="font-size:12.5px;padding:10px 0 6px;line-height:1.55;">${r.resumen}</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">Corrección corresponde a: <strong>${r.responsable}</strong></div>
+        ${r.items.length ? `<table style="width:100%;font-size:11.5px;">
+          ${r.items.map(i => `<tr>
+            <td style="padding:4px 8px;color:var(--muted);white-space:nowrap;">${i.cat}</td>
+            <td style="padding:4px 8px;">${i.txt}</td>
+            <td style="padding:4px 8px;text-align:right;font-weight:600;white-space:nowrap;">${fmt(i.monto)}</td>
+          </tr>`).join('')}
+        </table>` : ''}
+      </div>
+    </details>`).join('');
+}
+
+function copiarAuditorias(btn) {
+  const mesE = _auditMesEsteban();
+  const lineas = [
+    `AUDITORÍA DE CONSISTENCIA — INGECO`,
+    `Comparación: certificados (Julia) vs cobranzas (Esteban · ${mesE ? (MES[mesE] || mesE) : 's/d'})`,
+    `Generado: ${new Date().toLocaleString('es-AR')}`,
+    ``,
+  ];
+  AUDIT_RESULTADOS.forEach((r, i) => {
+    lineas.push(`${i + 1}. ${r.grave ? '[GRAVE] ' : ''}${r.chequeo} — ${r.titulo} — ${fmt(r.monto)}`);
+    lineas.push(`   ${r.resumen}`);
+    r.items.forEach(it => lineas.push(`   · ${it.cat}: ${it.txt} — ${fmt(it.monto)}`));
+    lineas.push('');
+  });
+  if (!AUDIT_RESULTADOS.length) lineas.push('Sin inconsistencias detectadas.');
+  navigator.clipboard.writeText(lineas.join('\n')).then(() => {
+    if (btn) { const t = btn.textContent; btn.textContent = '✅ Copiado'; setTimeout(() => btn.textContent = t, 1800); }
+  }).catch(() => alert('No se pudo copiar al portapapeles'));
+}
+
+// ================================================================
 // PANEL LATERAL
 // ================================================================
 
@@ -7581,6 +7855,7 @@ function renderAll() {
   renderFlujo();
   renderPersonas();
   renderFuentes();
+  renderAuditorias();
   _syncKpiCardsTipo();
 }
 
@@ -7902,6 +8177,7 @@ renderRentabilidad();
 renderFlujo();
 renderPersonas();
 renderFuentes();
+renderAuditorias();
 
 // Auto-carga desde caché del Apps Script (sin tocar Drive)
 if (APPS_SCRIPT_URL) {
