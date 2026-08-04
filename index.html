@@ -5245,10 +5245,14 @@ const SHEET_URLS_AUDIT = {
   julia:   'https://docs.google.com/spreadsheets/d/1Hl8HZqrH6lMwnAGpitA37ZGLg4szTcFGK7vmv92qkBA/edit',
   esteban: 'https://docs.google.com/spreadsheets/d/1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY/edit',
 };
-function _sheetLinkAudit(it) {
+function _sheetUrlAudit(it) {
   const base = SHEET_URLS_AUDIT[it && it.src];
   if (!base) return '';
-  const url = (it.gid != null && it.fila) ? `${base}#gid=${it.gid}&range=A${it.fila}` : base;
+  return (it.gid != null && it.fila) ? `${base}#gid=${it.gid}&range=A${it.fila}` : base;
+}
+function _sheetLinkAudit(it) {
+  const url = _sheetUrlAudit(it);
+  if (!url) return '';
   const lbl = (it.gid != null && it.fila) ? `fila ${it.fila} ↗` : 'archivo ↗';
   return `<a href="${url}" target="_blank" onclick="event.stopPropagation()" title="Abrir en Google Sheets (${it.src === 'julia' ? 'archivo de Julia' : 'planilla de Esteban'})" style="font-size:10px;font-weight:700;white-space:nowrap;text-decoration:none;color:#2563eb;">${lbl}</a>`;
 }
@@ -5624,7 +5628,11 @@ function renderSeguimientoCobros() {
       </div>
       ${_segBarra(o, total)}
       <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:7px;font-size:11px;">
-        ${o.fondoPend > 0 ? `<span style="color:#b45309;font-weight:600;">🔒 Fondo de reparo pendiente: ${fmt(o.fondoPend)} — reclamable</span>` : ''}
+        ${o.fondoPend > 0 ? (() => {
+          const fi = o.itemsPend.filter(i => i.esFondo).sort((a, b) => b.monto - a.monto)[0];
+          const url = fi ? _sheetUrlAudit(fi) : '';
+          return `<span style="color:#b45309;font-weight:600;${url ? 'cursor:pointer;text-decoration:underline dotted;' : ''}" ${url ? `onclick="event.stopPropagation();window.open('${url}','_blank')" title="Abrir la fila en la planilla de Esteban"` : ''}>🔒 Fondo de reparo pendiente: ${fmt(o.fondoPend)} — reclamable${url && fi.fila ? ' ↗' : ''}</span>`;
+        })() : ''}
         ${difJ ? `<span data-restrict="sueldos" style="color:#dc2626;font-weight:600;" onclick="event.stopPropagation();irAAuditoria('${difJ.titulo.replace(/'/g, "\\'")}');">⚠️ difiere ${fmt(difJ.monto)} del archivo de Julia — ver Auditorías</span>` : ''}
       </div>
     </div>`;
@@ -5655,7 +5663,17 @@ function openSeguimientoPanel(nombre) {
       <div class="panel-kpi-item"><div class="panel-kpi-label">Total registrado</div><div class="panel-kpi-val">${fmt(total)}</div></div>
       <div class="panel-kpi-item"><div class="panel-kpi-label">Cobrado</div><div class="panel-kpi-val" style="color:#16a34a;">${fmt(o.cob)}</div></div>
       <div class="panel-kpi-item"><div class="panel-kpi-label">Falta cobrar</div><div class="panel-kpi-val" style="color:#dc2626;">${fmt(o.pend)}</div></div>
-      <div class="panel-kpi-item"><div class="panel-kpi-label">Fondo de reparo pend.</div><div class="panel-kpi-val" style="color:#b45309;">${o.fondoPend > 0 ? fmt(o.fondoPend) : '—'}</div></div>
+      ${(() => {
+        const fi = o.itemsPend.filter(i => i.esFondo).sort((a, b) => b.monto - a.monto)[0];
+        const url = (o.fondoPend > 0 && fi) ? _sheetUrlAudit(fi) : '';
+        return `<div class="panel-kpi-item" ${url ? `style="cursor:pointer;" onclick="window.open('${url}','_blank')" title="Abrir la fila del fondo de reparo en la planilla de Esteban"` : ''}>
+          <div class="panel-kpi-label">Fondo de reparo pend.</div>
+          <div class="panel-kpi-val" style="color:#b45309;">${o.fondoPend > 0 ? fmt(o.fondoPend) + (url && fi.fila ? ' <span style="font-size:11px;">↗</span>' : '') : '—'}</div>
+        </div>`;
+      })()}
+    </div>
+    <div style="font-size:10.5px;color:var(--muted);margin-top:8px;line-height:1.5;">
+      ℹ️ <strong>Total registrado</strong> = cobrado desde ${MES[data.meses[0]] || data.meses[0]} + pendiente según la programación de ${MES[data.ult] || data.ult} (planilla de Esteban). No es el monto de contrato: no incluye lo cobrado antes de ${MES[data.meses[0]] || data.meses[0]} ni certificados aún no cargados.
     </div>
     ${o.itemsPend.length ? `
     <div style="font-size:12px;font-weight:700;margin:16px 0 6px;">FALTA COBRAR (programación de ${MES[data.ult] || data.ult})</div>
