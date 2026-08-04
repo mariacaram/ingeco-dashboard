@@ -930,7 +930,9 @@ function leerGeneradoFernando() {
 
         // Período → clave de mes
         const mesKey = _parseMesKey(row[cfg.iPeriodo], curYear);
-        const item = { nombre: nombre || cod, codigo: cod, monto: Math.round(monto), estado: estado };
+        // fila/gid: para armar el deep-link a la celda exacta del Sheet desde el tablero
+        const item = { nombre: nombre || cod, codigo: cod, monto: Math.round(monto), estado: estado,
+                       fila: i + 1, gid: sheet.getSheetId() };
 
         if (mesKey) {
           if (!aCobrarPorMes[mesKey]) aCobrarPorMes[mesKey] = {};
@@ -1854,6 +1856,8 @@ function leerCobrosEsteban() {
           fechaProb: iFechaProb !== null ? _fmtFecha(row[iFechaProb]) : '',
           fechaReal: iFechaReal !== null ? _fmtFecha(row[iFechaReal]) : '',
           cod:       iCod       !== null ? String(row[iCod]       || '').trim() : '',
+          fila:      i + 1,                 // fila real del Sheet (deep-link desde el tablero)
+          gid:       sheet.getSheetId(),
         };
 
         if (pastTotal) {

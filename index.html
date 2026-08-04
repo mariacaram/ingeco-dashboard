@@ -5238,6 +5238,21 @@ const MAPA_OBRAS_AUDIT = {
   'Provisión de mezcla asfáltica en caliente y riego de liga': ['Venta de asfalto frío'],
 };
 
+// URLs de los archivos fuente para el deep-link "abrir la fila en el Sheet".
+// Si el ítem trae fila+gid (requiere .gs actualizado), el link salta a la celda
+// exacta; si no, abre el archivo completo.
+const SHEET_URLS_AUDIT = {
+  julia:   'https://docs.google.com/spreadsheets/d/1Hl8HZqrH6lMwnAGpitA37ZGLg4szTcFGK7vmv92qkBA/edit',
+  esteban: 'https://docs.google.com/spreadsheets/d/1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY/edit',
+};
+function _sheetLinkAudit(it) {
+  const base = SHEET_URLS_AUDIT[it && it.src];
+  if (!base) return '';
+  const url = (it.gid != null && it.fila) ? `${base}#gid=${it.gid}&range=A${it.fila}` : base;
+  const lbl = (it.gid != null && it.fila) ? `fila ${it.fila} ↗` : 'archivo ↗';
+  return `<a href="${url}" target="_blank" onclick="event.stopPropagation()" title="Abrir en Google Sheets (${it.src === 'julia' ? 'archivo de Julia' : 'planilla de Esteban'})" style="font-size:10px;font-weight:700;white-space:nowrap;text-decoration:none;color:#2563eb;">${lbl}</a>`;
+}
+
 const AUDIT_TOLERANCIA = 5e6; // diferencias menores a $5M no se reportan
 const AUDIT_GRAVE = 100e6;    // monto en juego a partir del cual es "grave"
 const AUDIT_CATS_PEND = ['facturados', 'noCobrados', 'sinFecha', 'menosProbable'];
@@ -5265,13 +5280,13 @@ function runAuditorias() {
     const o = it.obra || '(sin obra)';
     (estPend[o] = estPend[o] || { total: 0, items: [] });
     estPend[o].total += it.importe || 0;
-    estPend[o].items.push({ txt: it.concepto || '(sin concepto)', monto: it.importe || 0, cat });
+    estPend[o].items.push({ txt: it.concepto || '(sin concepto)', monto: it.importe || 0, cat, fila: it.fila, gid: it.gid, src: 'esteban' });
   }));
   (cobros.cobrados || []).forEach(it => {
     const o = it.obra || '(sin obra)';
     (estCob[o] = estCob[o] || { total: 0, items: [] });
     estCob[o].total += it.importe || 0;
-    estCob[o].items.push({ txt: it.concepto || '(sin concepto)', monto: it.importe || 0, cat: 'cobrado' });
+    estCob[o].items.push({ txt: it.concepto || '(sin concepto)', monto: it.importe || 0, cat: 'cobrado', fila: it.fila, gid: it.gid, src: 'esteban' });
   });
 
   const usadosEsteban = new Set();
@@ -5286,7 +5301,7 @@ function runAuditorias() {
     const pendE = nombres.reduce((s, n) => s + (estPend[n] ? estPend[n].total : 0), 0);
     const dif = pendJ - pendE;
     if (Math.abs(dif) <= AUDIT_TOLERANCIA) return;
-    const itemsJ = oj.items.filter(i => i.estado === 'A Cobrar').map(i => ({ txt: i.nombre, monto: i.monto || 0, cat: 'Julia · A Cobrar' }));
+    const itemsJ = oj.items.filter(i => i.estado === 'A Cobrar').map(i => ({ txt: i.nombre, monto: i.monto || 0, cat: 'Julia · A Cobrar', fila: i.fila, gid: i.gid, src: 'julia' }));
     const itemsE = nombres.flatMap(n => (estPend[n] ? estPend[n].items : []).map(i => ({ ...i, cat: 'Esteban · ' + i.cat })));
     AUDIT_RESULTADOS.push({
       chequeo: 'Julia vs Esteban',
@@ -5325,6 +5340,7 @@ function runAuditorias() {
       resumen: `${fmt(oj.aCobrar)} registrados sin código de obra asignado: imposible saber a qué obra corresponden ni cruzarlos con cobranzas.`,
       responsable: 'Julia',
       items: [],
+      link: 'julia',
     });
   });
 
@@ -5341,7 +5357,7 @@ function runAuditorias() {
       grave: tot >= AUDIT_GRAVE,
       resumen: `${sinEstado.length} certificado(s) por ${fmt(tot)} sin estado cargado: no se sabe si están cobrados o pendientes.`,
       responsable: 'Julia',
-      items: sinEstado.map(i => ({ txt: i.nombre, monto: i.monto || 0, cat: 'Julia · sin estado' })),
+      items: sinEstado.map(i => ({ txt: i.nombre, monto: i.monto || 0, cat: 'Julia · sin estado', fila: i.fila, gid: i.gid, src: 'julia' })),
     });
   });
 
@@ -5359,7 +5375,7 @@ function runAuditorias() {
       const nj = (fj.match(/\d+/g) || []).join(' ');
       return nums && nj === nums;
     });
-    if (!hay) fondosEsolo.push({ txt: `${o} — ${i.txt}`, monto: i.monto, cat: 'Esteban · ' + i.cat });
+    if (!hay) fondosEsolo.push({ txt: `${o} — ${i.txt}`, monto: i.monto, cat: 'Esteban · ' + i.cat, fila: i.fila, gid: i.gid, src: 'esteban' });
   }));
   const totFsolo = fondosEsolo.reduce((s, i) => s + i.monto, 0);
   if (totFsolo > AUDIT_TOLERANCIA) {
@@ -5434,12 +5450,13 @@ function renderAuditorias() {
       </summary>
       <div style="padding:0 16px 14px;border-top:1px solid var(--border);">
         <div style="font-size:12.5px;padding:10px 0 6px;line-height:1.55;">${r.resumen}</div>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">Corrección corresponde a: <strong>${r.responsable}</strong></div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">Corrección corresponde a: <strong>${r.responsable}</strong>${!r.items.length && r.link ? ' · ' + _sheetLinkAudit({ src: r.link }) : ''}</div>
         ${r.items.length ? `<table style="width:100%;font-size:11.5px;">
           ${r.items.map(i => `<tr>
             <td style="padding:4px 8px;color:var(--muted);white-space:nowrap;">${i.cat}</td>
             <td style="padding:4px 8px;">${i.txt}</td>
             <td style="padding:4px 8px;text-align:right;font-weight:600;white-space:nowrap;">${fmt(i.monto)}</td>
+            <td style="padding:4px 8px;text-align:right;">${_sheetLinkAudit(i)}</td>
           </tr>`).join('')}
         </table>` : ''}
       </div>
