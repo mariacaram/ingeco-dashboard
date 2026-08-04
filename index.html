@@ -5529,7 +5529,7 @@ function _seguimientoCobros() {
     vistos.add(k);
     const o = O(_segNorm(it.obra));
     o.cob += it.importe || 0;
-    o.itemsCob.push({ txt: it.concepto || '(sin concepto)', monto: it.importe || 0, fecha: it.fechaReal || it.fechaProb || '', mes });
+    o.itemsCob.push({ txt: it.concepto || '(sin concepto)', monto: it.importe || 0, fecha: it.fechaReal || it.fechaProb || '', mes, fila: it.fila, gid: it.gid, src: 'esteban' });
   }));
 
   SEG_CATS.forEach(([cat]) => (COBROS_ESTEBAN[ult][cat] || []).forEach(it => {
@@ -5538,7 +5538,7 @@ function _seguimientoCobros() {
     o.cats[cat] = (o.cats[cat] || 0) + (it.importe || 0);
     const esFondo = ES_FONDO_REPARO(it.obra) || ES_FONDO_REPARO(it.concepto);
     if (esFondo) o.fondoPend += it.importe || 0;
-    o.itemsPend.push({ txt: it.concepto || '(sin concepto)', monto: it.importe || 0, cat, fecha: it.fechaProb || '', esFondo });
+    o.itemsPend.push({ txt: it.concepto || '(sin concepto)', monto: it.importe || 0, cat, fecha: it.fechaProb || '', esFondo, fila: it.fila, gid: it.gid, src: 'esteban' });
   }));
 
   return { meses, ult, obras };
@@ -5663,6 +5663,7 @@ function openSeguimientoPanel(nombre) {
       ${o.itemsPend.sort((a, b) => b.monto - a.monto).map(i => `<tr style="border-bottom:1px solid var(--border);">
         <td style="padding:6px 8px;">${i.esFondo ? '🔒 ' : ''}${i.txt}<br><span style="font-size:10px;color:${catColor[i.cat]};font-weight:600;">${catLbl[i.cat]}${i.fecha ? ' · prob. ' + i.fecha : ''}</span></td>
         <td style="padding:6px 8px;text-align:right;font-weight:700;white-space:nowrap;">${fmt(i.monto)}</td>
+        <td style="padding:6px 4px;text-align:right;">${_sheetLinkAudit(i)}</td>
       </tr>`).join('')}
     </table>` : ''}
     ${o.itemsCob.length ? `
@@ -5671,6 +5672,7 @@ function openSeguimientoPanel(nombre) {
       ${o.itemsCob.map(i => `<tr style="border-bottom:1px solid var(--border);">
         <td style="padding:6px 8px;">${i.txt}<br><span style="font-size:10px;color:var(--muted);">${i.fecha}</span></td>
         <td style="padding:6px 8px;text-align:right;font-weight:600;color:#16a34a;white-space:nowrap;">${fmt(i.monto)}</td>
+        <td style="padding:6px 4px;text-align:right;">${_sheetLinkAudit(i)}</td>
       </tr>`).join('')}
     </table>` : ''}`;
   panel.classList.add('open');
