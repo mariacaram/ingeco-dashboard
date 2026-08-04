@@ -5252,19 +5252,19 @@ function renderFuentes() {
 // el archivo de Esteban. Se amplía a mano cuando aparece una obra nueva con
 // nombre distinto en cada archivo (no hay código de obra común entre planillas).
 const MAPA_OBRAS_AUDIT = {
-  'Avenida Nestor Kirchner': ['ROCA', 'Av. Roca'],
-  'Avenida Mitre': ['MITRE', 'Av. Mitre', 'Pintura Av. Mitre'],
+  'Avenida Nestor Kirchner': ['ROCA', 'Av. Roca', 'Canal Roca'],
+  'Avenida Mitre': ['MITRE', 'Av. Mitre', 'Pintura Av. Mitre', 'Avenida Mitre'],
   'Papa Francisco': ['Papa Francisco', 'PAPA FRANCISCO'],
   'Ruta 357 - Quilmes': ['Ruta 357 - Quilmes', 'Ruta 307 - Quilmes'],
-  'Bacheo SMT': ['bacheo area central', 'Bacheo Munic.- Etapa 2'],
+  'Bacheo SMT': ['bacheo area central', 'Bacheo Munic.- Etapa 2', 'Bacheo SMT'],
   'Provisión de asfalto caliente': ['Venta de asfalto caliente', 'Provisión Asfalto p/Obras varias', 'Provisión de asfalto caliente'],
   'CERTIFICADO DE OBRA  Nº 1 - 81976-A': ['Obra Licit. Nº 81976', 'Licitación hormigon'],
   'CERTIFICADO DE OBRA  Nº 1 - 81982-A': ['Obra Licit. Nº 81982'],
   'Redeterminación': ['Redeterminación'],
-  'Cantero Soldati': ['Canteros Av. Soldati'],
+  'Cantero Soldati': ['Canteros Av. Soldati', 'Cantero Soldati'],
   'Provisión de hormigon': ['Provisión de hormigon para veredas', 'Provisión Hormigón p/Obras varias', 'Provisión de hormigon'],
   'Fondo de reparo': ['Fondo de reparo'],
-  'Avenida Belgrano': ['Pintura Av. Belgrano', 'PINTURA BELGRANO'],
+  'Avenida Belgrano': ['Pintura Av. Belgrano', 'PINTURA BELGRANO', 'Avenida Belgrano'],
   'Country Pilar': ['Country Pilar'],
   '9 de Julio y Perez Palavecino': ['Pérez Palavecino'],
   'Ruta 307 - Ampliación - Certificado N1': ['Ruta 307 (Ampliación)', 'Ruta 307'],
@@ -5527,11 +5527,20 @@ function copiarAuditorias(btn) {
 // Alias internos del archivo de Esteban: la misma obra aparece con nombres
 // distintos entre hojas mensuales. Se normaliza al nombre canónico.
 const ALIAS_ESTEBAN = {
-  'Av. Roca': 'ROCA',
+  // Esteban estandarizó los nombres (ago-2026) — estos alias cubren los rótulos
+  // viejos que puedan quedar en pestañas históricas, apuntando al nombre actual.
+  'Av. Roca': 'Canal Roca',
+  'ROCA': 'Canal Roca',
   'PAPA FRANCISCO': 'Papa Francisco',
-  'Av. Mitre': 'MITRE',
-  'Pintura Av. Mitre': 'MITRE',
-  'PINTURA BELGRANO': 'Pintura Av. Belgrano',
+  'Av. Mitre': 'Avenida Mitre',
+  'MITRE': 'Avenida Mitre',
+  'Pintura Av. Mitre': 'Avenida Mitre',
+  'PINTURA BELGRANO': 'Avenida Belgrano',
+  'Pintura Av. Belgrano': 'Avenida Belgrano',
+  'bacheo area central': 'Bacheo SMT',
+  'Bacheo Munic.- Etapa 2': 'Bacheo SMT',
+  'Canteros Av. Soldati': 'Cantero Soldati',
+  'Muni de Tafi viejo': 'Lomas de Tafí',
   // En la pestaña de julio los certificados de R357 aparecen como "Ruta 307 - Quilmes"
   'Ruta 307 - Quilmes': 'Ruta 357 - Quilmes',
   // La misma provisión aparece con 3 nombres según el mes (may/jun/jul)
@@ -5581,6 +5590,31 @@ function _seguimientoCobros() {
   }));
 
   return { meses, ult, obras };
+}
+
+// Pendiente según Julia (certificados con estado "A Cobrar"), agrupado por el
+// nombre canónico del seguimiento. Devuelve también las obras que Julia
+// certificó pero Esteban no tiene en su programación (posible olvido).
+function _juliaPendPorCanon(obrasSeg) {
+  const res = { map: {}, solo: [], hayEstados: false };
+  const obrasJ = (GENERADO_POR_OBRA && GENERADO_POR_OBRA.obras) || [];
+  obrasJ.forEach(oj => {
+    if (!oj.items) return;
+    if (!res.hayEstados && oj.items.some(i => i.estado)) res.hayEstados = true;
+    const pend = oj.items.filter(i => i.estado === 'A Cobrar').reduce((s, i) => s + (i.monto || 0), 0);
+    if (pend <= 0) return;
+    const ens = MAPA_OBRAS_AUDIT[oj.nombre];
+    let canon;
+    if (ens && ens.length) {
+      const canons = ens.map(_segNorm);
+      canon = canons.find(c => obrasSeg[c]) || canons[0];
+    } else {
+      canon = _segNorm(oj.nombre);
+    }
+    if (obrasSeg[canon]) res.map[canon] = (res.map[canon] || 0) + pend;
+    else res.solo.push({ nombre: oj.nombre, monto: pend });
+  });
+  return res;
 }
 
 // Diferencia contra el archivo de Julia (reusa el resultado de la auditoría).
@@ -5643,7 +5677,7 @@ function renderSeguimientoCobros() {
     return;
   }
   const { meses, ult, obras } = data;
-  sub.innerHTML = `Acumulado desde <strong>${MES[meses[0]] || meses[0]}</strong> · pendiente según programación de <strong>${MES[ult] || ult}</strong> — fuente: planilla de Esteban. Independiente del selector de mes. El % de avance es sobre lo registrado en este archivo, no sobre el total de contrato.`;
+  sub.innerHTML = `Acumulado desde <strong>${MES[meses[0]] || meses[0]}</strong> · pendiente según programación de <strong>${MES[ult] || ult}</strong> — fuente: planilla de Esteban, contrastada contra los certificados "A Cobrar" del archivo de Julia. Independiente del selector de mes. El % de avance es sobre lo registrado en este archivo, no sobre el total de contrato.`;
 
   const nombres = Object.keys(obras).filter(n => obras[n].cob + obras[n].pend > 1e6);
   const activas = nombres.filter(n => obras[n].pend > 0).sort((a, b) => obras[b].pend - obras[a].pend);
@@ -5665,11 +5699,28 @@ function renderSeguimientoCobros() {
       </div>` : '';
   }
 
+  // Doble fuente: pendiente según Julia (certificados A Cobrar) por obra canónica.
+  // Solo si el archivo de Julia ya trae estados cargados.
+  const jp = _juliaPendPorCanon(obras);
+
   const fila = n => {
     const o = obras[n];
     const total = o.cob + o.pend;
     const pct = total ? Math.round(o.cob / total * 100) : 0;
     const difJ = _segDifJulia(n);
+    let lineaJulia = '';
+    if (jp.hayEstados) {
+      const jPend = jp.map[n] || 0;
+      const dif = jPend - o.pend;
+      const linkA = difJ ? `onclick="event.stopPropagation();irAAuditoria('${difJ.titulo.replace(/'/g, "\\'")}');" style="cursor:pointer;"` : '';
+      if (Math.abs(dif) <= AUDIT_TOLERANCIA) {
+        lineaJulia = `<span style="color:#16a34a;font-weight:600;">✅ coincide con Julia (certificados A Cobrar: ${fmt(jPend)})</span>`;
+      } else if (dif > 0) {
+        lineaJulia = `<span data-restrict="sueldos" ${linkA} class="neg-val" style="font-weight:600;">🔶 Esteban no programó ${fmt(dif)}: Julia certificó ${fmt(jPend)} A Cobrar y Esteban solo lista ${fmt(o.pend)}${difJ ? ' — ver Auditorías' : ''}</span>`;
+      } else {
+        lineaJulia = `<span data-restrict="sueldos" ${linkA} style="color:#b45309;font-weight:600;">🔶 Julia registra ${fmt(jPend)} A Cobrar (${fmt(-dif)} menos que Esteban) — posible atraso de carga de Julia${difJ ? ' — ver Auditorías' : ''}</span>`;
+      }
+    }
     return `
     <div data-obra="${n.replace(/"/g, '&quot;')}" style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:13px 16px;margin-bottom:10px;cursor:pointer;" onclick="openSeguimientoPanel('${n.replace(/'/g, "\\'")}')">
       <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
@@ -5684,12 +5735,23 @@ function renderSeguimientoCobros() {
           const url = fi ? _sheetUrlAudit(fi) : '';
           return `<span style="color:#b45309;font-weight:600;${url ? 'cursor:pointer;text-decoration:underline dotted;' : ''}" ${url ? `onclick="event.stopPropagation();window.open('${url}','_blank')" title="Abrir la fila en la planilla de Esteban"` : ''}>🔒 Fondo de reparo pendiente: ${fmt(o.fondoPend)} — reclamable${url && fi.fila ? ' ↗' : ''}</span>`;
         })() : ''}
-        ${difJ ? `<span data-restrict="sueldos" style="color:#dc2626;font-weight:600;" onclick="event.stopPropagation();irAAuditoria('${difJ.titulo.replace(/'/g, "\\'")}');">⚠️ difiere ${fmt(difJ.monto)} del archivo de Julia — ver Auditorías</span>` : ''}
+        ${lineaJulia}
       </div>
     </div>`;
   };
 
-  list.innerHTML = activas.map(fila).join('') + (completas.length ? `
+  // Obras que Julia certificó (A Cobrar) pero Esteban no tiene en su programación
+  const soloJulia = jp.solo.filter(s => s.monto > AUDIT_TOLERANCIA).sort((a, b) => b.monto - a.monto);
+  const soloHtml = soloJulia.map(s => `
+    <div style="background:#fff7ed;border:1px solid #fdba74;border-left:4px solid #ea580c;border-radius:10px;padding:13px 16px;margin-bottom:10px;">
+      <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;">
+        <strong style="font-size:13px;">${s.nombre}</strong>
+        <span style="font-size:11px;color:#9a3412;font-weight:600;">⚠️ certificada por Julia, sin programación de cobro en la planilla de Esteban</span>
+        <span style="margin-left:auto;font-weight:800;font-size:14px;color:#ea580c;">${fmt(s.monto)}</span>
+      </div>
+    </div>`).join('');
+
+  list.innerHTML = soloHtml + activas.map(fila).join('') + (completas.length ? `
     <details style="margin-top:14px;">
       <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--muted);">✓ Completadas — sin pendiente (${completas.length})</summary>
       <div style="margin-top:10px;">${completas.map(fila).join('')}</div>
@@ -5803,18 +5865,25 @@ function renderCobranzaMargen() {
     const el = document.getElementById(id);
     if (!el) return;
     if (!data) { el.innerHTML = ''; return; }
+    const jp = _juliaPendPorCanon(data.obras);
     const chips = Object.entries(data.obras)
       .filter(([, o]) => o.pend > 1e6)
       .sort((a, b) => b[1].pend - a[1].pend)
       .map(([n, o]) => {
         const pct = Math.round(o.cob / (o.cob + o.pend) * 100);
-        return `<span onclick="irASeguimiento('${n.replace(/'/g, "\\'")}')" style="cursor:pointer;background:#fff;border:1px solid var(--border);border-radius:16px;padding:5px 12px;font-size:11px;white-space:nowrap;">
-          ${n} <strong style="color:${pct >= 80 ? '#16a34a' : pct >= 40 ? '#b45309' : '#dc2626'};">${pct}%</strong> · falta <strong>${fmt(o.pend)}</strong>${o.fondoPend > 0 ? ' 🔒' : ''}</span>`;
+        const difJulia = jp.hayEstados && Math.abs((jp.map[n] || 0) - o.pend) > AUDIT_TOLERANCIA;
+        return `<span onclick="irASeguimiento('${n.replace(/'/g, "\\'")}')" title="${difJulia ? 'Difiere del archivo de Julia — ver seguimiento' : ''}" style="cursor:pointer;background:#fff;border:1px solid ${difJulia ? '#fdba74' : 'var(--border)'};border-radius:16px;padding:5px 12px;font-size:11px;white-space:nowrap;">
+          ${n} <strong style="color:${pct >= 80 ? '#16a34a' : pct >= 40 ? '#b45309' : '#dc2626'};">${pct}%</strong> · falta <strong>${fmt(o.pend)}</strong>${o.fondoPend > 0 ? ' 🔒' : ''}${difJulia ? ' ⚠️' : ''}</span>`;
       });
+    // Obras certificadas por Julia que Esteban no programó — también como chip
+    jp.solo.filter(s => s.monto > AUDIT_TOLERANCIA).forEach(s => {
+      chips.push(`<span onclick="openTab('cobros');setTimeout(()=>document.getElementById('seguimiento-cobros').scrollIntoView({behavior:'smooth'}),80);" title="Certificada por Julia, sin programación de cobro en Esteban" style="cursor:pointer;background:#fff7ed;border:1px solid #fdba74;border-radius:16px;padding:5px 12px;font-size:11px;white-space:nowrap;">
+        ⚠️ ${s.nombre} · sin programar <strong>${fmt(s.monto)}</strong></span>`);
+    });
     el.innerHTML = chips.length ? `
       <div class="section" style="margin-top:16px;">
         <div class="section-title" style="font-size:13px;">Cobranza de obras — ¿falta algo?</div>
-        <div style="font-size:11px;color:var(--muted);margin:-4px 0 10px;">Acumulado desde ${MES[data.meses[0]] || data.meses[0]} (planilla de Esteban) · click para ver el seguimiento completo · 🔒 = tiene fondo de reparo pendiente</div>
+        <div style="font-size:11px;color:var(--muted);margin:-4px 0 10px;">Acumulado desde ${MES[data.meses[0]] || data.meses[0]} (planilla de Esteban) · click para ver el seguimiento completo · 🔒 = tiene fondo de reparo pendiente · ⚠️ = difiere del archivo de Julia</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">${chips.join('')}</div>
       </div>` : '';
   });
