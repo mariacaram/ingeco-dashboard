@@ -830,14 +830,15 @@
             <th>Cód. Obra</th>
             <th class="num">A Cobrar</th>
             <th class="num">Insumos</th>
-            <th class="num">MO (prorrateada)</th>
+            <th class="num" title="MO de asfalto — prorrateada por tn despachadas (TANGO)">MO Asfalto (prorrateada)</th>
+            <th class="num" title="MO de hormigón tercerizada — OC de Guillermo con 'Mano de obra' en Descripción">MO Hormigón</th>
             <th class="num">Asfalto (tn)</th>
             <th class="num">Alquiler</th>
             <th class="num">Margen</th>
           </tr>
         </thead>
         <tbody id="tbody-resumen-obra">
-          <tr><td colspan="7" class="nd" style="text-align:center;padding:20px;">Presioná "Actualizar datos" para cargar desde Drive</td></tr>
+          <tr><td colspan="8" class="nd" style="text-align:center;padding:20px;">Presioná "Actualizar datos" para cargar desde Drive</td></tr>
         </tbody>
       </table>
       <div class="nota-fuente" style="margin-top:6px;">⚖️ <strong>MO prorrateada:</strong> MO total Obras (TANGO) × (tn caliente de la obra / tn caliente total del mes) — fuente tn: Remitos Oficiales columna OBRA</div>
@@ -2544,6 +2545,21 @@ function computeMargenObrasMes(mes) {
     });
   }
 
+  // MO de hormigón tercerizada (OC de Guillermo con "Mano de obra" en Descripción)
+  const mohPorNombre = {};
+  if (OC_INSUMOS && OC_INSUMOS[mes] && OC_INSUMOS[mes].moHormigon && OC_INSUMOS[mes].moHormigon.items) {
+    OC_INSUMOS[mes].moHormigon.items.forEach(item => {
+      if (ocEsInt(item)) return;
+      const nameK = (item.obra   || '').toLowerCase().trim();
+      const codeK = (item.codigo || '').toLowerCase().trim();
+      if (nameK)                    mohPorNombre[nameK] = (mohPorNombre[nameK] || 0) + item.monto;
+      if (codeK && codeK !== nameK) mohPorNombre[codeK] = (mohPorNombre[codeK] || 0) + item.monto;
+      // que una obra con solo MO de hormigón también aparezca en "Con gasto/salida del mes"
+      const canon = codeK || nameK;
+      if (canon && !ocObras[canon]) ocObras[canon] = { cod: (item.codigo || item.obra || '').trim(), nombre: (item.obra || '').trim() };
+    });
+  }
+
   // Alquiler del mes: mapa por nombre de obra (lowercase) + display original.
   // No se filtra por INT: el costo de alquiler aplica a todas las obras, incluso internas.
   // "Alquiler de equipos" (ingreso de taller) y "Planta de Trituración"/"Cantera"/
@@ -2591,6 +2607,7 @@ function computeMargenObrasMes(mes) {
     const nk = (o.nombre || '').toLowerCase().trim();
     const ck = (o.cod_obra || '').toLowerCase().trim();
     const insumos  = ocPorNombre[nk]  || ocPorNombre[ck]  || 0;
+    const moHormigon = mohPorNombre[ck] || mohPorNombre[nk] || 0;
     const alquiler = alqPorNombre[ck] || alqPorNombre[nk] || 0;
     const tnObra     = tnPorObraKey[ck]     || tnPorObraKey[nk]     || 0;
     const tnFrioObra = tnFrioPorObraKey[ck] || tnFrioPorObraKey[nk] || 0;
@@ -2600,9 +2617,9 @@ function computeMargenObrasMes(mes) {
     const costoAsfObra = (precioMesResumen != null && (tnObra > 0 || tnFrioObra > 0))
       ? Math.round((tnObra * (precioMesResumen.caliente || 0)) + (tnFrioObra * (precioMesResumen.frio || 0)))
       : null;
-    const margen  = aCobrar - insumos - (moObra || 0) - (costoAsfObra || 0) - alquiler;
-    const hasData = aCobrar > 0 || insumos > 0 || alquiler > 0 || tnObraTotal > 0 || moObra != null;
-    return { o, aCobrar, insumos, alquiler, tnObra, tnFrioObra, tnObraTotal, moObra, costoAsfObra, margen, hasData, extra: !!extra };
+    const margen  = aCobrar - insumos - moHormigon - (moObra || 0) - (costoAsfObra || 0) - alquiler;
+    const hasData = aCobrar > 0 || insumos > 0 || moHormigon > 0 || alquiler > 0 || tnObraTotal > 0 || moObra != null;
+    return { o, aCobrar, insumos, moHormigon, alquiler, tnObra, tnFrioObra, tnObraTotal, moObra, costoAsfObra, margen, hasData, extra: !!extra };
   };
 
   const rows = obras.map(o => buildDatosObra(o, false));
@@ -2694,12 +2711,13 @@ function computeMargenObrasTotal() {
       const key = ((r.o.cod_obra || r.o.nombre || '') + '').toLowerCase().trim();
       let acc = porObra[key];
       if (!acc) {
-        acc = porObra[key] = { o: Object.assign({}, r.o), aCobrar: 0, insumos: 0, alquiler: 0,
+        acc = porObra[key] = { o: Object.assign({}, r.o), aCobrar: 0, insumos: 0, moHormigon: 0, alquiler: 0,
           tnObra: 0, tnFrioObra: 0, tnObraTotal: 0, moObra: null, costoAsfObra: null,
           margen: 0, hasData: false, extra: r.extra };
       }
       acc.aCobrar  += r.aCobrar;
       acc.insumos  += r.insumos;
+      acc.moHormigon += r.moHormigon || 0;
       acc.alquiler += r.alquiler;
       acc.tnObra   += r.tnObra;
       acc.tnFrioObra  += r.tnFrioObra;
@@ -2751,6 +2769,7 @@ function _filaMargenHTML(r, moEsEstim, tnTotalGlobal) {
       <td class="num" style="${cellStyle}" ${hoverTip} onclick="openDetalleCelda('acobrar','${codEsc2}','${nomEsc}')">${r.aCobrar > 0 ? `<strong class="pos-val" style="text-decoration:underline dotted;">${fmt(r.aCobrar)}</strong>` : '<span class="nd">—</span>'}</td>
       <td class="num" style="${cellStyle}" ${hoverTip} onclick="openDetalleCelda('insumos','${codEsc2}','${nomEsc}')">${r.insumos  > 0 ? `<span class="neg-val" style="text-decoration:underline dotted;">${fmt(r.insumos)}</span>`  : '<span class="nd">—</span>'}</td>
       <td class="num" style="${cellStyle}" ${hoverTip} onclick="openDetalleCelda('mo','${codEsc2}','${nomEsc}')">${moCell}</td>
+      <td class="num" style="${cellStyle}" ${hoverTip} onclick="openDetalleCelda('moh','${codEsc2}','${nomEsc}')">${r.moHormigon > 0 ? `<span class="neg-val" style="text-decoration:underline dotted;" title="MO hormigón tercerizada (OC Guillermo)">${fmt(r.moHormigon)}</span>` : '<span class="nd">—</span>'}</td>
       <td class="num" style="${cellStyle}" ${hoverTip} onclick="openDetalleCelda('tn','${codEsc2}','${nomEsc}')">${tnCell}</td>
       <td class="num" style="${cellStyle}" ${hoverTip} onclick="openDetalleCelda('alquiler','${codEsc2}','${nomEsc}')">${r.alquiler > 0 ? `<span class="neg-val" style="text-decoration:underline dotted;">${fmt(r.alquiler)}</span>` : '<span class="nd">—</span>'}</td>
       <td class="num" style="background:${r.margen > 0 ? '#f0fdf4' : r.margen < 0 ? '#fef2f2' : 'transparent'};"><strong class="${mgColor}">${fmt(r.margen)}</strong></td>
@@ -2897,17 +2916,17 @@ function renderResumenObra() {
   const busq = BUSQUEDA_OBRA.obra;
   const otrosGastosDivEl = document.getElementById('otros-gastos-obra');
   if (tbody && !datos) {
-    tbody.innerHTML = '<tr><td colspan="7" class="nd" style="text-align:center;padding:20px;">Presioná "Actualizar datos" para cargar desde Drive</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="nd" style="text-align:center;padding:20px;">Presioná "Actualizar datos" para cargar desde Drive</td></tr>';
     if (otrosGastosDivEl) otrosGastosDivEl.innerHTML = '';
   } else if (tbody && busq && !datos.rows.some(r => _obraMatchBusqueda(r.o, busq))) {
-    tbody.innerHTML = `<tr><td colspan="7" class="nd" style="text-align:center;padding:20px;">Sin obras que coincidan con "${busq}" en este período</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="nd" style="text-align:center;padding:20px;">Sin obras que coincidan con "${busq}" en este período</td></tr>`;
     renderChartsObra({ insumos: [], mo: [], alquiler: [], tn: [] });
     if (otrosGastosDivEl) otrosGastosDivEl.innerHTML = '';
   } else if (tbody) {
     const rows = busq ? datos.rows.filter(r => _obraMatchBusqueda(r.o, busq)) : datos.rows;
     const { moEsEstim, tnTotalGlobal } = datos;
 
-    let sumaCobrar = 0, sumaInsumos = 0, sumaAlquiler = 0, sumaTn = 0, sumaMO = 0;
+    let sumaCobrar = 0, sumaInsumos = 0, sumaAlquiler = 0, sumaTn = 0, sumaMO = 0, sumaMOH = 0;
     const chartData = { insumos: [], mo: [], alquiler: [], tn: [] };
     rows.forEach(r => {
       sumaCobrar   += r.aCobrar;
@@ -2915,6 +2934,7 @@ function renderResumenObra() {
       sumaAlquiler += r.alquiler;
       sumaTn       += r.tnObra + r.tnFrioObra;
       sumaMO       += r.moObra || 0;
+      sumaMOH      += r.moHormigon || 0;
       const label = (r.o.cod_obra || r.o.nombre || '').trim();
       if (r.insumos  > 0) chartData.insumos.push({ label, valor: r.insumos });
       if (r.moObra   > 0) chartData.mo.push({ label, valor: r.moObra, estim: moEsEstim });
@@ -2928,7 +2948,7 @@ function renderResumenObra() {
 
     const extras = rows.filter(r => r.extra && !r.otroGasto);
     if (extras.length > 0) {
-      filas.push(`<tr><td colspan="7" style="background:#f8fafc;padding:5px 12px;font-size:11px;color:var(--muted);border-top:2px solid var(--border);font-style:italic;">
+      filas.push(`<tr><td colspan="8" style="background:#f8fafc;padding:5px 12px;font-size:11px;color:var(--muted);border-top:2px solid var(--border);font-style:italic;">
         Con gasto/salida del mes · ${extras.length} obra${extras.length !== 1 ? 's' : ''} con OC de insumos o remitos, sin certificado en obras activas
       </td></tr>`);
       extras.forEach(r => filas.push(_filaMargenHTML(r, moEsEstim, tnTotalGlobal)));
@@ -2948,7 +2968,7 @@ function renderResumenObra() {
     const tnTotalCell = sumaTn > 0
       ? `<span style="font-size:12px;color:var(--muted);">${fmtTn(sumaTn)} tn</span>`
       : '<span class="nd">—</span>';
-    const sumaEgresos = sumaInsumos + sumaMO + sumaAlquiler;
+    const sumaEgresos = sumaInsumos + sumaMO + sumaMOH + sumaAlquiler;
     const sumaMargen  = sumaCobrar - sumaEgresos;
     const sumaColor   = sumaMargen > 0 ? 'pos-val' : sumaMargen < 0 ? 'neg-val' : '';
 
@@ -2957,6 +2977,7 @@ function renderResumenObra() {
       <td class="num pos-val">${fmt(sumaCobrar)}</td>
       <td class="num neg-val">${fmt(sumaInsumos)}</td>
       <td class="num">${moCellTotal}</td>
+      <td class="num">${sumaMOH > 0 ? `<span class="neg-val">${fmt(sumaMOH)}</span>` : '<span class="nd">—</span>'}</td>
       <td class="num">${tnTotalCell}</td>
       <td class="num neg-val">${fmt(sumaAlquiler)}</td>
       <td class="num ${sumaColor}">${fmt(sumaMargen)}</td>
@@ -3008,11 +3029,12 @@ function renderResumenTipoContrato() {
   const lista = Object.keys(grupos)
     .map(tipo => {
       const rs  = grupos[tipo];
-      const tot = { aCobrar: 0, insumos: 0, mo: 0, tn: 0, alquiler: 0, margen: 0 };
+      const tot = { aCobrar: 0, insumos: 0, mo: 0, moh: 0, tn: 0, alquiler: 0, margen: 0 };
       rs.forEach(r => {
         tot.aCobrar  += r.aCobrar;
         tot.insumos  += r.insumos;
         tot.mo       += r.moObra || 0;
+        tot.moh      += r.moHormigon || 0;
         tot.tn       += r.tnObraTotal;
         tot.alquiler += r.alquiler;
         tot.margen   += r.margen;
@@ -3031,7 +3053,8 @@ function renderResumenTipoContrato() {
     <th>Cód. Obra</th>
     <th class="num">A Cobrar</th>
     <th class="num">Insumos</th>
-    <th class="num">MO (prorrateada)</th>
+    <th class="num">MO Asfalto (prorrateada)</th>
+    <th class="num">MO Hormigón</th>
     <th class="num">Asfalto (tn)</th>
     <th class="num">Alquiler</th>
     <th class="num">Margen</th>
@@ -3047,6 +3070,7 @@ function renderResumenTipoContrato() {
       <td class="num pos-val">${fmt(g.tot.aCobrar)}</td>
       <td class="num neg-val">${fmt(g.tot.insumos)}</td>
       <td class="num">${g.tot.mo > 0 ? `<span class="neg-val">${moEsEstim ? '~' : ''}${fmt(g.tot.mo)}</span>` : '<span class="nd">—</span>'}</td>
+      <td class="num">${g.tot.moh > 0 ? `<span class="neg-val">${fmt(g.tot.moh)}</span>` : '<span class="nd">—</span>'}</td>
       <td class="num">${g.tot.tn > 0 ? `<span style="font-size:12px;color:var(--muted);">${fmtTn(g.tot.tn)} tn</span>` : '<span class="nd">—</span>'}</td>
       <td class="num neg-val">${fmt(g.tot.alquiler)}</td>
       <td class="num ${mgColor}" style="background:${g.tot.margen > 0 ? '#f0fdf4' : g.tot.margen < 0 ? '#fef2f2' : 'transparent'};">${fmt(g.tot.margen)}</td>
@@ -3062,13 +3086,13 @@ function renderResumenTipoContrato() {
 
   // Total general (suma de los márgenes por obra de todos los tipos + Otros
   // Gastos o salidas) — así coincide con el TOTAL de "Contribución marginal por obra"
-  const totG = { aCobrar: 0, insumos: 0, mo: 0, alquiler: 0, margen: 0 };
+  const totG = { aCobrar: 0, insumos: 0, mo: 0, moh: 0, alquiler: 0, margen: 0 };
   lista.forEach(g => {
-    totG.aCobrar += g.tot.aCobrar; totG.insumos += g.tot.insumos; totG.mo += g.tot.mo;
+    totG.aCobrar += g.tot.aCobrar; totG.insumos += g.tot.insumos; totG.mo += g.tot.mo; totG.moh += g.tot.moh;
     totG.alquiler += g.tot.alquiler; totG.margen += g.tot.margen;
   });
   otrosGastosTipo.forEach(r => {
-    totG.aCobrar += r.aCobrar; totG.insumos += r.insumos; totG.mo += r.moObra || 0;
+    totG.aCobrar += r.aCobrar; totG.insumos += r.insumos; totG.mo += r.moObra || 0; totG.moh += r.moHormigon || 0;
     totG.alquiler += r.alquiler; totG.margen += r.margen;
   });
   const mgG = totG.margen > 0 ? 'pos-val' : totG.margen < 0 ? 'neg-val' : '';
@@ -3076,7 +3100,8 @@ function renderResumenTipoContrato() {
     <span><strong>TOTAL GENERAL</strong></span>
     <span>A Cobrar: <strong class="pos-val">${fmt(totG.aCobrar)}</strong></span>
     <span>Insumos: <strong class="neg-val">${fmt(totG.insumos)}</strong></span>
-    <span data-restrict="sueldos">MO: <strong class="neg-val">${moEsEstim ? '~' : ''}${fmt(totG.mo)}</strong></span>
+    <span data-restrict="sueldos">MO Asfalto: <strong class="neg-val">${moEsEstim ? '~' : ''}${fmt(totG.mo)}</strong></span>
+    <span>MO Hormigón: <strong class="neg-val">${fmt(totG.moh)}</strong></span>
     <span>Alquiler: <strong class="neg-val">${fmt(totG.alquiler)}</strong></span>
     <span>Margen: <strong class="${mgG}">${fmt(totG.margen)}</strong></span>
   </div>`;
@@ -3100,7 +3125,7 @@ function openHistorialObra(codObra, nombreObra) {
     return (keyC && (ck === keyC || nk === keyC)) || (keyN && (ck === keyN || nk === keyN));
   });
 
-  const tot = { aCobrar: 0, insumos: 0, mo: 0, asf: 0, alquiler: 0, margen: 0, tnCal: 0, tnFrio: 0 };
+  const tot = { aCobrar: 0, insumos: 0, mo: 0, moh: 0, asf: 0, alquiler: 0, margen: 0, tnCal: 0, tnFrio: 0 };
   let algunaEstim = false;
   let hayDatosMesActual = false;
   const filasMes = [];
@@ -3113,6 +3138,7 @@ function openHistorialObra(codObra, nombreObra) {
     tot.aCobrar  += r.aCobrar;
     tot.insumos  += r.insumos;
     tot.mo       += r.moObra       || 0;
+    tot.moh      += r.moHormigon   || 0;
     tot.asf      += r.costoAsfObra || 0;
     tot.alquiler += r.alquiler;
     tot.margen   += r.margen;
@@ -3127,6 +3153,7 @@ function openHistorialObra(codObra, nombreObra) {
       <td style="padding:7px 10px;font-size:12px;text-align:right;">${r.aCobrar > 0 ? `<span class="pos-val">${fmt(r.aCobrar)}</span>` : '—'}</td>
       <td style="padding:7px 10px;font-size:12px;text-align:right;">${r.insumos > 0 ? `<span class="neg-val">${fmt(r.insumos)}</span>` : '—'}</td>
       <td style="padding:7px 10px;font-size:12px;text-align:right;" data-restrict="sueldos">${r.moObra != null ? `<span class="neg-val">${d.moEsEstim ? '~' : ''}${fmt(r.moObra)}</span>` : '—'}</td>
+      <td style="padding:7px 10px;font-size:12px;text-align:right;">${r.moHormigon > 0 ? `<span class="neg-val">${fmt(r.moHormigon)}</span>` : '—'}</td>
       <td style="padding:7px 10px;font-size:12px;text-align:right;">${r.costoAsfObra != null ? `<span class="neg-val" title="${tnStr}">${fmt(r.costoAsfObra)}</span>` : (tnStr || '—')}</td>
       <td style="padding:7px 10px;font-size:12px;text-align:right;">${r.alquiler > 0 ? `<span class="neg-val">${fmt(r.alquiler)}</span>` : '—'}</td>
       <td style="padding:7px 10px;font-size:12px;text-align:right;background:${r.margen > 0 ? '#f0fdf4' : r.margen < 0 ? '#fef2f2' : 'transparent'};"><strong class="${mgColor}">${fmt(r.margen)}</strong></td>
@@ -3157,7 +3184,8 @@ function openHistorialObra(codObra, nombreObra) {
           <th style="text-align:left;padding:7px 10px;font-size:11px;">Mes</th>
           <th style="text-align:right;padding:7px 10px;font-size:11px;">A Cobrar</th>
           <th style="text-align:right;padding:7px 10px;font-size:11px;">Insumos</th>
-          <th style="text-align:right;padding:7px 10px;font-size:11px;" data-restrict="sueldos">MO</th>
+          <th style="text-align:right;padding:7px 10px;font-size:11px;" data-restrict="sueldos">MO Asf.</th>
+          <th style="text-align:right;padding:7px 10px;font-size:11px;">MO Horm.</th>
           <th style="text-align:right;padding:7px 10px;font-size:11px;">Asfalto</th>
           <th style="text-align:right;padding:7px 10px;font-size:11px;">Alquiler</th>
           <th style="text-align:right;padding:7px 10px;font-size:11px;">Margen</th>
@@ -3168,6 +3196,7 @@ function openHistorialObra(codObra, nombreObra) {
             <td style="padding:8px 10px;font-size:12px;text-align:right;" class="pos-val">${fmt(tot.aCobrar)}</td>
             <td style="padding:8px 10px;font-size:12px;text-align:right;" class="neg-val">${fmt(tot.insumos)}</td>
             <td style="padding:8px 10px;font-size:12px;text-align:right;" class="neg-val" data-restrict="sueldos">${tot.mo > 0 ? (algunaEstim ? '~' : '') + fmt(tot.mo) : '—'}</td>
+            <td style="padding:8px 10px;font-size:12px;text-align:right;" class="neg-val">${tot.moh > 0 ? fmt(tot.moh) : '—'}</td>
             <td style="padding:8px 10px;font-size:12px;text-align:right;" class="neg-val">${tot.asf > 0 ? fmt(tot.asf) : '—'}</td>
             <td style="padding:8px 10px;font-size:12px;text-align:right;" class="neg-val">${tot.alquiler > 0 ? fmt(tot.alquiler) : '—'}</td>
             <td style="padding:8px 10px;font-size:12px;text-align:right;background:${tot.margen > 0 ? '#f0fdf4' : tot.margen < 0 ? '#fef2f2' : 'transparent'};" class="${mgColorT}">${fmt(tot.margen)}</td>
@@ -3175,7 +3204,7 @@ function openHistorialObra(codObra, nombreObra) {
         </tbody>
       </table>
       ${tnTotStr}
-      <div style="font-size:11px;color:var(--muted);margin-top:10px;">Margen mensual = A Cobrar − Insumos − MO prorrateada − Costo asfalto − Alquiler. ${algunaEstim ? '~ incluye MO estimada en meses sin TANGO cargado.' : ''}</div>`;
+      <div style="font-size:11px;color:var(--muted);margin-top:10px;">Margen mensual = A Cobrar − Insumos − MO Asfalto prorrateada − MO Hormigón tercerizada − Costo asfalto − Alquiler. ${algunaEstim ? '~ incluye MO estimada en meses sin TANGO cargado.' : ''}</div>`;
   }
 
   const codEsc3 = (codObra    || '').replace(/'/g, "\\'");
@@ -3225,7 +3254,7 @@ function _recolectarDatosObra(codObra, nombreObra, soloMes) {
   const certificados = [];           // { mes, nombre, codigo, monto }
   const provTotales  = {};           // proveedor → { monto, nOC }
   const equipoTotales = {};          // codigo → { codigo, clasificacion, marca, modelo, horas, costo }
-  const tot = { aCobrar: 0, insumos: 0, mo: 0, asf: 0, alquiler: 0, margen: 0, tnCal: 0, tnFrio: 0 };
+  const tot = { aCobrar: 0, insumos: 0, mo: 0, moh: 0, asf: 0, alquiler: 0, margen: 0, tnCal: 0, tnFrio: 0 };
   let algunaEstim = false;
   let infoObra = null;               // { nombre, cod_obra, cliente, tipo }
 
@@ -3240,11 +3269,12 @@ function _recolectarDatosObra(codObra, nombreObra, soloMes) {
     meses.push(m);
     porMes[m] = {
       aCobrar: r.aCobrar, insumos: r.insumos, mo: r.moObra || 0, moEstim: d.moEsEstim && r.moObra != null,
+      moh: r.moHormigon || 0,
       asf: r.costoAsfObra || 0, alquiler: r.alquiler, margen: r.margen,
       tnCal: r.tnObra, tnFrio: r.tnFrioObra, nCert: 0,
     };
     if (d.moEsEstim && r.moObra != null) algunaEstim = true;
-    tot.aCobrar += r.aCobrar; tot.insumos += r.insumos; tot.mo += r.moObra || 0;
+    tot.aCobrar += r.aCobrar; tot.insumos += r.insumos; tot.mo += r.moObra || 0; tot.moh += r.moHormigon || 0;
     tot.asf += r.costoAsfObra || 0; tot.alquiler += r.alquiler; tot.margen += r.margen;
     tot.tnCal += r.tnObra; tot.tnFrio += r.tnFrioObra;
 
@@ -3324,7 +3354,8 @@ function generarReportePDF(codObra, nombreObra, soloMes) {
   };
   let cascadaFilas = filaCascada('Certificado (ingresos)', D.tot.aCobrar, 'ing');
   cascadaFilas += filaCascada('Insumos (OC de compra)', D.tot.insumos, 'egr');
-  if (showMO) cascadaFilas += filaCascada('Mano de obra (prorrateada)' + (D.algunaEstim ? ' *' : ''), D.tot.mo, 'egr');
+  if (showMO) cascadaFilas += filaCascada('Mano de obra asfalto (prorrateada)' + (D.algunaEstim ? ' *' : ''), D.tot.mo, 'egr');
+  if (D.tot.moh > 0) cascadaFilas += filaCascada('Mano de obra hormigón (tercerizada)', D.tot.moh, 'egr');
   cascadaFilas += filaCascada('Costo de asfalto', D.tot.asf, 'egr');
   cascadaFilas += filaCascada('Alquiler de equipos', D.tot.alquiler, 'egr');
   if (!showMO) cascadaFilas += filaCascada('Otros costos operativos', D.tot.mo, 'egr');
@@ -4634,12 +4665,12 @@ function _resultadoUnidadesMes(mes) {
   // Margen Obras = TOTAL de Contribución marginal por obra de ese mes
   let margenObras = null;
   const dObras = computeMargenObrasMes(mes);
-  let obACobrar = 0, obInsumos = 0, obMO = 0, obAsf = 0, obAlq = 0;
+  let obACobrar = 0, obInsumos = 0, obMO = 0, obMOH = 0, obAsf = 0, obAlq = 0;
   if (dObras && dObras.rows) {
     margenObras = dObras.rows.reduce((s, r) => s + r.margen, 0);
     dObras.rows.forEach(r => {
       obACobrar += r.aCobrar || 0; obInsumos += r.insumos || 0;
-      obMO += r.moObra || 0; obAsf += r.costoAsfObra || 0; obAlq += r.alquiler || 0;
+      obMO += r.moObra || 0; obMOH += r.moHormigon || 0; obAsf += r.costoAsfObra || 0; obAlq += r.alquiler || 0;
     });
   }
 
@@ -4691,7 +4722,8 @@ function _resultadoUnidadesMes(mes) {
       ingresos: [{ l: 'Certificado / A cobrar', v: obACobrar, nota: 'Fernando Solís' }],
       egresos: [
         { l: 'OC Insumos de obra', v: obInsumos, nota: 'Guillermo Konicek' },
-        { l: 'Mano de obra Obras', v: obMO, nota: dObras && dObras.moEsEstim ? 'estimada' : 'TANGO' },
+        { l: 'MO Asfalto (prorrateada)', v: obMO, nota: dObras && dObras.moEsEstim ? 'estimada' : 'TANGO' },
+        { l: 'MO Hormigón (tercerizada)', v: obMOH, nota: 'OC Guillermo — "Mano de obra"' },
         { l: 'Costo asfalto', v: obAsf, nota: 'tn × precio' },
         { l: 'Alquiler interno máquinas', v: obAlq, nota: 'Partes diarios' },
       ] },
@@ -5901,6 +5933,35 @@ function openDetalleCelda(tipo, codObra, nombreObra) {
           <tr style="background:#fef2f2;border-top:2px solid #fca5a5;font-weight:700;">
             <td colspan="2" style="padding:8px 10px;font-size:12px;">TOTAL</td>
             <td style="padding:8px 10px;text-align:right;" class="neg-val">${fmt(item.monto)}</td>
+          </tr></tbody>
+        </table>`;
+    }
+
+  } else if (tipo === 'moh') {
+    titulo = 'MO Hormigón (tercerizada) — ' + (nombreObra || codObra);
+    const ocMesH = OC_INSUMOS[mesActual];
+    const nkH = (nombreObra || '').toLowerCase().trim();
+    const ckH = (codObra || '').toLowerCase().trim();
+    const itemH = (ocMesH && ocMesH.moHormigon && ocMesH.moHormigon.items) ? ocMesH.moHormigon.items.find(i => {
+      const io = (i.obra || '').toLowerCase().trim();
+      const ic = (i.codigo || '').toLowerCase().trim();
+      return (ic && (ic === ckH || ic === nkH)) || io === nkH || io === ckH;
+    }) : null;
+    if (!itemH) {
+      html = '<p class="nd" style="padding:16px;">Sin OC de mano de obra de hormigón para esta obra en ' + mes + '</p>';
+    } else {
+      const provsH = itemH.proveedores || [];
+      html = `<div style="font-size:12px;color:var(--muted);margin-bottom:10px;">${itemH.nOC} OC con "Mano de obra" en Descripción · ${mes} · Fuente: OC Guillermo Konicek — servicio tercerizado, no es un insumo</div>
+        <table style="width:100%;border-collapse:collapse;">
+          <thead><tr style="background:#f1f5f9;"><th style="text-align:left;padding:7px 10px;font-size:11px;">Contratista</th><th style="text-align:right;padding:7px 10px;font-size:11px;">N° OC</th><th style="text-align:right;padding:7px 10px;font-size:11px;">Monto</th></tr></thead>
+          <tbody>${provsH.map(p => `<tr style="border-top:1px solid var(--border);">
+            <td style="padding:7px 10px;font-size:12px;">${p.proveedor}</td>
+            <td style="padding:7px 10px;font-size:12px;text-align:right;color:var(--muted);">${p.nOC}</td>
+            <td style="padding:7px 10px;font-size:12px;text-align:right;" class="neg-val">${fmt(p.monto)}</td>
+          </tr>`).join('')}
+          <tr style="background:#fef2f2;border-top:2px solid #fca5a5;font-weight:700;">
+            <td colspan="2" style="padding:8px 10px;font-size:12px;">TOTAL</td>
+            <td style="padding:8px 10px;text-align:right;" class="neg-val">${fmt(itemH.monto)}</td>
           </tr></tbody>
         </table>`;
     }

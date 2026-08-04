@@ -582,6 +582,7 @@ function leerOCInsumos() {
     const COL_COD    = _findCol(headers, ['código obra', 'codigo obra', 'cod obra', 'cod_obra']) ?? 7;
     const COL_OBRA   = _findCol(headers, ['obra general', 'obra']) ?? 5;
     const COL_ESTADO = _findCol(headers, ['estado', 'status']) ?? 6;
+    const COL_DESC   = _findCol(headers, ['descripción', 'descripcion', 'detalle']) ?? 3;
 
     Logger.log('OC Insumos — cols: fecha=' + COL_FECHA + ' monto=' + COL_MONTO + ' obra=' + COL_OBRA + ' cod=' + COL_COD + ' prov=' + COL_PROV + ' estado=' + COL_ESTADO);
 
@@ -609,7 +610,24 @@ function leerOCInsumos() {
       const esAceptada = estadoRaw.toLowerCase().includes('acept');
       const esPendiente = estadoRaw.toLowerCase().includes('pend');
 
-      if (!acum[mes]) acum[mes] = { items: {}, total: 0, nOC: 0 };
+      if (!acum[mes]) acum[mes] = { items: {}, total: 0, nOC: 0, moh: {}, mohTotal: 0, mohN: 0 };
+
+      // MO de hormigón tercerizada: Guillermo la marca en DESCRIPCIÓN como
+      // "Mano de obra" (o similar). No es un insumo — se acumula aparte para
+      // mostrarla como columna propia en contribución marginal.
+      const descRaw = String(row[COL_DESC] || '').trim();
+      if (/mano\s*de\s*obra/i.test(descRaw)) {
+        if (!acum[mes].moh[key]) acum[mes].moh[key] = { obra: obra, codigo: codigo, monto: 0, nOC: 0, proveedores: {} };
+        const m = acum[mes].moh[key];
+        if (!m.proveedores[proveedor]) m.proveedores[proveedor] = { monto: 0, nOC: 0 };
+        m.proveedores[proveedor].monto += monto;
+        m.proveedores[proveedor].nOC  += 1;
+        m.monto += monto;
+        m.nOC   += 1;
+        acum[mes].mohTotal += monto;
+        acum[mes].mohN     += 1;
+        continue; // no sumar como insumo
+      }
       if (!acum[mes].items[key]) acum[mes].items[key] = { obra: obra, codigo: codigo, monto: 0, nOC: 0, aceptadas: 0, pendientes: 0, proveedores: {} };
       if (!acum[mes].items[key].proveedores[proveedor]) acum[mes].items[key].proveedores[proveedor] = { monto: 0, nOC: 0, aceptadas: 0, pendientes: 0 };
       acum[mes].items[key].proveedores[proveedor].monto += monto;
@@ -625,7 +643,7 @@ function leerOCInsumos() {
     // Convertir a formato del dashboard
     const resultado = {};
     for (const [mes, data] of Object.entries(acum)) {
-      if (data.nOC === 0) continue;
+      if (data.nOC === 0 && data.mohN === 0) continue;
       resultado[mes] = {
         total: Math.round(data.total),
         nOC:   data.nOC,
@@ -641,6 +659,22 @@ function leerOCInsumos() {
             pendientes: v.pendientes,
             proveedores: Object.entries(v.proveedores)
               .map(([proveedor, pv]) => ({ proveedor, monto: Math.round(pv.monto), nOC: pv.nOC, aceptadas: pv.aceptadas, pendientes: pv.pendientes }))
+              .sort((a, b) => b.monto - a.monto)
+          }))
+          .sort((a, b) => b.monto - a.monto)
+      };
+      // MO de hormigón tercerizada del mes (aparte de los insumos)
+      resultado[mes].moHormigon = {
+        total: Math.round(data.mohTotal),
+        nOC:   data.mohN,
+        items: Object.entries(data.moh)
+          .map(([key, v]) => ({
+            obra: v.obra,
+            codigo: v.codigo || '',
+            monto: Math.round(v.monto),
+            nOC: v.nOC,
+            proveedores: Object.entries(v.proveedores)
+              .map(([proveedor, pv]) => ({ proveedor, monto: Math.round(pv.monto), nOC: pv.nOC }))
               .sort((a, b) => b.monto - a.monto)
           }))
           .sort((a, b) => b.monto - a.monto)
