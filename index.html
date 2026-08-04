@@ -5224,18 +5224,18 @@ const MAPA_OBRAS_AUDIT = {
   'Papa Francisco': ['Papa Francisco', 'PAPA FRANCISCO'],
   'Ruta 357 - Quilmes': ['Ruta 357 - Quilmes'],
   'Bacheo SMT': ['bacheo area central', 'Bacheo Munic.- Etapa 2'],
-  'Provisión de asfalto caliente': ['Venta de asfalto caliente', 'Provisión Asfalto p/Obras varias'],
+  'Provisión de asfalto caliente': ['Venta de asfalto caliente', 'Provisión Asfalto p/Obras varias', 'Provisión de asfalto caliente'],
   'CERTIFICADO DE OBRA  Nº 1 - 81976-A': ['Obra Licit. Nº 81976', 'Licitación hormigon'],
   'CERTIFICADO DE OBRA  Nº 1 - 81982-A': ['Obra Licit. Nº 81982'],
   'Redeterminación': ['Redeterminación'],
   'Cantero Soldati': ['Canteros Av. Soldati'],
-  'Provisión de hormigon': ['Provisión de hormigon para veredas', 'Provisión Hormigón p/Obras varias'],
+  'Provisión de hormigon': ['Provisión de hormigon para veredas', 'Provisión Hormigón p/Obras varias', 'Provisión de hormigon'],
   'Fondo de reparo': ['Fondo de reparo'],
   'Avenida Belgrano': ['Pintura Av. Belgrano', 'PINTURA BELGRANO'],
   'Country Pilar': ['Country Pilar'],
   '9 de Julio y Perez Palavecino': ['Pérez Palavecino'],
   'Ruta 307 - Ampliación - Certificado N1': ['Ruta 307 (Ampliación)', 'Ruta 307'],
-  'Provisión de mezcla asfáltica en caliente y riego de liga': ['Venta de asfalto frío'],
+  'Provisión de mezcla asfáltica en caliente y riego de liga': ['Venta de asfalto frío', 'Provisión de asfalto frío'],
 };
 
 // URLs de los archivos fuente para el deep-link "abrir la fila en el Sheet".
@@ -5495,6 +5495,12 @@ const ALIAS_ESTEBAN = {
   'Av. Mitre': 'MITRE',
   'Pintura Av. Mitre': 'MITRE',
   'PINTURA BELGRANO': 'Pintura Av. Belgrano',
+  // La misma provisión aparece con 3 nombres según el mes (may/jun/jul)
+  'Venta de asfalto caliente': 'Provisión de asfalto caliente',
+  'Provisión Asfalto p/Obras varias': 'Provisión de asfalto caliente',
+  'Venta de asfalto frío': 'Provisión de asfalto frío',
+  'Provisión Hormigón p/Obras varias': 'Provisión de hormigon',
+  'Provisión de hormigon para veredas': 'Provisión de hormigon',
 };
 const SEG_CATS = [
   ['facturados',    'facturado',     '#2563eb'],
@@ -5515,7 +5521,10 @@ function _seguimientoCobros() {
 
   const vistos = new Set();
   meses.forEach(mes => (COBROS_ESTEBAN[mes].cobrados || []).forEach(it => {
-    const k = (it.obra || '') + '|' + (it.concepto || '') + '|' + (it.importe || 0);
+    // clave con obra normalizada: el mismo cobro puede repetirse en dos hojas
+    // mensuales con la obra renombrada (ej. "Provisión Asfalto p/Obras varias"
+    // en mayo y "Provisión de asfalto caliente" en junio)
+    const k = _segNorm(it.obra) + '|' + (it.concepto || '') + '|' + (it.importe || 0);
     if (vistos.has(k)) return; // mismo cobro repetido en dos hojas mensuales
     vistos.add(k);
     const o = O(_segNorm(it.obra));
