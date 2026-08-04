@@ -1860,20 +1860,23 @@ function leerCobrosEsteban() {
           gid:       sheet.getSheetId(),
         };
 
-        if (pastTotal) {
-          menosProbable.push(item);
-          totalMenosProbable += importe;
-          continue;
-        }
-
-        // Categorizar por valor RAW de col G (antes de formatear)
+        // Categorizar por valor RAW de col G (antes de formatear).
+        // La marca explícita de col G (fecha real, F, N/C) gana SIEMPRE sobre
+        // la posición: una fila facturada o cobrada debajo del TOTAL no es
+        // "menos probable". Solo las filas sin marca debajo del TOTAL lo son.
         const gRaw = iFechaReal !== null ? row[iFechaReal] : '';
         const gStr = String(gRaw || '').trim();
 
         if (gStr === '' || gStr === '-') {
-          item.categoria = 'sinFecha';
-          sinFecha.push(item);
-          totalSinFecha += importe;
+          if (pastTotal) {
+            item.categoria = 'menosProbable';
+            menosProbable.push(item);
+            totalMenosProbable += importe;
+          } else {
+            item.categoria = 'sinFecha';
+            sinFecha.push(item);
+            totalSinFecha += importe;
+          }
         } else if (gStr.toUpperCase() === 'F') {
           item.categoria = 'facturado';
           item.fechaReal = '';
