@@ -7272,10 +7272,14 @@ const OBRAS_PLANTA_INTERNA = ['planta de asfalto', 'planta de trituración', 'pr
 function getOCPlantaInterna(mes) {
   const ocMes = OC_INSUMOS[mes || mesActual];
   if (!ocMes || !ocMes.items || ocMes.items.length === 0) return null;
-  const items = ocMes.items.filter(i => {
+  const esInterna = i => {
     const obra = (i.obra || '').toLowerCase().trim();
     return OBRAS_PLANTA_INTERNA.some(n => obra === n || obra.includes(n) || n.includes(obra));
-  });
+  };
+  // Incluye también la MO de hormigón tercerizada de los centros internos
+  // (ej. Predio Warnes): al separarse de los insumos, sin esto se perdería.
+  const items = ocMes.items.filter(esInterna)
+    .concat(((ocMes.moHormigon && ocMes.moHormigon.items) || []).filter(esInterna));
   if (items.length === 0) return null;
   return {
     total: items.reduce((s, i) => s + i.monto, 0),
@@ -7793,16 +7797,20 @@ function renderEgresosChart() {
   const moEsEstimEgr = moReal == null && moMes != null;
   const alqObjEgr = ALQUILER_EQUIPOS[mesActual];
   const alqMes = _alqTotalObras(alqObjEgr);
+  // MO hormigón tercerizada del mes (solo obras no-INT, igual que OC Insumos)
+  const mohObj = OC_INSUMOS[mesActual] && OC_INSUMOS[mesActual].moHormigon;
+  const mohMes = (mohObj && mohObj.items) ? mohObj.items.filter(i => !ocEsInt(i)).reduce((s, i) => s + i.monto, 0) : 0;
 
   if (ocMes == null && moMes == null && alqMes == null) {
     container.innerHTML = '<div class="nd" style="text-align:center;padding:20px;font-size:13px;">Actualizá datos para ver el gráfico</div>';
     return;
   }
 
-  const total = (ocMes || 0) + (moMes || 0) + (alqMes || 0);
+  const total = (ocMes || 0) + (moMes || 0) + mohMes + (alqMes || 0);
   const items = [
     { label: 'OC Insumos',       valor: ocMes  || 0, color: '#f59e0b' },
-    { label: (moEsEstimEgr ? '~' : '') + 'Mano de Obra de Obras', valor: moMes  || 0, color: '#ef4444' },
+    { label: (moEsEstimEgr ? '~' : '') + 'MO Asfalto de Obras', valor: moMes  || 0, color: '#ef4444' },
+    { label: 'MO Hormigón (tercerizada)', valor: mohMes, color: '#a855f7' },
     { label: 'Alquiler Equipos', valor: alqMes || 0, color: '#3b82f6' },
   ].filter(i => i.valor > 0);
 
