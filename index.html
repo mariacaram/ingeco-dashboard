@@ -1059,6 +1059,7 @@
   <div class="section" id="seguimiento-cobros">
     <div class="section-title">Seguimiento de cobros por obra</div>
     <div id="seg-cobros-sub" style="font-size:12px;color:var(--muted);margin:-4px 0 14px;"></div>
+    <div id="seg-fondos-card"></div>
     <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:11px;margin-bottom:12px;">
       <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#16a34a;margin-right:5px;"></span>Cobrado</span>
       <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#2563eb;margin-right:5px;"></span>Facturado</span>
@@ -5614,6 +5615,22 @@ function renderSeguimientoCobros() {
   const activas = nombres.filter(n => obras[n].pend > 0).sort((a, b) => obras[b].pend - obras[a].pend);
   const completas = nombres.filter(n => !(obras[n].pend > 0)).sort((a, b) => obras[b].cob - obras[a].cob);
 
+  // Tarjeta resumen de fondos de reparo pendientes (todos, reclamables)
+  const cardFondos = document.getElementById('seg-fondos-card');
+  if (cardFondos) {
+    const fondos = _fondosReparoPendientes();
+    const totF = fondos.reduce((s, f) => s + f.monto, 0);
+    cardFondos.innerHTML = fondos.length ? `
+      <div onclick="openFondosReparoPanel()" style="cursor:pointer;background:#fffbeb;border:1px solid #fcd34d;border-left:4px solid #f59e0b;border-radius:10px;padding:13px 16px;margin-bottom:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <span style="font-size:20px;">🔒</span>
+        <div>
+          <div style="font-size:13px;font-weight:700;color:#92400e;">Fondos de reparo pendientes de cobro</div>
+          <div style="font-size:11px;color:#b45309;">${fondos.length} ítem(s) retenidos en ${new Set(fondos.map(f => f.obra)).size} obra(s) — click para ver el detalle y reclamar</div>
+        </div>
+        <span style="margin-left:auto;font-size:20px;font-weight:800;color:#92400e;">${fmt(totF)}</span>
+      </div>` : '';
+  }
+
   const fila = n => {
     const o = obras[n];
     const total = o.cob + o.pend;
@@ -5693,6 +5710,53 @@ function openSeguimientoPanel(nombre) {
         <td style="padding:6px 4px;text-align:right;">${_sheetLinkAudit(i)}</td>
       </tr>`).join('')}
     </table>` : ''}`;
+  panel.classList.add('open');
+  overlay.classList.add('open');
+}
+
+// Lista plana de todos los fondos de reparo pendientes (todas las obras)
+function _fondosReparoPendientes() {
+  const data = _seguimientoCobros();
+  if (!data) return [];
+  const out = [];
+  Object.entries(data.obras).forEach(([obra, o]) => {
+    o.itemsPend.forEach(i => { if (i.esFondo) out.push({ obra, ...i }); });
+  });
+  return out.sort((a, b) => b.monto - a.monto);
+}
+
+function openFondosReparoPanel() {
+  const panel = document.getElementById('sidePanel');
+  const overlay = document.getElementById('overlay');
+  const content = document.getElementById('panelContent');
+  if (!panel) return;
+  const data = _seguimientoCobros();
+  const fondos = _fondosReparoPendientes();
+  const totF = fondos.reduce((s, f) => s + f.monto, 0);
+  const conFecha = fondos.filter(f => f.fecha);
+  const catLbl = { facturados: 'Facturado', noCobrados: 'No cobrado', sinFecha: 'Sin fecha', menosProbable: 'Menos probable' };
+  const catColor = { facturados: '#2563eb', noCobrados: '#dc2626', sinFecha: '#b45309', menosProbable: '#64748b' };
+
+  content.innerHTML = `
+    <div class="panel-title">🔒 Fondos de reparo pendientes</div>
+    <div class="panel-sub">Retenciones por reclamar · programación de ${data ? (MES[data.ult] || data.ult) : ''}</div>
+    <div class="panel-kpi">
+      <div class="panel-kpi-item"><div class="panel-kpi-label">Total retenido</div><div class="panel-kpi-val" style="color:#b45309;">${fmt(totF)}</div></div>
+      <div class="panel-kpi-item"><div class="panel-kpi-label">Ítems</div><div class="panel-kpi-val">${fondos.length}</div></div>
+      <div class="panel-kpi-item"><div class="panel-kpi-label">Obras</div><div class="panel-kpi-val">${new Set(fondos.map(f => f.obra)).size}</div></div>
+      <div class="panel-kpi-item"><div class="panel-kpi-label">Con fecha probable</div><div class="panel-kpi-val">${conFecha.length}</div></div>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin:10px 0 6px;">Ordenados por monto. El link abre la fila en la planilla de Esteban para verificar antes de reclamar.</div>
+    <table style="width:100%;font-size:12px;">
+      ${fondos.map(f => `<tr style="border-bottom:1px solid var(--border);">
+        <td style="padding:7px 8px;">
+          <strong style="font-size:11px;">${f.obra}</strong><br>${f.txt}<br>
+          <span style="font-size:10px;color:${catColor[f.cat]};font-weight:600;">${catLbl[f.cat]}${f.fecha ? ' · prob. ' + f.fecha : ' · sin fecha estimada'}</span>
+        </td>
+        <td style="padding:7px 8px;text-align:right;font-weight:700;white-space:nowrap;">${fmt(f.monto)}</td>
+        <td style="padding:7px 4px;text-align:right;">${_sheetLinkAudit(f)}</td>
+      </tr>`).join('')}
+    </table>`;
   panel.classList.add('open');
   overlay.classList.add('open');
 }
