@@ -7050,7 +7050,8 @@ function openTotalACobrarPanel() {
   const totalMes = obrasMes.reduce((s, o) => s + (o.aCobrar ?? o.generado ?? 0), 0);
 
   // Clasificación por estado (col E): "Cobrada" vs "A Cobrar"
-  const esCobrada = e => (e || '').toLowerCase().includes('cobrada');
+  // "Cobrada" (Municipio) o "Cobrado" (Vialidad) — matchea ambas
+  const esCobrada = e => (e || '').toLowerCase().includes('cobrad');
   let totalCobrar = 0, totalCobrada = 0;
   obrasMes.forEach(o => (o.items || []).forEach(it => {
     if (esCobrada(it.estado)) totalCobrada += it.monto; else totalCobrar += it.monto;
