@@ -991,7 +991,12 @@
 
   <!-- Tabla principal: cobrados + facturados + sin fecha -->
   <div class="section">
-    <div class="section-title">Detalle · <span class="cobros-mes-lbl">—</span> <span class="badge real">Google Sheets — Esteban</span></div>
+    <details id="detalle-mes-details">
+    <summary style="cursor:pointer;list-style:none;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;">
+      <span class="section-title" style="margin-bottom:0;">Detalle · <span class="cobros-mes-lbl">—</span> <span class="badge real">Google Sheets — Esteban</span></span>
+      <span id="detalle-mes-resumen" style="font-size:12px;color:var(--muted);"></span>
+      <span style="margin-left:auto;font-size:11px;font-weight:700;color:var(--muted);">ver / ocultar ▾</span>
+    </summary>
     <!-- Filtros de cliente y estado -->
     <div id="detalle-filtros" style="display:none;margin:10px 0 14px;">
       <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start;">
@@ -1012,6 +1017,7 @@
       </table>
     </div>
     <div class="nota-fuente"><strong>Fuente:</strong> <a href="https://docs.google.com/spreadsheets/d/1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY/edit" target="_blank">Planilla Cobros (Esteban)</a> — filas hasta TOTAL en col Concepto</div>
+    </details>
   </div>
 
   <!-- Gráfico pendiente de cobro por cliente -->
@@ -1039,7 +1045,12 @@
 
   <!-- Tabla obras menos probables (después de TOTAL) -->
   <div class="section" id="section-menos-probable" style="display:none;">
-    <div class="section-title">Obras menos probables · <span class="cobros-mes-lbl">—</span> <span class="badge parcial">después del TOTAL</span></div>
+    <details id="menos-probable-details">
+    <summary style="cursor:pointer;list-style:none;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;">
+      <span class="section-title" style="margin-bottom:0;">Obras menos probables · <span class="cobros-mes-lbl">—</span> <span class="badge parcial">después del TOTAL</span></span>
+      <span id="mp-resumen" style="font-size:12px;color:var(--muted);"></span>
+      <span style="margin-left:auto;font-size:11px;font-weight:700;color:var(--muted);">ver / ocultar ▾</span>
+    </summary>
     <div style="margin:8px 0 14px;font-size:12px;">
       <div style="color:var(--muted);margin-bottom:6px;">Filtrar por cliente:</div>
       <div id="mp-chips" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
@@ -1051,6 +1062,7 @@
       </table>
     </div>
     <div class="nota-fuente">Obras listadas por Esteban después del TOTAL — menor probabilidad de cobro en el mes</div>
+    </details>
   </div>
 
   <!-- Tabla pipeline (legacy, oculta) -->
@@ -3805,6 +3817,16 @@ function renderCobrosReal() {
     renderDetalleTabla();
   }
 
+  // Resumen del acordeón "Detalle del mes" (colapsado por defecto)
+  const resumenDet = document.getElementById('detalle-mes-resumen');
+  if (resumenDet) {
+    if (d) {
+      const nMov = ['cobrados', 'facturados', 'noCobrados', 'sinFecha'].reduce((s, c) => s + ((d[c] || []).length), 0);
+      const totMov = (d.totalCobrado || 0) + (d.totalFacturado || 0) + (d.totalNoCobrado || 0) + (d.totalSinFecha || 0);
+      resumenDet.textContent = nMov ? `${nMov} movimientos · ${fmt(totMov)}` : '';
+    } else resumenDet.textContent = '';
+  }
+
   // ── Gráfico timeline por fecha probable ────────────────────────
   renderCobrosTimeline(d);
 
@@ -3813,6 +3835,11 @@ function renderCobrosReal() {
   const secMP = document.getElementById('section-menos-probable');
   if (_menosProbableActuales.length > 0) {
     if (secMP) secMP.style.display = '';
+    const mpResumen = document.getElementById('mp-resumen');
+    if (mpResumen) {
+      const totMP = _menosProbableActuales.reduce((s, it) => s + (it.importe || 0), 0);
+      mpResumen.textContent = `${_menosProbableActuales.length} ítems · ${fmt(totMP)}`;
+    }
     const chipsBox = document.getElementById('mp-chips');
     if (chipsBox) {
       const clientesUnicos = [...new Set(_menosProbableActuales.map(it => (it.cliente || '—').trim()).filter(Boolean))].sort();
@@ -5617,6 +5644,19 @@ function _juliaPendPorCanon(obrasSeg) {
   return res;
 }
 
+// Veredicto del cruce Esteban vs Julia para una obra del seguimiento
+function _segVeredictoJulia(n, o, jp) {
+  if (!jp || !jp.hayEstados) return null;
+  const jPend = jp.map[n] || 0;
+  const dif = jPend - o.pend;
+  if (Math.abs(dif) <= AUDIT_TOLERANCIA) return { icon: '✅', tipo: 'ok', jPend, dif,
+    tip: `Coincide con Julia (certificados A Cobrar: ${fmt(jPend)})` };
+  if (dif > 0) return { icon: '🔶', tipo: 'esteban', jPend, dif,
+    tip: `Esteban no programó ${fmt(dif)}: Julia certificó ${fmt(jPend)} A Cobrar y Esteban lista ${fmt(o.pend)}` };
+  return { icon: '🔶', tipo: 'julia', jPend, dif,
+    tip: `Julia registra ${fmt(jPend)} A Cobrar — ${fmt(-dif)} menos que Esteban; posible atraso de carga de Julia` };
+}
+
 // Diferencia contra el archivo de Julia (reusa el resultado de la auditoría).
 // Devuelve { monto, titulo } — titulo es el nombre de la obra en el archivo
 // de Julia, que identifica la tarjeta correspondiente en Auditorías.
@@ -5707,52 +5747,41 @@ function renderSeguimientoCobros() {
     const o = obras[n];
     const total = o.cob + o.pend;
     const pct = total ? Math.round(o.cob / total * 100) : 0;
-    const difJ = _segDifJulia(n);
-    let lineaJulia = '';
-    if (jp.hayEstados) {
-      const jPend = jp.map[n] || 0;
-      const dif = jPend - o.pend;
-      const linkA = difJ ? `onclick="event.stopPropagation();irAAuditoria('${difJ.titulo.replace(/'/g, "\\'")}');" style="cursor:pointer;"` : '';
-      if (Math.abs(dif) <= AUDIT_TOLERANCIA) {
-        lineaJulia = `<span style="color:#16a34a;font-weight:600;">✅ coincide con Julia (certificados A Cobrar: ${fmt(jPend)})</span>`;
-      } else if (dif > 0) {
-        lineaJulia = `<span data-restrict="sueldos" ${linkA} class="neg-val" style="font-weight:600;">🔶 Esteban no programó ${fmt(dif)}: Julia certificó ${fmt(jPend)} A Cobrar y Esteban solo lista ${fmt(o.pend)}${difJ ? ' — ver Auditorías' : ''}</span>`;
-      } else {
-        lineaJulia = `<span data-restrict="sueldos" ${linkA} style="color:#b45309;font-weight:600;">🔶 Julia registra ${fmt(jPend)} A Cobrar (${fmt(-dif)} menos que Esteban) — posible atraso de carga de Julia${difJ ? ' — ver Auditorías' : ''}</span>`;
-      }
-    }
+    const v = _segVeredictoJulia(n, o, jp);
+    const iconos =
+      (o.fondoPend > 0 ? `<span title="Fondo de reparo pendiente: ${fmt(o.fondoPend)} — reclamable (ver detalle)">🔒</span>` : '') +
+      (v ? `<span data-restrict="sueldos" title="${v.tip}">${v.icon}</span>` : '');
     return `
-    <div data-obra="${n.replace(/"/g, '&quot;')}" style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:13px 16px;margin-bottom:10px;cursor:pointer;" onclick="openSeguimientoPanel('${n.replace(/'/g, "\\'")}')">
-      <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
-        <strong style="font-size:13px;">${n}</strong>
-        <span style="font-size:11px;color:var(--muted);">cobrado ${fmt(o.cob)} · falta ${fmt(o.pend)}</span>
-        <span style="margin-left:auto;font-weight:800;font-size:14px;color:${pct >= 80 ? '#16a34a' : pct >= 40 ? '#b45309' : '#dc2626'};">${pct}%</span>
-      </div>
-      ${_segBarra(o, total)}
-      <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:7px;font-size:11px;">
-        ${o.fondoPend > 0 ? (() => {
-          const fi = o.itemsPend.filter(i => i.esFondo).sort((a, b) => b.monto - a.monto)[0];
-          const url = fi ? _sheetUrlAudit(fi) : '';
-          return `<span style="color:#b45309;font-weight:600;${url ? 'cursor:pointer;text-decoration:underline dotted;' : ''}" ${url ? `onclick="event.stopPropagation();window.open('${url}','_blank')" title="Abrir la fila en la planilla de Esteban"` : ''}>🔒 Fondo de reparo pendiente: ${fmt(o.fondoPend)} — reclamable${url && fi.fila ? ' ↗' : ''}</span>`;
-        })() : ''}
-        ${lineaJulia}
-      </div>
+    <div data-obra="${n.replace(/"/g, '&quot;')}" title="Click para ver el detalle certificado por certificado" style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:9px 14px;margin-bottom:7px;cursor:pointer;display:flex;align-items:center;gap:12px;flex-wrap:wrap;" onclick="openSeguimientoPanel('${n.replace(/'/g, "\\'")}')">
+      <strong style="font-size:12.5px;flex:0 1 auto;min-width:130px;">${n}</strong>
+      <div style="flex:1 1 140px;min-width:110px;">${_segBarra(o, total)}</div>
+      <span style="font-size:11px;color:var(--muted);white-space:nowrap;">falta <strong style="color:#0f172a;">${fmt(o.pend)}</strong></span>
+      <span style="font-weight:800;font-size:13px;width:40px;text-align:right;color:${pct >= 80 ? '#16a34a' : pct >= 40 ? '#b45309' : '#dc2626'};">${pct}%</span>
+      <span style="font-size:13px;width:44px;text-align:left;">${iconos}</span>
     </div>`;
   };
 
   // Obras que Julia certificó (A Cobrar) pero Esteban no tiene en su programación
   const soloJulia = jp.solo.filter(s => s.monto > AUDIT_TOLERANCIA).sort((a, b) => b.monto - a.monto);
   const soloHtml = soloJulia.map(s => `
-    <div style="background:#fff7ed;border:1px solid #fdba74;border-left:4px solid #ea580c;border-radius:10px;padding:13px 16px;margin-bottom:10px;">
-      <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;">
-        <strong style="font-size:13px;">${s.nombre}</strong>
-        <span style="font-size:11px;color:#9a3412;font-weight:600;">⚠️ certificada por Julia, sin programación de cobro en la planilla de Esteban</span>
-        <span style="margin-left:auto;font-weight:800;font-size:14px;color:#ea580c;">${fmt(s.monto)}</span>
-      </div>
+    <div style="background:#fff7ed;border:1px solid #fdba74;border-left:4px solid #ea580c;border-radius:10px;padding:9px 14px;margin-bottom:7px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <strong style="font-size:12.5px;">${s.nombre}</strong>
+      <span style="font-size:11px;color:#9a3412;font-weight:600;">⚠️ certificada por Julia, sin programación de cobro en Esteban</span>
+      <span style="margin-left:auto;font-weight:800;font-size:13px;color:#ea580c;">${fmt(s.monto)}</span>
     </div>`).join('');
 
-  list.innerHTML = soloHtml + activas.map(fila).join('') + (completas.length ? `
-    <details style="margin-top:14px;">
+  // Las 10 con más pendiente a la vista; el resto colapsado (igual que Completadas)
+  const TOP = 10;
+  const activasTop = activas.slice(0, TOP);
+  const activasResto = activas.slice(TOP);
+  list.innerHTML = soloHtml + activasTop.map(fila).join('')
+    + (activasResto.length ? `
+    <details style="margin-top:10px;">
+      <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--muted);">Ver las ${activasResto.length} obras restantes con pendiente ▾</summary>
+      <div style="margin-top:10px;">${activasResto.map(fila).join('')}</div>
+    </details>` : '')
+    + (completas.length ? `
+    <details style="margin-top:10px;">
       <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--muted);">✓ Completadas — sin pendiente (${completas.length})</summary>
       <div style="margin-top:10px;">${completas.map(fila).join('')}</div>
     </details>` : '');
@@ -5788,6 +5817,15 @@ function openSeguimientoPanel(nombre) {
     <div style="font-size:10.5px;color:var(--muted);margin-top:8px;line-height:1.5;">
       ℹ️ <strong>Total registrado</strong> = cobrado desde ${MES[data.meses[0]] || data.meses[0]} + pendiente según la programación de ${MES[data.ult] || data.ult} (planilla de Esteban). No es el monto de contrato: no incluye lo cobrado antes de ${MES[data.meses[0]] || data.meses[0]} ni certificados aún no cargados.
     </div>
+    ${(() => {
+      const vP = _segVeredictoJulia(nombre, o, _juliaPendPorCanon(data.obras));
+      if (!vP) return '';
+      const difJP = _segDifJulia(nombre);
+      const linkA = (difJP && vP.tipo !== 'ok')
+        ? ` — <span style="color:#2563eb;font-weight:700;cursor:pointer;" onclick="document.getElementById('sidePanel').classList.remove('open');document.getElementById('overlay').classList.remove('open');irAAuditoria('${difJP.titulo.replace(/'/g, "\\'")}')">ver Auditorías →</span>`
+        : '';
+      return `<div data-restrict="sueldos" style="margin-top:12px;padding:10px 12px;border-radius:8px;font-size:12px;line-height:1.5;background:${vP.tipo === 'ok' ? '#f0fdf4' : '#fff7ed'};border:1px solid ${vP.tipo === 'ok' ? '#86efac' : '#fdba74'};">${vP.icon} ${vP.tip}${linkA}</div>`;
+    })()}
     ${o.itemsPend.length ? `
     <div style="font-size:12px;font-weight:700;margin:16px 0 6px;">FALTA COBRAR (programación de ${MES[data.ult] || data.ult})</div>
     <table style="width:100%;font-size:12px;">
