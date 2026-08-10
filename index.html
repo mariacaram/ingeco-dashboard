@@ -2837,22 +2837,30 @@ function _itemOtroGastoHTML(r) {
   const codEsc2 = (o.cod_obra || '').replace(/'/g, "\\'");
   const nomEsc  = (o.nombre  || '').replace(/'/g, "\\'");
   const dato = (label, val) => val ? `<span style="margin-right:16px;"><span style="color:var(--muted);">${label}:</span> <strong>${val}</strong></span>` : '';
-  const datos = [
+  const nombreLink = `<span style="cursor:pointer;font-size:13px;font-weight:600;color:#92400e;text-decoration:underline dotted;" title="Ver historial de todos los meses" onclick="openHistorialObra('${codEsc2}','${nomEsc}')">${o.cod_obra}</span>`;
+  const filaHTML = (izq, der) => `<div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding:9px 4px;border-bottom:1px dashed #fca5a5;">
+    ${izq}<span style="font-size:12px;">${der}</span>
+  </div>`;
+  const datosSinTn = [
     dato('A Cobrar', r.aCobrar > 0 ? fmt(r.aCobrar) : ''),
     dato('Insumos', r.insumos > 0 ? fmt(r.insumos) : ''),
-    dato('TN', tnLabel),
     dato('Alquiler', r.alquiler > 0 ? fmt(r.alquiler) : ''),
   ].filter(Boolean).join('');
-  // Desglose legible del asfalto despachado: subtipo (carpeta/bacheo) + destino
-  // (col H del remito) — en las provisiones importa saber a qué cliente fue.
-  const detTn = (r.tnDet && r.tnDet.length)
-    ? `<div style="flex-basis:100%;font-size:11px;color:#9a3412;padding:2px 0 0 12px;">${r.tnDet.map(e => `↳ ${_tnDetLabel(e)}: <strong>${fmtTn(e.t)} tn</strong>`).join('<span style="margin:0 8px;color:#fca5a5;">·</span>')}</div>`
-    : '';
-  return `<div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding:9px 4px;border-bottom:1px dashed #fca5a5;">
-    <span style="cursor:pointer;font-size:13px;font-weight:600;color:#92400e;text-decoration:underline dotted;" title="Ver historial de todos los meses" onclick="openHistorialObra('${codEsc2}','${nomEsc}')">${o.cod_obra}</span>
-    <span style="font-size:12px;">${datos || '<span class="nd">Sin montos este mes</span>'}</span>
-    ${detTn}
-  </div>`;
+
+  // Con desglose de remitos: UNA FILA por cada combinación subtipo+destino
+  // ("Provisión de asfalto caliente · Caliente p/carpeta → Muni SMT" = una fila)
+  if (r.tnDet && r.tnDet.length) {
+    const filas = [];
+    if (datosSinTn) filas.push(filaHTML(nombreLink, datosSinTn));
+    r.tnDet.forEach(e => filas.push(filaHTML(
+      `<span style="font-size:12.5px;">${nombreLink} <span style="color:#9a3412;">· ${_tnDetLabel(e)}</span></span>`,
+      `<span style="color:var(--muted);">TN:</span> <strong>${fmtTn(e.t)} tn${e.s === 'frio' ? ' frío' : ''}</strong>`
+    )));
+    return filas.join('');
+  }
+
+  const datos = datosSinTn + dato('TN', tnLabel);
+  return filaHTML(nombreLink, datos || '<span class="nd">Sin montos este mes</span>');
 }
 
 // Construye el bloque completo de "Otros Gastos o salidas" — un card con fondo
