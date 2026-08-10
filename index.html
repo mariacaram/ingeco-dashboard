@@ -2828,6 +2828,19 @@ function _filaMargenHTML(r, moEsEstim, tnTotalGlobal) {
 // se note a simple vista que es otra cosa: un detalle a tener en cuenta, no
 // una obra más. Solo se muestra lo que haya de A Cobrar, Insumos, TN y
 // Alquiler — sin MO ni Margen, que no tienen sentido acá.
+// Precio de referencia para la certificación teórica de provisiones.
+// SOLO aplica a asfalto CALIENTE provisto a la Municipalidad de San Miguel de
+// Tucumán ($/tn). Si aparecen otros convenios con precio, agregarlos acá.
+const PRECIOS_PROVISION_TN = [
+  { esFrio: false, destinoRe: /san miguel de tucum/i, precio: 119500 },
+];
+function _precioProvision(e) {
+  for (const p of PRECIOS_PROVISION_TN) {
+    if ((e.s === 'frio') === p.esFrio && p.destinoRe.test(e.d || '')) return p.precio;
+  }
+  return null;
+}
+
 function _itemOtroGastoHTML(r) {
   const o = r.o;
   const _tnPartes = [];
@@ -2852,10 +2865,16 @@ function _itemOtroGastoHTML(r) {
   if (r.tnDet && r.tnDet.length) {
     const filas = [];
     if (datosSinTn) filas.push(filaHTML(nombreLink, datosSinTn));
-    r.tnDet.forEach(e => filas.push(filaHTML(
-      `<span style="font-size:12.5px;">${nombreLink} <span style="color:#9a3412;">· ${_tnDetLabel(e)}</span></span>`,
-      `<span style="color:var(--muted);">TN:</span> <strong>${fmtTn(e.t)} tn${e.s === 'frio' ? ' frío' : ''}</strong>`
-    )));
+    r.tnDet.forEach(e => {
+      const pTn = _precioProvision(e);
+      const cert = pTn
+        ? ` <span style="margin-left:14px;color:var(--muted);">Cert. teórica:</span> <strong class="pos-val" title="${fmtTn(e.t)} tn × $${pTn.toLocaleString('es-AR')}/tn">${fmt(Math.round(e.t * pTn))}</strong>`
+        : '';
+      filas.push(filaHTML(
+        `<span style="font-size:12.5px;">${nombreLink} <span style="color:#9a3412;">· ${_tnDetLabel(e)}</span></span>`,
+        `<span style="color:var(--muted);">TN:</span> <strong>${fmtTn(e.t)} tn${e.s === 'frio' ? ' frío' : ''}</strong>${cert}`
+      ));
+    });
     return filas.join('');
   }
 
@@ -2867,9 +2886,22 @@ function _itemOtroGastoHTML(r) {
 // distinto (no una tabla), compartido entre "por obra" y "por tipo de contratación".
 function _renderOtrosGastosBlock(otrosGastos) {
   if (!otrosGastos || otrosGastos.length === 0) return '';
+  // Certificación teórica total del bloque (solo renglones con precio de convenio)
+  let certTotal = 0, certTn = 0;
+  otrosGastos.forEach(r => (r.tnDet || []).forEach(e => {
+    const pTn = _precioProvision(e);
+    if (pTn) { certTotal += Math.round(e.t * pTn); certTn += e.t; }
+  }));
+  const certLinea = certTotal > 0
+    ? `<div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;padding:10px 4px 2px;font-size:12px;font-weight:700;color:#92400e;">
+        <span>Σ Certificación teórica — asfalto caliente a Muni. S.M. Tucumán (${fmtTn(certTn)} tn × $119.500/tn)</span>
+        <span class="pos-val" style="font-size:13px;">${fmt(certTotal)}</span>
+      </div>`
+    : '';
   return `<div style="margin-top:16px;background:#fef2f2;border:1.5px dashed #fca5a5;border-radius:10px;padding:12px 16px;">
     <div style="font-size:12px;font-weight:700;color:#92400e;margin-bottom:6px;">⚠ Otros Gastos o salidas <span style="font-weight:400;">· ${otrosGastos.length} ítem${otrosGastos.length !== 1 ? 's' : ''} sin clasificar — no son obras, revisar a qué imputar</span></div>
     ${otrosGastos.map(r => _itemOtroGastoHTML(r)).join('')}
+    ${certLinea}
   </div>`;
 }
 
