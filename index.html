@@ -2659,9 +2659,15 @@ function computeMargenObrasMes(mes) {
     const costoAsfObra = (precioMesResumen != null && (tnObra > 0 || tnFrioObra > 0))
       ? Math.round((tnObra * (precioMesResumen.caliente || 0)) + (tnFrioObra * (precioMesResumen.frio || 0)))
       : null;
+    // Certificación teórica de provisiones (tn × precio de convenio — hoy solo
+    // asfalto caliente a Muni SMT). Informativa: NO suma al margen real.
+    const certTeorica = (tnDet || []).reduce((s, e) => {
+      const pTn = _precioProvision(e);
+      return s + (pTn ? Math.round(e.t * pTn) : 0);
+    }, 0);
     const margen  = aCobrar - insumos - moHormigon - (moObra || 0) - (costoAsfObra || 0) - alquiler;
     const hasData = aCobrar > 0 || insumos > 0 || moHormigon > 0 || alquiler > 0 || tnObraTotal > 0 || moObra != null;
-    return { o, aCobrar, insumos, moHormigon, alquiler, tnObra, tnFrioObra, tnCarpeta, tnBacheo, tnDet, tnObraTotal, moObra, costoAsfObra, margen, hasData, extra: !!extra };
+    return { o, aCobrar, certTeorica, insumos, moHormigon, alquiler, tnObra, tnFrioObra, tnCarpeta, tnBacheo, tnDet, tnObraTotal, moObra, costoAsfObra, margen, hasData, extra: !!extra };
   };
 
   const rows = obras.map(o => buildDatosObra(o, false));
@@ -2841,67 +2847,91 @@ function _precioProvision(e) {
   return null;
 }
 
-function _itemOtroGastoHTML(r) {
+// Filas <tr> del bloque "Otros Gastos o salidas" — una fila por ítem, con las
+// columnas alineadas: Insumos | Alquiler | TN | Cert. teórica.
+function _filasOtroGastoTR(r) {
   const o = r.o;
-  const _tnPartes = [];
-  if (r.tnObra > 0)     _tnPartes.push(fmtTn(r.tnObra) + ' tn');
-  if (r.tnFrioObra > 0) _tnPartes.push(fmtTn(r.tnFrioObra) + ' frío');
-  const tnLabel = _tnPartes.join(' + ');
   const codEsc2 = (o.cod_obra || '').replace(/'/g, "\\'");
   const nomEsc  = (o.nombre  || '').replace(/'/g, "\\'");
-  const dato = (label, val) => val ? `<span style="margin-right:16px;"><span style="color:var(--muted);">${label}:</span> <strong>${val}</strong></span>` : '';
-  const nombreLink = `<span style="cursor:pointer;font-size:13px;font-weight:600;color:#92400e;text-decoration:underline dotted;" title="Ver historial de todos los meses" onclick="openHistorialObra('${codEsc2}','${nomEsc}')">${o.cod_obra}</span>`;
-  const filaHTML = (izq, der) => `<div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding:9px 4px;border-bottom:1px dashed #fca5a5;">
-    ${izq}<span style="font-size:12px;">${der}</span>
-  </div>`;
-  const datosSinTn = [
-    dato('A Cobrar', r.aCobrar > 0 ? fmt(r.aCobrar) : ''),
-    dato('Insumos', r.insumos > 0 ? fmt(r.insumos) : ''),
-    dato('Alquiler', r.alquiler > 0 ? fmt(r.alquiler) : ''),
-  ].filter(Boolean).join('');
+  const nombreLink = `<span style="cursor:pointer;font-weight:600;color:#92400e;text-decoration:underline dotted;" title="Ver historial de todos los meses" onclick="openHistorialObra('${codEsc2}','${nomEsc}')">${o.cod_obra}</span>`;
+  const td = html => `<td style="padding:8px 10px;font-size:12px;text-align:right;white-space:nowrap;">${html}</td>`;
+  const tdV = td('<span style="color:#fca5a5;">—</span>');
+  const trStyle = 'border-top:1px dashed #fca5a5;';
+  const tdItem = extra => `<td style="padding:8px 4px;font-size:12.5px;">${nombreLink}${extra || ''}</td>`;
+  const filas = [];
 
-  // Con desglose de remitos: UNA FILA por cada combinación subtipo+destino
-  // ("Provisión de asfalto caliente · Caliente p/carpeta → Muni SMT" = una fila)
   if (r.tnDet && r.tnDet.length) {
-    const filas = [];
-    if (datosSinTn) filas.push(filaHTML(nombreLink, datosSinTn));
+    // Fila base con los montos que no son de remitos (si los hay)
+    if (r.insumos > 0 || r.alquiler > 0 || r.aCobrar > 0) {
+      filas.push(`<tr style="${trStyle}">${tdItem()}
+        ${r.insumos  > 0 ? td(`<strong>${fmt(r.insumos)}</strong>`)  : tdV}
+        ${r.alquiler > 0 ? td(`<strong>${fmt(r.alquiler)}</strong>`) : tdV}
+        ${tdV}${tdV}
+      </tr>`);
+    }
+    // Una fila por combinación subtipo + destino
     r.tnDet.forEach(e => {
       const pTn = _precioProvision(e);
-      const cert = pTn
-        ? ` <span style="margin-left:14px;color:var(--muted);">Cert. teórica:</span> <strong class="pos-val" title="${fmtTn(e.t)} tn × $${pTn.toLocaleString('es-AR')}/tn">${fmt(Math.round(e.t * pTn))}</strong>`
-        : '';
-      filas.push(filaHTML(
-        `<span style="font-size:12.5px;">${nombreLink} <span style="color:#9a3412;">· ${_tnDetLabel(e)}</span></span>`,
-        `<span style="color:var(--muted);">TN:</span> <strong>${fmtTn(e.t)} tn${e.s === 'frio' ? ' frío' : ''}</strong>${cert}`
-      ));
+      filas.push(`<tr style="${trStyle}">
+        ${tdItem(` <span style="color:#9a3412;">· ${_tnDetLabel(e)}</span>`)}
+        ${tdV}${tdV}
+        ${td(`<strong>${fmtTn(e.t)} tn${e.s === 'frio' ? ' frío' : ''}</strong>`)}
+        ${pTn ? td(`<strong class="pos-val" title="${fmtTn(e.t)} tn × $${pTn.toLocaleString('es-AR')}/tn">${fmt(Math.round(e.t * pTn))}</strong>`) : tdV}
+      </tr>`);
     });
     return filas.join('');
   }
 
-  const datos = datosSinTn + dato('TN', tnLabel);
-  return filaHTML(nombreLink, datos || '<span class="nd">Sin montos este mes</span>');
+  // Sin desglose de remitos: una única fila
+  const _tnPartes = [];
+  if (r.tnObra > 0)     _tnPartes.push(fmtTn(r.tnObra) + ' tn');
+  if (r.tnFrioObra > 0) _tnPartes.push(fmtTn(r.tnFrioObra) + ' frío');
+  return `<tr style="${trStyle}">${tdItem()}
+    ${r.insumos  > 0 ? td(`<strong>${fmt(r.insumos)}</strong>`)  : tdV}
+    ${r.alquiler > 0 ? td(`<strong>${fmt(r.alquiler)}</strong>`) : tdV}
+    ${_tnPartes.length ? td(`<strong>${_tnPartes.join(' + ')}</strong>`) : tdV}
+    ${tdV}
+  </tr>`;
 }
 
 // Construye el bloque completo de "Otros Gastos o salidas" — un card con fondo
 // distinto (no una tabla), compartido entre "por obra" y "por tipo de contratación".
 function _renderOtrosGastosBlock(otrosGastos) {
   if (!otrosGastos || otrosGastos.length === 0) return '';
-  // Certificación teórica total del bloque (solo renglones con precio de convenio)
-  let certTotal = 0, certTn = 0;
-  otrosGastos.forEach(r => (r.tnDet || []).forEach(e => {
-    const pTn = _precioProvision(e);
-    if (pTn) { certTotal += Math.round(e.t * pTn); certTn += e.t; }
-  }));
-  const certLinea = certTotal > 0
-    ? `<div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;padding:10px 4px 2px;font-size:12px;font-weight:700;color:#92400e;">
-        <span>Σ Certificación teórica — asfalto caliente a Muni. S.M. Tucumán (${fmtTn(certTn)} tn × $119.500/tn)</span>
-        <span class="pos-val" style="font-size:13px;">${fmt(certTotal)}</span>
-      </div>`
-    : '';
+  // Totales del bloque
+  let totIns = 0, totAlq = 0, totCert = 0, certTn = 0, totTnCal = 0, totTnFrio = 0;
+  otrosGastos.forEach(r => {
+    totIns += r.insumos || 0; totAlq += r.alquiler || 0;
+    totTnCal += r.tnObra || 0; totTnFrio += r.tnFrioObra || 0;
+    (r.tnDet || []).forEach(e => {
+      const pTn = _precioProvision(e);
+      if (pTn) { totCert += Math.round(e.t * pTn); certTn += e.t; }
+    });
+  });
+  const _tnTot = [];
+  if (totTnCal > 0)  _tnTot.push(fmtTn(totTnCal) + ' tn');
+  if (totTnFrio > 0) _tnTot.push(fmtTn(totTnFrio) + ' frío');
+  const th = t => `<th style="text-align:right;padding:6px 10px;font-size:10px;font-weight:700;color:#9a3412;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;">${t}</th>`;
+  const tdT = html => `<td style="padding:9px 10px;font-size:12.5px;text-align:right;font-weight:700;white-space:nowrap;">${html}</td>`;
   return `<div style="margin-top:16px;background:#fef2f2;border:1.5px dashed #fca5a5;border-radius:10px;padding:12px 16px;">
-    <div style="font-size:12px;font-weight:700;color:#92400e;margin-bottom:6px;">⚠ Otros Gastos o salidas <span style="font-weight:400;">· ${otrosGastos.length} ítem${otrosGastos.length !== 1 ? 's' : ''} sin clasificar — no son obras, revisar a qué imputar</span></div>
-    ${otrosGastos.map(r => _itemOtroGastoHTML(r)).join('')}
-    ${certLinea}
+    <div style="font-size:12px;font-weight:700;color:#92400e;margin-bottom:2px;">⚠ Otros Gastos o salidas <span style="font-weight:400;">· ${otrosGastos.length} ítem${otrosGastos.length !== 1 ? 's' : ''} sin clasificar — no son obras, revisar a qué imputar</span></div>
+    <div class="table-wrap"><table style="width:100%;border-collapse:collapse;">
+      <thead><tr>
+        <th style="text-align:left;padding:6px 4px;font-size:10px;font-weight:700;color:#9a3412;text-transform:uppercase;letter-spacing:.04em;">Ítem</th>
+        ${th('Insumos')}${th('Alquiler')}${th('TN')}${th('Cert. teórica')}
+      </tr></thead>
+      <tbody>
+        ${otrosGastos.map(r => _filasOtroGastoTR(r)).join('')}
+        <tr style="border-top:2px solid #fca5a5;background:#fee2e2;">
+          <td style="padding:9px 4px;font-size:12px;font-weight:700;color:#92400e;">TOTAL</td>
+          ${tdT(totIns > 0 ? fmt(totIns) : '—')}
+          ${tdT(totAlq > 0 ? fmt(totAlq) : '—')}
+          ${tdT(_tnTot.length ? _tnTot.join(' + ') : '—')}
+          ${tdT(totCert > 0 ? `<span class="pos-val" title="${fmtTn(certTn)} tn × $119.500/tn">${fmt(totCert)}</span>` : '—')}
+        </tr>
+      </tbody>
+    </table></div>
+    ${totCert > 0 ? `<div style="font-size:10.5px;color:#b45309;margin-top:6px;">Cert. teórica = tn × $119.500 — solo asfalto caliente provisto a la Municipalidad de San Miguel de Tucumán. Valor informativo: no suma al margen.</div>` : ''}
   </div>`;
 }
 
