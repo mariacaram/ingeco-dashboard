@@ -2534,6 +2534,28 @@ function _alqTotalPredio(alqObj) {
   return alqObj.porObra.reduce((s, it) => s + (esCentroPredio(it.obra) ? (it.costoArs || 0) : 0), 0);
 }
 
+// ── Detalle de tn de asfalto: subtipo (carpeta/bacheo) + destino (col H) ──
+const TN_SUB_LBL = { carpeta: 'Caliente p/carpeta', bacheo: 'Caliente p/bacheo', caliente: 'Caliente', frio: 'Frío' };
+function _tnDetLabel(e) { return (TN_SUB_LBL[e.s] || e.s) + (e.d ? ' → ' + e.d : ''); }
+// Fusiona dos listas de detalle agrupando por (subtipo, destino)
+function _tnDetMerge(a, b) {
+  const out = a.map(e => ({ s: e.s, d: e.d, t: e.t }));
+  (b || []).forEach(e => {
+    const ex = out.find(x => x.s === e.s && x.d === e.d);
+    if (ex) ex.t = Math.round((ex.t + e.t) * 10) / 10;
+    else out.push({ s: e.s, d: e.d, t: e.t });
+  });
+  return out.sort((x, y) => y.t - x.t);
+}
+// Línea compacta para celdas/bloques: "Caliente p/carpeta 500 · Caliente p/bacheo → Muni 120"
+function _tnDetCompacto(det, max) {
+  if (!det || !det.length) return '';
+  const n = max || 3;
+  const parts = det.slice(0, n).map(e => `${_tnDetLabel(e)} <strong>${fmtTn(e.t)}</strong>`);
+  if (det.length > n) parts.push(`+${det.length - n} más`);
+  return parts.join(' · ');
+}
+
 function computeMargenObrasMes(mes) {
   mes = mes || mesActual;
   // _obrasActuales() ya excluye las obras "Interno" (ver definición más arriba)
@@ -2600,6 +2622,8 @@ function computeMargenObrasMes(mes) {
   // Tn caliente/frío por obra desde remitos — base para prorratear MO y costo asfalto
   const remitosMes = REMITOS_ASFALTO[mes];
   const tnPorObraKey = {}, tnFrioPorObraKey = {}, tnDisplayName = {};
+  const tnCarpetaPorObraKey = {}, tnBacheoPorObraKey = {}; // sub-destino del caliente
+  const tnDetPorObraKey = {}; // detalle legible [{s, d, t}] — subtipo + destino (col H)
   let tnTotalGlobal = 0; // caliente + frío — denominador del prorrateo de MO
   if (remitosMes && remitosMes.porObra) {
     Object.entries(remitosMes.porObra).forEach(([obra, v]) => {
@@ -2607,6 +2631,9 @@ function computeMargenObrasMes(mes) {
       if (!k) return;
       tnPorObraKey[k]     = (tnPorObraKey[k]     || 0) + (v.caliente || 0);
       tnFrioPorObraKey[k] = (tnFrioPorObraKey[k] || 0) + (v.frio     || 0);
+      tnCarpetaPorObraKey[k] = (tnCarpetaPorObraKey[k] || 0) + (v.carpeta || 0);
+      tnBacheoPorObraKey[k]  = (tnBacheoPorObraKey[k]  || 0) + (v.bacheo  || 0);
+      if (v.det && v.det.length) tnDetPorObraKey[k] = _tnDetMerge(tnDetPorObraKey[k] || [], v.det);
       if (!tnDisplayName[k]) tnDisplayName[k] = obra.trim();
       tnTotalGlobal += (v.caliente || 0) + (v.frio || 0);
     });
@@ -2623,6 +2650,9 @@ function computeMargenObrasMes(mes) {
     const alquiler = alqPorNombre[ck] || alqPorNombre[nk] || 0;
     const tnObra     = tnPorObraKey[ck]     || tnPorObraKey[nk]     || 0;
     const tnFrioObra = tnFrioPorObraKey[ck] || tnFrioPorObraKey[nk] || 0;
+    const tnCarpeta  = tnCarpetaPorObraKey[ck] || tnCarpetaPorObraKey[nk] || 0;
+    const tnBacheo   = tnBacheoPorObraKey[ck]  || tnBacheoPorObraKey[nk]  || 0;
+    const tnDet      = tnDetPorObraKey[ck]     || tnDetPorObraKey[nk]     || [];
     const tnObraTotal = tnObra + tnFrioObra;
     const moObra = (moTotal != null && tnTotalGlobal > 0 && tnObraTotal > 0)
       ? Math.round(moTotal * (tnObraTotal / tnTotalGlobal)) : null;
@@ -2631,7 +2661,7 @@ function computeMargenObrasMes(mes) {
       : null;
     const margen  = aCobrar - insumos - moHormigon - (moObra || 0) - (costoAsfObra || 0) - alquiler;
     const hasData = aCobrar > 0 || insumos > 0 || moHormigon > 0 || alquiler > 0 || tnObraTotal > 0 || moObra != null;
-    return { o, aCobrar, insumos, moHormigon, alquiler, tnObra, tnFrioObra, tnObraTotal, moObra, costoAsfObra, margen, hasData, extra: !!extra };
+    return { o, aCobrar, insumos, moHormigon, alquiler, tnObra, tnFrioObra, tnCarpeta, tnBacheo, tnDet, tnObraTotal, moObra, costoAsfObra, margen, hasData, extra: !!extra };
   };
 
   const rows = obras.map(o => buildDatosObra(o, false));
@@ -2724,7 +2754,7 @@ function computeMargenObrasTotal() {
       let acc = porObra[key];
       if (!acc) {
         acc = porObra[key] = { o: Object.assign({}, r.o), aCobrar: 0, insumos: 0, moHormigon: 0, alquiler: 0,
-          tnObra: 0, tnFrioObra: 0, tnObraTotal: 0, moObra: null, costoAsfObra: null,
+          tnObra: 0, tnFrioObra: 0, tnCarpeta: 0, tnBacheo: 0, tnDet: [], tnObraTotal: 0, moObra: null, costoAsfObra: null,
           margen: 0, hasData: false, extra: r.extra };
       }
       acc.aCobrar  += r.aCobrar;
@@ -2733,6 +2763,9 @@ function computeMargenObrasTotal() {
       acc.alquiler += r.alquiler;
       acc.tnObra   += r.tnObra;
       acc.tnFrioObra  += r.tnFrioObra;
+      acc.tnCarpeta   += r.tnCarpeta || 0;
+      acc.tnBacheo    += r.tnBacheo  || 0;
+      if (r.tnDet && r.tnDet.length) acc.tnDet = _tnDetMerge(acc.tnDet, r.tnDet);
       acc.tnObraTotal += r.tnObraTotal;
       if (r.moObra       != null) acc.moObra       = (acc.moObra       || 0) + r.moObra;
       if (r.costoAsfObra != null) acc.costoAsfObra = (acc.costoAsfObra || 0) + r.costoAsfObra;
@@ -2766,8 +2799,9 @@ function _filaMargenHTML(r, moEsEstim, tnTotalGlobal) {
   if (r.tnObra > 0)     _tnPartes.push(fmtTn(r.tnObra) + ' tn');
   if (r.tnFrioObra > 0) _tnPartes.push(fmtTn(r.tnFrioObra) + ' frío');
   const tnLabel = _tnPartes.join(' + ');
+  const detLinea = _tnDetCompacto(r.tnDet, 2);
   const tnCell = (r.tnObra > 0 || r.tnFrioObra > 0)
-    ? `<span style="font-size:12px;" title="${tnLabel}${r.costoAsfObra != null ? ' → ' + fmt(r.costoAsfObra) : ''}">${tnLabel}${r.costoAsfObra != null ? '<br><small class="neg-val" style="font-size:10px;">' + fmt(r.costoAsfObra) + '</small>' : ''}</span>`
+    ? `<span style="font-size:12px;" title="${(r.tnDet || []).map(e => _tnDetLabel(e) + ': ' + fmtTn(e.t) + ' tn').join(' · ') || tnLabel}">${tnLabel}${r.costoAsfObra != null ? '<br><small class="neg-val" style="font-size:10px;">' + fmt(r.costoAsfObra) + '</small>' : ''}${detLinea ? '<br><small style="font-size:9.5px;color:var(--muted);">' + detLinea + '</small>' : ''}</span>`
     : '<span class="nd">—</span>';
   const moCell = r.moObra != null
     ? `<span class="neg-val" title="${moEsEstim ? 'MO estimada' : 'MO real'} × ${fmtTn(r.tnObraTotal)}tn / ${fmtTn(tnTotalGlobal)}tn total">${moEsEstim ? '~' : ''}${fmt(r.moObra)}</span>`
@@ -2809,9 +2843,15 @@ function _itemOtroGastoHTML(r) {
     dato('TN', tnLabel),
     dato('Alquiler', r.alquiler > 0 ? fmt(r.alquiler) : ''),
   ].filter(Boolean).join('');
+  // Desglose legible del asfalto despachado: subtipo (carpeta/bacheo) + destino
+  // (col H del remito) — en las provisiones importa saber a qué cliente fue.
+  const detTn = (r.tnDet && r.tnDet.length)
+    ? `<div style="flex-basis:100%;font-size:11px;color:#9a3412;padding:2px 0 0 12px;">${r.tnDet.map(e => `↳ ${_tnDetLabel(e)}: <strong>${fmtTn(e.t)} tn</strong>`).join('<span style="margin:0 8px;color:#fca5a5;">·</span>')}</div>`
+    : '';
   return `<div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding:9px 4px;border-bottom:1px dashed #fca5a5;">
     <span style="cursor:pointer;font-size:13px;font-weight:600;color:#92400e;text-decoration:underline dotted;" title="Ver historial de todos los meses" onclick="openHistorialObra('${codEsc2}','${nomEsc}')">${o.cod_obra}</span>
     <span style="font-size:12px;">${datos || '<span class="nd">Sin montos este mes</span>'}</span>
+    ${detTn}
   </div>`;
 }
 
@@ -6109,10 +6149,10 @@ function openDetalleCelda(tipo, codObra, nombreObra) {
     const remitosMes = REMITOS_ASFALTO[mesActual];
     const nk = (nombreObra||'').toLowerCase().trim();
     const ck = (codObra||'').toLowerCase().trim();
-    let tnCal = 0, tnFrio = 0;
+    let tnCal = 0, tnFrio = 0, tnDetPanel = [];
     if (remitosMes && remitosMes.porObra) {
       const entry = Object.entries(remitosMes.porObra).find(([k]) => k.toLowerCase()===nk||k.toLowerCase()===ck);
-      if (entry) { tnCal = entry[1].caliente||0; tnFrio = entry[1].frio||0; }
+      if (entry) { tnCal = entry[1].caliente||0; tnFrio = entry[1].frio||0; tnDetPanel = (entry[1].det||[]).slice().sort((a,b)=>b.t-a.t); }
     }
     const precio = _precioAsfaltoMes(mesActual);
     const costoTotal = precio ? Math.round(tnCal*(precio.caliente||0)+tnFrio*(precio.frio||0)) : null;
@@ -6121,12 +6161,21 @@ function openDetalleCelda(tipo, codObra, nombreObra) {
         <div style="background:#f8fafc;border-radius:8px;padding:12px;">
           <div style="font-size:11px;color:var(--muted);">Asfalto caliente</div>
           <div style="font-size:20px;font-weight:700;">${fmtTn(tnCal)} tn</div>
-          ${precio&&precio.caliente?`<div style="font-size:11px;color:var(--muted);">${fmtTn(tnCal)} tn × $${fmt(precio.caliente)}/tn</div>`:''}
+          ${precio&&precio.caliente?`<div style="font-size:11px;color:var(--muted);">${fmtTn(tnCal)} tn × ${fmt(precio.caliente)}/tn</div>`:''}
         </div>
         ${tnFrio>0?`<div style="background:#f8fafc;border-radius:8px;padding:12px;">
           <div style="font-size:11px;color:var(--muted);">Asfalto frío</div>
           <div style="font-size:20px;font-weight:700;">${fmtTn(tnFrio)} tn</div>
-          ${precio&&precio.frio?`<div style="font-size:11px;color:var(--muted);">${fmtTn(tnFrio)} tn × $${fmt(precio.frio)}/tn</div>`:''}
+          ${precio&&precio.frio?`<div style="font-size:11px;color:var(--muted);">${fmtTn(tnFrio)} tn × ${fmt(precio.frio)}/tn</div>`:''}
+        </div>`:''}
+        ${tnDetPanel.length?`<div style="background:#f8fafc;border-radius:8px;padding:12px;">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">Desglose por destino <span style="font-weight:400;">(col E + col H del remito)</span></div>
+          <table style="width:100%;font-size:12px;">
+            ${tnDetPanel.map(e=>`<tr style="border-top:1px solid var(--border);">
+              <td style="padding:6px 4px;">${_tnDetLabel(e)}</td>
+              <td style="padding:6px 4px;text-align:right;font-weight:700;white-space:nowrap;">${fmtTn(e.t)} tn</td>
+            </tr>`).join('')}
+          </table>
         </div>`:''}
         ${costoTotal!=null?`<div style="background:#fef2f2;border-radius:8px;padding:12px;border:1px solid #fca5a5;">
           <div style="font-size:11px;color:var(--muted);">Costo total asfalto</div>

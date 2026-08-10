@@ -1670,7 +1670,7 @@ function leerRemitosAsfalto() {
       const rows = sheet.getDataRange().getValues();
 
       // Buscar fila de encabezados que tenga CANT. y U.D./U.M.
-      let hdrIdx = -1, iCant = -1, iUD = -1, iDesc = -1, iMes = -1, iAnio = -1, iFecha = -1, iObra = -1;
+      let hdrIdx = -1, iCant = -1, iUD = -1, iDesc = -1, iMes = -1, iAnio = -1, iFecha = -1, iObra = -1, iDest = -1;
       for (let i = 0; i < Math.min(20, rows.length); i++) {
         const cells = rows[i].map(c => String(c).toUpperCase().trim());
         const iC = cells.findIndex(c => c === 'CANT.' || c === 'CANT' || c === 'CANTIDAD' || c === 'TOTAL' || c === 'TN' || c === 'TONELADAS');
@@ -1680,6 +1680,9 @@ function leerRemitosAsfalto() {
         // Obra: preferir OBRA GENERAL (col K). Fallback a OBRA / OBRA PARTICULAR / DESTINO.
         let iOb = cells.findIndex(c => c === 'OBRA GENERAL');
         if (iOb < 0) iOb = cells.findIndex(c => c === 'OBRA' || c === 'OBRA PARTICULAR' || c === 'DESTINO' || c === 'CLIENTE');
+        // Destino/cliente del remito (col H) — importa en las provisiones a terceros
+        let iDs = cells.findIndex(c => c === 'DESTINO' || c === 'CLIENTE' || c === 'OBRA PARTICULAR');
+        if (iDs === iOb) iDs = -1; // no duplicar si la obra ya sale de esa columna
         const iFe = cells.findIndex(c => c === 'FECHA');
         if ((iC >= 0 && iU >= 0) || (iDt >= 0 && iMt >= 0) || (iC >= 0 && iDt >= 0) || (iDt >= 0 && iOb >= 0) || (iC >= 0 && iOb >= 0)) {
           hdrIdx = i;
@@ -1690,13 +1693,14 @@ function leerRemitosAsfalto() {
           iAnio  = cells.findIndex(c => c === 'AÑO' || c === 'ANO');
           iFecha = iFe >= 0 ? iFe : cells.findIndex(c => c === 'FECHA');
           iObra  = iOb;
+          iDest  = iDs >= 0 ? iDs : 7; // col H por defecto
           break;
         }
       }
       // Fallback para planilla General (Roberto): col A=Fecha, B=TN, E=Descripción, K=Obra
       if (hdrIdx < 0) {
-        Logger.log('Remitos [' + sheet.getName() + ']: sin header reconocido — aplicando fallback B=TN, E=Desc, K=Obra');
-        hdrIdx = 0; iCant = 1; iUD = -1; iDesc = 4; iMes = -1; iAnio = -1; iFecha = 0; iObra = 10;
+        Logger.log('Remitos [' + sheet.getName() + ']: sin header reconocido — aplicando fallback B=TN, E=Desc, H=Destino, K=Obra');
+        hdrIdx = 0; iCant = 1; iUD = -1; iDesc = 4; iMes = -1; iAnio = -1; iFecha = 0; iObra = 10; iDest = 7;
       }
       Logger.log('Remitos [' + sheet.getName() + ']: hdr=' + hdrIdx + ' iCant=' + iCant + ' iUD=' + iUD + ' iDesc=' + iDesc + ' iMes=' + iMes + ' iAnio=' + iAnio + ' iObra=' + iObra);
 
@@ -1757,22 +1761,43 @@ function leerRemitosAsfalto() {
         if (cant <= 0) continue;
         const tipo = desc.includes('CALIENTE') ? 'caliente'
                    : (desc.includes('FRI') || desc.includes('FRÍO')) ? 'frio' : null;
+        // Sub-destino del caliente (col E: "Asfalto caliente para carpeta/bacheo")
+        const subTipo = tipo === 'caliente'
+          ? (desc.includes('CARPETA') ? 'carpeta' : desc.includes('BACHEO') ? 'bacheo' : null)
+          : null;
+        // Destino/cliente del remito (col H) — relevante en provisiones a terceros
+        const destino = iDest >= 0 ? String(row[iDest] || '').trim() : '';
 
         if (fechaObj && !isNaN(fechaObj.getTime())) {
           detalle.push({ fecha: fechaObj, fechaStr: Utilities.formatDate(fechaObj, TZ, 'dd/MM/yyyy'), tipo: tipo, cant: Math.round(cant * 10) / 10, obra: obra });
         }
 
+        // Detalle legible por obra: tipo + sub-destino (carpeta/bacheo) + cliente (col H).
+        // Se agrega en porObra[obra].det = [{s, d, t}] agrupado por (s|d).
+        const _addDet = function(obraKey, s, d, t) {
+          const po = resultado[mesKey].porObra[obraKey];
+          if (!po.det) po.det = [];
+          let e = null;
+          for (var q = 0; q < po.det.length; q++) { if (po.det[q].s === s && po.det[q].d === d) { e = po.det[q]; break; } }
+          if (!e) { e = { s: s, d: d, t: 0 }; po.det.push(e); }
+          e.t = Math.round((e.t + t) * 10) / 10;
+        };
+
         if (tipo === 'caliente') {
           resultado[mesKey].caliente += cant;
+          if (subTipo) resultado[mesKey][subTipo] = Math.round(((resultado[mesKey][subTipo] || 0) + cant) * 10) / 10;
           if (obra) {
             if (!resultado[mesKey].porObra[obra]) resultado[mesKey].porObra[obra] = { caliente: 0, frio: 0 };
             resultado[mesKey].porObra[obra].caliente = Math.round((resultado[mesKey].porObra[obra].caliente + cant) * 10) / 10;
+            if (subTipo) resultado[mesKey].porObra[obra][subTipo] = Math.round(((resultado[mesKey].porObra[obra][subTipo] || 0) + cant) * 10) / 10;
+            _addDet(obra, subTipo || 'caliente', destino, cant);
           }
         } else if (tipo === 'frio') {
           resultado[mesKey].frio += cant;
           if (obra) {
             if (!resultado[mesKey].porObra[obra]) resultado[mesKey].porObra[obra] = { caliente: 0, frio: 0 };
             resultado[mesKey].porObra[obra].frio = Math.round((resultado[mesKey].porObra[obra].frio + cant) * 10) / 10;
+            _addDet(obra, 'frio', destino, cant);
           }
         }
         resultado[mesKey].total += cant;
