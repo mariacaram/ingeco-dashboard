@@ -2847,6 +2847,31 @@ function _precioProvision(e) {
   return null;
 }
 
+// Cortes manuales de provisiones: todo lo despachado ANTES de la fecha de
+// corte ya está pagado, así que ese mes solo cuenta lo salido desde el corte.
+// jul-2026 / frío → Muni SMT: corte al 30/07, salieron 8 tn desde esa fecha.
+// Agosto en adelante cuenta normal (el corte aplica solo al mes indicado).
+const CORTES_PROVISION = [
+  { mes: 'jul', s: 'frio', obraRe: /asfalto fr/i, destinoRe: /san miguel de tucum/i, tn: 8,
+    nota: 'Corte al 30/07: lo despachado antes de esa fecha ya está pagado — se cuentan solo las 8,0 tn salidas desde el 30/07' },
+];
+// Aplica los cortes al detalle de una obra. Devuelve { det, notas }.
+function _aplicarCorteDet(mes, obraNombre, det) {
+  const notas = [];
+  const out = (det || []).map(e => {
+    const c = CORTES_PROVISION.find(c => c.mes === mes
+      && (c.s ? e.s === c.s : true)
+      && c.obraRe.test(obraNombre || '')
+      && c.destinoRe.test(e.d || ''));
+    if (c && e.t > c.tn) {
+      notas.push(`${c.nota} (en los remitos figuran ${fmtTn(e.t)} tn del mes completo).`);
+      return { s: e.s, d: e.d, t: c.tn };
+    }
+    return e;
+  });
+  return { det: out, notas };
+}
+
 // Certificación REAL de una provisión: lo que Esteban cargó en su planilla en
 // el MES SIGUIENTE (las provisiones se pagan hasta el 10 del mes siguiente).
 // Busca en cobrados/facturados/noCobrados/sinFecha del mes M+1 los ítems cuya
@@ -2909,8 +2934,11 @@ function _filasOtroGastoTR(r) {
         ${tdV}${tdV}${tdV}
       </tr>`);
     }
-    // Una fila por combinación subtipo + destino
-    r.tnDet.forEach(e => {
+    // Una fila por combinación subtipo + destino (con cortes manuales aplicados)
+    const corte = mesActual !== 'total'
+      ? _aplicarCorteDet(mesActual, o.cod_obra || o.nombre, r.tnDet)
+      : { det: r.tnDet, notas: [] };
+    corte.det.forEach(e => {
       const pTn = _precioProvision(e);
       filas.push(`<tr style="${trStyle}">
         ${tdItem(` <span style="color:#9a3412;">· ${_tnDetLabel(e)}</span>`)}
@@ -2920,6 +2948,7 @@ function _filasOtroGastoTR(r) {
         ${tdV}
       </tr>`);
     });
+    corte.notas.forEach(n => filas.push(`<tr><td colspan="6" style="padding:2px 4px 8px;font-size:11px;color:#b45309;">✂️ ${n}</td></tr>`));
 
     // Comparación teórico vs real (lo cargado por Esteban en el mes siguiente)
     const real = mesActual !== 'total' ? _certRealProvision(mesActual, o.cod_obra || o.nombre) : null;
@@ -2974,7 +3003,15 @@ function _renderOtrosGastosBlock(otrosGastos) {
   let totIns = 0, totAlq = 0, totCert = 0, certTn = 0, totTnCal = 0, totTnFrio = 0, totReal = 0, hayReal = false, hayAjuste = false;
   otrosGastos.forEach(r => {
     totIns += r.insumos || 0; totAlq += r.alquiler || 0;
-    totTnCal += r.tnObra || 0; totTnFrio += r.tnFrioObra || 0;
+    // TN con cortes manuales aplicados (lo anterior al corte ya está pagado)
+    let calR = r.tnObra || 0, frioR = r.tnFrioObra || 0;
+    if (mesActual !== 'total' && r.tnDet && r.tnDet.length) {
+      const cd = _aplicarCorteDet(mesActual, r.o.cod_obra || r.o.nombre, r.tnDet);
+      const sumS = (arr, esF) => arr.filter(e => (e.s === 'frio') === esF).reduce((s, e) => s + e.t, 0);
+      calR  -= sumS(r.tnDet, false) - sumS(cd.det, false);
+      frioR -= sumS(r.tnDet, true)  - sumS(cd.det, true);
+    }
+    totTnCal += calR; totTnFrio += frioR;
     (r.tnDet || []).forEach(e => {
       const pTn = _precioProvision(e);
       if (pTn) certTn += e.t;
