@@ -2664,7 +2664,7 @@ function computeMargenObrasMes(mes) {
     // Certificación teórica de provisiones (tn × precio de convenio — hoy solo
     // asfalto caliente a Muni SMT). Informativa: NO suma al margen real.
     const certTeorica = (tnDet || []).reduce((s, e) => {
-      const pTn = _precioProvision(e);
+      const pTn = _precioProvision(e, mes);
       return s + (pTn ? Math.round(e.t * pTn) : 0);
     }, 0);
     const margen  = aCobrar - insumos - moHormigon - (moObra || 0) - (costoAsfObra || 0) - alquiler;
@@ -2842,11 +2842,48 @@ function _filaMargenHTML(r, moEsEstim, tnTotalGlobal) {
 const PRECIOS_PROVISION_TN = [
   { esFrio: false, destinoRe: /san miguel de tucum/i, precio: 119500 },
 ];
-function _precioProvision(e) {
+// Precios editables por cliente+tipo, guardados en el navegador (localStorage).
+// Cada entrada {key, desde, precio} rige desde ese mes hasta que se actualice.
+const PRECIOS_PROVISION_LS = 'ingeco_precios_provision';
+function _provKey(s, d) { return (s === 'frio' ? 'frio' : 'caliente') + '|' + (d || '').toLowerCase().trim(); }
+function _preciosProvisionGuardados() {
+  try { return JSON.parse(localStorage.getItem(PRECIOS_PROVISION_LS) || '[]'); } catch (e) { return []; }
+}
+// Precio efectivo para una entrada de detalle en un mes dado:
+// 1) el ajuste guardado más reciente con desde <= mes; 2) la tabla base.
+function _precioProvision(e, mes) {
+  const k = _provKey(e.s, e.d);
+  const idxM = (mes && mes !== 'total') ? MES_ORDER.indexOf(mes) : MES_ORDER.length;
+  let mejor = null, mejorIdx = -1;
+  _preciosProvisionGuardados().forEach(p => {
+    if (p.key !== k) return;
+    const i = MES_ORDER.indexOf(p.desde);
+    if (i < 0 || i > idxM) return;
+    if (i >= mejorIdx) { mejor = p; mejorIdx = i; }
+  });
+  if (mejor) return mejor.precio;
   for (const p of PRECIOS_PROVISION_TN) {
     if ((e.s === 'frio') === p.esFrio && p.destinoRe.test(e.d || '')) return p.precio;
   }
   return null;
+}
+// Edición desde la tabla: el precio nuevo rige desde el mes visible en adelante
+function editarPrecioProvision(sTipo, dest) {
+  const mesRef = mesActual !== 'total' ? mesActual : MES_ORDER[Math.min(new Date().getMonth(), MES_ORDER.length - 1)];
+  const actual = _precioProvision({ s: sTipo, d: dest }, mesRef);
+  const val = prompt(
+    `Precio $/tn — ${sTipo === 'frio' ? 'asfalto frío' : 'asfalto caliente'} → ${dest}\n` +
+    `Rige desde ${MES[mesRef] || mesRef} en adelante (los meses anteriores conservan el precio que tenían).`,
+    actual || '');
+  if (val == null) return;
+  const precio = parseInt(String(val).replace(/[^\d]/g, ''), 10);
+  if (!precio) { alert('Precio inválido — ingresá solo el número en $/tn (ej. 119500)'); return; }
+  const arr = _preciosProvisionGuardados();
+  const k = _provKey(sTipo, dest);
+  const ex = arr.find(p => p.key === k && p.desde === mesRef);
+  if (ex) ex.precio = precio; else arr.push({ key: k, desde: mesRef, precio });
+  localStorage.setItem(PRECIOS_PROVISION_LS, JSON.stringify(arr));
+  renderAll();
 }
 
 // Cortes manuales de provisiones: todo lo despachado ANTES de la fecha de
@@ -2915,6 +2952,50 @@ function _certExcedentePrev(mes, obraNombre) {
   return { mesPrev, teoPrev, realPrev: realPrev.total, excedente };
 }
 
+// Detalle de la fila agrupada "Frío → Otros" (se llena al renderizar el bloque)
+const _PROV_OTROS = {};
+function openProvisionFrioOtros(cod) {
+  const dta = _PROV_OTROS[cod];
+  const panel = document.getElementById('sidePanel');
+  const overlay = document.getElementById('overlay');
+  const content = document.getElementById('panelContent');
+  if (!dta || !panel) return;
+  const tot = Math.round(dta.entries.reduce((s, e) => s + e.t, 0) * 10) / 10;
+  let certTot = 0;
+  const filasP = dta.entries.slice().sort((a, b) => b.t - a.t).map(e => {
+    const pTn = _precioProvision(e, dta.mes);
+    const cert = pTn ? Math.round(e.t * pTn) : 0;
+    certTot += cert;
+    const dEsc = (e.d || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    return `<tr style="border-bottom:1px solid var(--border);">
+      <td style="padding:7px 8px;font-size:12px;">${e.d || '(sin destino)'}</td>
+      <td style="padding:7px 8px;font-size:12px;text-align:right;white-space:nowrap;"><strong>${fmtTn(e.t)} tn</strong></td>
+      <td style="padding:7px 8px;font-size:12px;text-align:right;white-space:nowrap;"><span onclick="editarPrecioProvision('frio','${dEsc}')" style="cursor:pointer;text-decoration:underline dotted;" title="Actualizar precio — rige desde ${MES[dta.mes] || dta.mes} en adelante">${pTn ? '$' + pTn.toLocaleString('es-AR') : 'poner precio'} ✎</span></td>
+      <td style="padding:7px 8px;font-size:12px;text-align:right;white-space:nowrap;">${cert > 0 ? `<strong class="pos-val">${fmt(cert)}</strong>` : '—'}</td>
+    </tr>`;
+  }).join('');
+  content.innerHTML = `
+    <div class="panel-title">Provisión de asfalto frío — otros destinos</div>
+    <div class="panel-sub">${MES[dta.mes] || dta.mes} · todo el frío que no va a Muni. S.M. Tucumán</div>
+    <div class="panel-kpi">
+      <div class="panel-kpi-item"><div class="panel-kpi-label">Destinos</div><div class="panel-kpi-val">${dta.entries.length}</div></div>
+      <div class="panel-kpi-item"><div class="panel-kpi-label">TN frío</div><div class="panel-kpi-val">${fmtTn(tot)} tn</div></div>
+      <div class="panel-kpi-item"><div class="panel-kpi-label">Cert. teórica</div><div class="panel-kpi-val" style="color:#16a34a;">${certTot > 0 ? fmt(certTot) : '—'}</div></div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;margin-top:10px;">
+      <thead><tr style="background:#f1f5f9;">
+        <th style="text-align:left;padding:7px 8px;font-size:11px;">Destino</th>
+        <th style="text-align:right;padding:7px 8px;font-size:11px;">TN</th>
+        <th style="text-align:right;padding:7px 8px;font-size:11px;">$/tn</th>
+        <th style="text-align:right;padding:7px 8px;font-size:11px;">Cert. teórica</th>
+      </tr></thead>
+      <tbody>${filasP}</tbody>
+    </table>
+    <div style="font-size:10.5px;color:var(--muted);margin-top:10px;">Click en el precio para actualizarlo — el nuevo valor rige desde ${MES[dta.mes] || dta.mes} en adelante.</div>`;
+  panel.classList.add('open');
+  overlay.classList.add('open');
+}
+
 // Filas <tr> del bloque "Otros Gastos o salidas" — una fila por ítem, con las
 // columnas alineadas: Insumos | Alquiler | TN | Cert. teórica.
 function _filasOtroGastoTR(r) {
@@ -2934,25 +3015,51 @@ function _filasOtroGastoTR(r) {
       filas.push(`<tr style="${trStyle}">${tdItem()}
         ${r.insumos  > 0 ? td(`<strong>${fmt(r.insumos)}</strong>`)  : tdV}
         ${r.alquiler > 0 ? td(`<strong>${fmt(r.alquiler)}</strong>`) : tdV}
-        ${tdV}${tdV}${tdV}
+        ${tdV}${tdV}${tdV}${tdV}
       </tr>`);
     }
     // Una fila por combinación subtipo + destino (con cortes manuales aplicados)
     const corte = mesActual !== 'total'
       ? _aplicarCorteDet(mesActual, o.cod_obra || o.nombre, r.tnDet)
       : { det: r.tnDet, notas: [] };
-    corte.det.forEach(e => {
-      const pTn = _precioProvision(e);
+    // El frío que NO va a Muni SMT se agrupa en una sola fila "Otros" (detalle al click)
+    const esMuniSMT = dd => /san miguel de tucum/i.test(dd || '');
+    const otrosFrio = corte.det.filter(e => e.s === 'frio' && !esMuniSMT(e.d));
+    const detVisible = corte.det.filter(e => !(e.s === 'frio' && !esMuniSMT(e.d)));
+    detVisible.forEach(e => {
+      const pTn = _precioProvision(e, mesActual);
+      const dEsc = (e.d || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+      const precioCell = td(`<span onclick="event.stopPropagation();editarPrecioProvision('${e.s === 'frio' ? 'frio' : 'caliente'}','${dEsc}')" style="cursor:pointer;text-decoration:underline dotted;" title="Click para actualizar el precio — rige desde el mes visible en adelante">${pTn ? '$' + pTn.toLocaleString('es-AR') : '<span style="color:#9a3412;">poner precio</span>'} ✎</span>`);
       filas.push(`<tr style="${trStyle}">
         ${tdItem(` <span style="color:#9a3412;">· ${_tnDetLabel(e)}</span>`)}
         ${tdV}${tdV}
         ${td(`<strong>${e.nota ? '✂️ ' : ''}${fmtTn(e.t)} tn${e.s === 'frio' ? ' frío' : ''}</strong>`)}
+        ${precioCell}
         ${pTn ? td(`<strong class="pos-val" title="${fmtTn(e.t)} tn × $${pTn.toLocaleString('es-AR')}/tn">${fmt(Math.round(e.t * pTn))}</strong>`) : tdV}
         ${tdV}
       </tr>`);
       // La nota del corte va pegada a la fila que modifica
-      if (e.nota) filas.push(`<tr><td colspan="6" style="padding:2px 4px 8px;font-size:11px;color:#b45309;">✂️ ${e.nota}</td></tr>`);
+      if (e.nota) filas.push(`<tr><td colspan="7" style="padding:2px 4px 8px;font-size:11px;color:#b45309;">✂️ ${e.nota}</td></tr>`);
     });
+
+    // Fila agrupada "Frío → Otros" (todo el frío que no es Muni SMT)
+    if (otrosFrio.length) {
+      const tnOtros = Math.round(otrosFrio.reduce((s, e) => s + e.t, 0) * 10) / 10;
+      const certOtros = otrosFrio.reduce((s, e) => {
+        const pTn = _precioProvision(e, mesActual);
+        return s + (pTn ? Math.round(e.t * pTn) : 0);
+      }, 0);
+      _PROV_OTROS[o.cod_obra || o.nombre] = { obra: o.cod_obra || o.nombre, mes: mesActual, entries: otrosFrio };
+      const codKey = (o.cod_obra || o.nombre || '').replace(/'/g, "\\'");
+      filas.push(`<tr style="${trStyle}cursor:pointer;" title="Click para ver el detalle por destino" onclick="openProvisionFrioOtros('${codKey}')">
+        ${tdItem(` <span style="color:#9a3412;">· Frío → Otros <span style="font-weight:400;">(${otrosFrio.length} destino${otrosFrio.length !== 1 ? 's' : ''} — ver detalle ▸)</span></span>`)}
+        ${tdV}${tdV}
+        ${td(`<strong>${fmtTn(tnOtros)} tn frío</strong>`)}
+        ${tdV}
+        ${certOtros > 0 ? td(`<strong class="pos-val">${fmt(certOtros)}</strong>`) : tdV}
+        ${tdV}
+      </tr>`);
+    }
 
     // Comparación teórico vs real (lo cargado por Esteban en el mes siguiente)
     const real = mesActual !== 'total' ? _certRealProvision(mesActual, o.cod_obra || o.nombre) : null;
@@ -2967,19 +3074,19 @@ function _filasOtroGastoTR(r) {
       const urlReal = (real && typeof _sheetUrlAudit === 'function' && real.items[0]) ? _sheetUrlAudit(real.items[0]) : '';
       filas.push(`<tr style="${trStyle}background:#fff7ed;">
         ${tdItem(` <span style="color:#9a3412;">· Σ certificación${real ? ` — real cargada por Esteban en ${MES[real.mesSig] || real.mesSig}` : ''}</span>`)}
-        ${tdV}${tdV}${tdV}
+        ${tdV}${tdV}${tdV}${tdV}
         ${r.certTeorica > 0
           ? td(`<strong class="pos-val" ${aj ? `title="Teórica del mes ${fmt(r.certTeorica)} − ${fmt(descuento)} pagados de más en ${MES[aj.mesPrev] || aj.mesPrev}"` : ''}>${aj ? '≈ ' : ''}${fmt(teoAjust)}</strong>`)
           : tdV}
         ${real ? td(`<strong class="pos-val" title="${tipReal.replace(/"/g, '&quot;')}" ${urlReal ? `style="cursor:pointer;text-decoration:underline dotted;" onclick="window.open('${urlReal}','_blank')"` : ''}>${fmt(real.total)}${urlReal ? ' ↗' : ''}</strong>`) : td(`<span style="color:#dc2626;font-size:11px;font-weight:600;" title="No se encontró ningún ítem de esta provisión en la planilla de Esteban del mes siguiente">sin cargar</span>`)}
       </tr>`);
       if (aj) {
-        filas.push(`<tr><td colspan="6" style="padding:2px 4px 8px;font-size:11px;color:#b45309;">
+        filas.push(`<tr><td colspan="7" style="padding:2px 4px 8px;font-size:11px;color:#b45309;">
           ℹ️ Cert. teórica ajustada: a los <strong>${fmt(r.certTeorica)}</strong> del mes se les descuentan <strong>${fmt(descuento)}</strong> pagados de más en ${MES[aj.mesPrev] || aj.mesPrev} (Esteban cargó ${fmt(aj.realPrev)} contra un teórico de ${fmt(aj.teoPrev)}) → queda <strong>${fmt(teoAjust)}</strong>. Ese excedente ya se pagó y no debería volver a pagarse.
         </td></tr>`);
       }
       if (real && Math.abs(dif) > AUDIT_TOLERANCIA) {
-        filas.push(`<tr><td colspan="6" style="padding:2px 4px 8px;font-size:11px;color:#b45309;">
+        filas.push(`<tr><td colspan="7" style="padding:2px 4px 8px;font-size:11px;color:#b45309;">
           ⚠ Diferencia de <strong>${fmt(Math.abs(dif))}</strong> entre la certificación teórica${aj ? ' ajustada' : ''} y lo cargado por Esteban (${dif > 0 ? 'real por encima' : 'real por debajo'} del teórico) — consultar con Adrián el motivo.
         </td></tr>`);
       }
@@ -2995,7 +3102,7 @@ function _filasOtroGastoTR(r) {
     ${r.insumos  > 0 ? td(`<strong>${fmt(r.insumos)}</strong>`)  : tdV}
     ${r.alquiler > 0 ? td(`<strong>${fmt(r.alquiler)}</strong>`) : tdV}
     ${_tnPartes.length ? td(`<strong>${_tnPartes.join(' + ')}</strong>`) : tdV}
-    ${tdV}${tdV}
+    ${tdV}${tdV}${tdV}
   </tr>`;
 }
 
@@ -3017,7 +3124,7 @@ function _renderOtrosGastosBlock(otrosGastos) {
     }
     totTnCal += calR; totTnFrio += frioR;
     (r.tnDet || []).forEach(e => {
-      const pTn = _precioProvision(e);
+      const pTn = _precioProvision(e, mesActual);
       if (pTn) certTn += e.t;
     });
     // Teórica de la obra ajustada por el excedente pagado de más el mes anterior
@@ -3042,7 +3149,7 @@ function _renderOtrosGastosBlock(otrosGastos) {
     <div class="table-wrap"><table style="width:100%;border-collapse:collapse;">
       <thead><tr>
         <th style="text-align:left;padding:6px 4px;font-size:10px;font-weight:700;color:#9a3412;text-transform:uppercase;letter-spacing:.04em;">Ítem</th>
-        ${th('Insumos')}${th('Alquiler')}${th('TN')}${th('Cert. teórica')}${th('Cert. real')}
+        ${th('Insumos')}${th('Alquiler')}${th('TN')}${th('$/tn')}${th('Cert. teórica')}${th('Cert. real')}
       </tr></thead>
       <tbody>
         ${otrosGastos.map(r => _filasOtroGastoTR(r)).join('')}
@@ -3051,12 +3158,13 @@ function _renderOtrosGastosBlock(otrosGastos) {
           ${tdT(totIns > 0 ? fmt(totIns) : '—')}
           ${tdT(totAlq > 0 ? fmt(totAlq) : '—')}
           ${tdT(_tnTot.length ? _tnTot.join(' + ') : '—')}
-          ${tdT(totCert > 0 ? `<span class="pos-val" title="${fmtTn(certTn)} tn con precio de convenio${hayAjuste ? ' — neto del excedente pagado de más el mes anterior' : ''}">${hayAjuste ? '≈ ' : ''}${fmt(totCert)}</span>` : '—')}
+          ${tdT('—')}
+          ${tdT(totCert > 0 ? `<span class="pos-val" title="${fmtTn(certTn)} tn con precio de convenio${hayAjuste ? ' — neto del excedente pagado de más el mes anterior' : ''}">${hayAjuste ? '≈ ' : ''}${fmt(totCert)}</span>` : (hayAjuste ? '<span class="pos-val" title="La teórica del mes quedó absorbida por el excedente pagado de más el mes anterior">≈ $0</span>' : '—'))}
           ${tdT(hayReal ? `<span class="pos-val">${fmt(totReal)}</span>` : '—')}
         </tr>
       </tbody>
     </table></div>
-    ${totCert > 0 || hayReal ? `<div style="font-size:10.5px;color:#b45309;margin-top:6px;">Cert. teórica = tn × $119.500 — solo asfalto caliente provisto a la Municipalidad de San Miguel de Tucumán${hayAjuste ? ', neta del excedente que Esteban pagó de más el mes anterior (ya pagado, no debe volver a pagarse)' : ''}. Cert. real = certificados de la provisión cargados por Esteban en su planilla del mes siguiente (las provisiones se pagan hasta el día 10). Valores informativos: no suman al margen.</div>` : ''}
+    <div style="font-size:10.5px;color:#b45309;margin-top:6px;">Cert. teórica = tn × precio de convenio por cliente ($/tn — click en el precio para actualizarlo; el precio nuevo rige desde el mes visible en adelante y los meses anteriores conservan el suyo)${hayAjuste ? ', neta del excedente que Esteban pagó de más el mes anterior (ya pagado, no debe volver a pagarse)' : ''}. Cert. real = certificados de la provisión cargados por Esteban en su planilla del mes siguiente (las provisiones se pagan hasta el día 10). Valores informativos: no suman al margen.</div>
   </div>`;
 }
 
