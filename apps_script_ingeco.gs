@@ -1719,8 +1719,14 @@ function leerRemitosAsfalto() {
           } else {
             var parts = String(rawF).trim().split('/');
             if (parts.length === 3) {
-              var m = parseInt(parts[0]), d = parseInt(parts[1]), y = parseInt(parts[2]);
+              // Formato es-AR: día/mes/año. Si el primer número no puede ser
+              // día (>31) o el segundo no puede ser mes (>12), se invierte.
+              var a = parseInt(parts[0]), b = parseInt(parts[1]), y = parseInt(parts[2]);
               if (y < 100) y += 2000;
+              var d, m;
+              if (a > 12 && b <= 12)      { d = a; m = b; } // 31/07 → día/mes
+              else if (b > 12 && a <= 12) { d = b; m = a; } // 07/31 → mes/día
+              else                        { d = a; m = b; } // ambiguo → día/mes (es-AR)
               if (!isNaN(m) && !isNaN(d) && !isNaN(y)) fechaObj = new Date(y, m - 1, d, 0, 0, 0);
             }
           }
