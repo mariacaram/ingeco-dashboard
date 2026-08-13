@@ -2539,11 +2539,13 @@ const TN_SUB_LBL = { carpeta: 'Caliente p/carpeta', bacheo: 'Caliente p/bacheo',
 function _tnDetLabel(e) { return (TN_SUB_LBL[e.s] || e.s) + (e.d ? ' → ' + e.d : ''); }
 // Fusiona dos listas de detalle agrupando por (subtipo, destino)
 function _tnDetMerge(a, b) {
-  const out = a.map(e => ({ s: e.s, d: e.d, t: e.t }));
+  const out = a.map(e => ({ s: e.s, d: e.d, t: e.t, tc: e.tc }));
   (b || []).forEach(e => {
     const ex = out.find(x => x.s === e.s && x.d === e.d);
-    if (ex) ex.t = Math.round((ex.t + e.t) * 10) / 10;
-    else out.push({ s: e.s, d: e.d, t: e.t });
+    if (ex) {
+      ex.t = Math.round((ex.t + e.t) * 10) / 10;
+      if (e.tc != null) ex.tc = Math.round(((ex.tc || 0) + e.tc) * 10) / 10;
+    } else out.push({ s: e.s, d: e.d, t: e.t, tc: e.tc });
   });
   return out.sort((x, y) => y.t - x.t);
 }
@@ -2852,24 +2854,25 @@ function _precioProvision(e) {
 // jul-2026 / frío → Muni SMT: corte al 30/07, salieron 8 tn desde esa fecha.
 // Agosto en adelante cuenta normal (el corte aplica solo al mes indicado).
 const CORTES_PROVISION = [
-  { mes: 'jul', s: 'frio', obraRe: /asfalto fr/i, destinoRe: /san miguel de tucum/i, tn: 8,
-    nota: 'Corte al 30/07: lo despachado antes de esa fecha ya está pagado — se cuentan solo las 8,0 tn salidas desde el 30/07' },
+  // base = tn que quedaron pendientes al corte; se les suma lo despachado desde
+  // el 30/07 inclusive (e.tc, calculado por fecha en el .gs).
+  { mes: 'jul', s: 'frio', obraRe: /asfalto fr/i, destinoRe: /san miguel de tucum/i, base: 8 },
 ];
-// Aplica los cortes al detalle de una obra. Devuelve { det, notas }.
+// Aplica los cortes al detalle de una obra. La nota queda adjunta a la entrada
+// cortada (e.nota) para que se dibuje pegada a SU fila, no al final del grupo.
 function _aplicarCorteDet(mes, obraNombre, det) {
-  const notas = [];
   const out = (det || []).map(e => {
     const c = CORTES_PROVISION.find(c => c.mes === mes
       && (c.s ? e.s === c.s : true)
       && c.obraRe.test(obraNombre || '')
       && c.destinoRe.test(e.d || ''));
-    if (c && e.t > c.tn) {
-      notas.push(`${c.nota} (en los remitos figuran ${fmtTn(e.t)} tn del mes completo).`);
-      return { s: e.s, d: e.d, t: c.tn };
-    }
-    return e;
+    if (!c) return e;
+    const tCorte = Math.round((c.base + (e.tc || 0)) * 10) / 10;
+    if (tCorte >= e.t) return e;
+    return { s: e.s, d: e.d, t: tCorte,
+      nota: `Corte al 30/07 — provisión de frío a Muni. S.M. Tucumán: 8,0 tn de base + ${fmtTn(e.tc || 0)} tn despachadas el 30-31/07 = ${fmtTn(tCorte)} tn. Lo despachado antes del 30/07 ya está pagado (en los remitos figuran ${fmtTn(e.t)} tn del mes completo).` };
   });
-  return { det: out, notas };
+  return { det: out };
 }
 
 // Certificación REAL de una provisión: lo que Esteban cargó en su planilla en
@@ -2943,12 +2946,13 @@ function _filasOtroGastoTR(r) {
       filas.push(`<tr style="${trStyle}">
         ${tdItem(` <span style="color:#9a3412;">· ${_tnDetLabel(e)}</span>`)}
         ${tdV}${tdV}
-        ${td(`<strong>${fmtTn(e.t)} tn${e.s === 'frio' ? ' frío' : ''}</strong>`)}
+        ${td(`<strong>${e.nota ? '✂️ ' : ''}${fmtTn(e.t)} tn${e.s === 'frio' ? ' frío' : ''}</strong>`)}
         ${pTn ? td(`<strong class="pos-val" title="${fmtTn(e.t)} tn × $${pTn.toLocaleString('es-AR')}/tn">${fmt(Math.round(e.t * pTn))}</strong>`) : tdV}
         ${tdV}
       </tr>`);
+      // La nota del corte va pegada a la fila que modifica
+      if (e.nota) filas.push(`<tr><td colspan="6" style="padding:2px 4px 8px;font-size:11px;color:#b45309;">✂️ ${e.nota}</td></tr>`);
     });
-    corte.notas.forEach(n => filas.push(`<tr><td colspan="6" style="padding:2px 4px 8px;font-size:11px;color:#b45309;">✂️ ${n}</td></tr>`));
 
     // Comparación teórico vs real (lo cargado por Esteban en el mes siguiente)
     const real = mesActual !== 'total' ? _certRealProvision(mesActual, o.cod_obra || o.nombre) : null;

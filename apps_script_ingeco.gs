@@ -1781,6 +1781,12 @@ function leerRemitosAsfalto() {
           for (var q = 0; q < po.det.length; q++) { if (po.det[q].s === s && po.det[q].d === d) { e = po.det[q]; break; } }
           if (!e) { e = { s: s, d: d, t: 0 }; po.det.push(e); }
           e.t = Math.round((e.t + t) * 10) / 10;
+          // Corte 30/07 (frío → Muni SMT): tc = tn despachadas desde el día 30
+          // inclusive. El tablero usa tc para el corte de julio (8 tn base + tc).
+          if (mesKey === 'jul' && s === 'frio' && /san miguel de tucum/i.test(d || '')
+              && fechaObj && !isNaN(fechaObj.getTime()) && fechaObj.getUTCDate() >= 30) {
+            e.tc = Math.round(((e.tc || 0) + t) * 10) / 10;
+          }
         };
 
         if (tipo === 'caliente') {
