@@ -2866,6 +2866,27 @@ function _certRealProvision(mes, obraNombre) {
   return { mesSig, total: items.reduce((s, i) => s + i.importe, 0), items };
 }
 
+// Excedente pagado de más el mes anterior: si lo real que cargó Esteban para
+// la provisión del mes M-1 superó su certificación teórica, ese excedente ya
+// se pagó y se descuenta de la teórica del mes M (no debería volver a pagarse).
+function _certExcedentePrev(mes, obraNombre) {
+  const idx = MES_ORDER.indexOf(mes);
+  if (idx <= 0) return null;
+  const mesPrev = MES_ORDER[idx - 1];
+  const dPrev = computeMargenObrasMes(mesPrev);
+  if (!dPrev) return null;
+  const nk = (obraNombre || '').toLowerCase().trim();
+  const rPrev = dPrev.rows.find(r =>
+    ((r.o.nombre || '').toLowerCase().trim() === nk) || ((r.o.cod_obra || '').toLowerCase().trim() === nk));
+  const teoPrev = rPrev ? (rPrev.certTeorica || 0) : 0;
+  if (teoPrev <= 0) return null; // sin teórica previa no hay contra qué comparar
+  const realPrev = _certRealProvision(mesPrev, obraNombre);
+  if (!realPrev) return null;
+  const excedente = realPrev.total - teoPrev;
+  if (excedente <= 0) return null;
+  return { mesPrev, teoPrev, realPrev: realPrev.total, excedente };
+}
+
 // Filas <tr> del bloque "Otros Gastos o salidas" — una fila por ítem, con las
 // columnas alineadas: Insumos | Alquiler | TN | Cert. teórica.
 function _filasOtroGastoTR(r) {
@@ -2901,20 +2922,32 @@ function _filasOtroGastoTR(r) {
     });
 
     // Comparación teórico vs real (lo cargado por Esteban en el mes siguiente)
-    const real = mesActual !== 'total' ? _certRealProvision(mesActual, o.nombre || o.cod_obra) : null;
+    const real = mesActual !== 'total' ? _certRealProvision(mesActual, o.cod_obra || o.nombre) : null;
+    // Ajuste por excedente del mes anterior: si Esteban pagó de más el mes
+    // pasado, se descuenta de la teórica de este mes (ya está pagado).
+    const aj = (mesActual !== 'total' && r.certTeorica > 0) ? _certExcedentePrev(mesActual, o.cod_obra || o.nombre) : null;
+    const descuento = aj ? Math.min(aj.excedente, r.certTeorica || 0) : 0;
+    const teoAjust = Math.max(0, (r.certTeorica || 0) - descuento);
     if (r.certTeorica > 0 || real) {
-      const dif = (real ? real.total : 0) - (r.certTeorica || 0);
+      const dif = (real ? real.total : 0) - teoAjust;
       const tipReal = real ? real.items.map(i => `${i.concepto}: ${fmt(i.importe)}`).join(' · ') : '';
       const urlReal = (real && typeof _sheetUrlAudit === 'function' && real.items[0]) ? _sheetUrlAudit(real.items[0]) : '';
       filas.push(`<tr style="${trStyle}background:#fff7ed;">
         ${tdItem(` <span style="color:#9a3412;">· Σ certificación${real ? ` — real cargada por Esteban en ${MES[real.mesSig] || real.mesSig}` : ''}</span>`)}
         ${tdV}${tdV}${tdV}
-        ${r.certTeorica > 0 ? td(`<strong class="pos-val">${fmt(r.certTeorica)}</strong>`) : tdV}
+        ${r.certTeorica > 0
+          ? td(`<strong class="pos-val" ${aj ? `title="Teórica del mes ${fmt(r.certTeorica)} − ${fmt(descuento)} pagados de más en ${MES[aj.mesPrev] || aj.mesPrev}"` : ''}>${aj ? '≈ ' : ''}${fmt(teoAjust)}</strong>`)
+          : tdV}
         ${real ? td(`<strong class="pos-val" title="${tipReal.replace(/"/g, '&quot;')}" ${urlReal ? `style="cursor:pointer;text-decoration:underline dotted;" onclick="window.open('${urlReal}','_blank')"` : ''}>${fmt(real.total)}${urlReal ? ' ↗' : ''}</strong>`) : td(`<span style="color:#dc2626;font-size:11px;font-weight:600;" title="No se encontró ningún ítem de esta provisión en la planilla de Esteban del mes siguiente">sin cargar</span>`)}
       </tr>`);
+      if (aj) {
+        filas.push(`<tr><td colspan="6" style="padding:2px 4px 8px;font-size:11px;color:#b45309;">
+          ℹ️ Cert. teórica ajustada: a los <strong>${fmt(r.certTeorica)}</strong> del mes se les descuentan <strong>${fmt(descuento)}</strong> pagados de más en ${MES[aj.mesPrev] || aj.mesPrev} (Esteban cargó ${fmt(aj.realPrev)} contra un teórico de ${fmt(aj.teoPrev)}) → queda <strong>${fmt(teoAjust)}</strong>. Ese excedente ya se pagó y no debería volver a pagarse.
+        </td></tr>`);
+      }
       if (real && Math.abs(dif) > AUDIT_TOLERANCIA) {
         filas.push(`<tr><td colspan="6" style="padding:2px 4px 8px;font-size:11px;color:#b45309;">
-          ⚠ Diferencia de <strong>${fmt(Math.abs(dif))}</strong> entre la certificación teórica y lo cargado por Esteban (${dif > 0 ? 'real por encima' : 'real por debajo'} del teórico) — consultar con Adrián el motivo.
+          ⚠ Diferencia de <strong>${fmt(Math.abs(dif))}</strong> entre la certificación teórica${aj ? ' ajustada' : ''} y lo cargado por Esteban (${dif > 0 ? 'real por encima' : 'real por debajo'} del teórico) — consultar con Adrián el motivo.
         </td></tr>`);
       }
     }
@@ -2938,16 +2971,23 @@ function _filasOtroGastoTR(r) {
 function _renderOtrosGastosBlock(otrosGastos) {
   if (!otrosGastos || otrosGastos.length === 0) return '';
   // Totales del bloque
-  let totIns = 0, totAlq = 0, totCert = 0, certTn = 0, totTnCal = 0, totTnFrio = 0, totReal = 0, hayReal = false;
+  let totIns = 0, totAlq = 0, totCert = 0, certTn = 0, totTnCal = 0, totTnFrio = 0, totReal = 0, hayReal = false, hayAjuste = false;
   otrosGastos.forEach(r => {
     totIns += r.insumos || 0; totAlq += r.alquiler || 0;
     totTnCal += r.tnObra || 0; totTnFrio += r.tnFrioObra || 0;
     (r.tnDet || []).forEach(e => {
       const pTn = _precioProvision(e);
-      if (pTn) { totCert += Math.round(e.t * pTn); certTn += e.t; }
+      if (pTn) certTn += e.t;
     });
+    // Teórica de la obra ajustada por el excedente pagado de más el mes anterior
+    let teoObra = r.certTeorica || 0;
+    if (mesActual !== 'total' && teoObra > 0) {
+      const aj = _certExcedentePrev(mesActual, r.o.cod_obra || r.o.nombre);
+      if (aj) { teoObra = Math.max(0, teoObra - aj.excedente); hayAjuste = true; }
+    }
+    totCert += teoObra;
     if (mesActual !== 'total' && r.tnDet && r.tnDet.length) {
-      const real = _certRealProvision(mesActual, r.o.nombre || r.o.cod_obra);
+      const real = _certRealProvision(mesActual, r.o.cod_obra || r.o.nombre);
       if (real) { totReal += real.total; hayReal = true; }
     }
   });
@@ -2970,12 +3010,12 @@ function _renderOtrosGastosBlock(otrosGastos) {
           ${tdT(totIns > 0 ? fmt(totIns) : '—')}
           ${tdT(totAlq > 0 ? fmt(totAlq) : '—')}
           ${tdT(_tnTot.length ? _tnTot.join(' + ') : '—')}
-          ${tdT(totCert > 0 ? `<span class="pos-val" title="${fmtTn(certTn)} tn × $119.500/tn">${fmt(totCert)}</span>` : '—')}
+          ${tdT(totCert > 0 ? `<span class="pos-val" title="${fmtTn(certTn)} tn con precio de convenio${hayAjuste ? ' — neto del excedente pagado de más el mes anterior' : ''}">${hayAjuste ? '≈ ' : ''}${fmt(totCert)}</span>` : '—')}
           ${tdT(hayReal ? `<span class="pos-val">${fmt(totReal)}</span>` : '—')}
         </tr>
       </tbody>
     </table></div>
-    ${totCert > 0 || hayReal ? `<div style="font-size:10.5px;color:#b45309;margin-top:6px;">Cert. teórica = tn × $119.500 — solo asfalto caliente provisto a la Municipalidad de San Miguel de Tucumán. Cert. real = certificados de la provisión cargados por Esteban en su planilla del mes siguiente (las provisiones se pagan hasta el día 10). Valores informativos: no suman al margen.</div>` : ''}
+    ${totCert > 0 || hayReal ? `<div style="font-size:10.5px;color:#b45309;margin-top:6px;">Cert. teórica = tn × $119.500 — solo asfalto caliente provisto a la Municipalidad de San Miguel de Tucumán${hayAjuste ? ', neta del excedente que Esteban pagó de más el mes anterior (ya pagado, no debe volver a pagarse)' : ''}. Cert. real = certificados de la provisión cargados por Esteban en su planilla del mes siguiente (las provisiones se pagan hasta el día 10). Valores informativos: no suman al margen.</div>` : ''}
   </div>`;
 }
 
