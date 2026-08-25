@@ -4059,7 +4059,25 @@ function renderCobrosReal() {
   // Actualizar todos los spans con el mes
   document.querySelectorAll('.cobros-mes-lbl').forEach(el => { el.textContent = mesLabel; });
 
-  const d = COBROS_ESTEBAN[mesActual];
+  let d = COBROS_ESTEBAN[mesActual];
+
+  // Meses cerrados: lo que quedó "sin fecha" en la hoja de un mes que ya
+  // terminó NO se cobró ese mes — se excluye de la vista (KPIs, donut,
+  // timeline y detalle) y se informa cuánto pasó al mes siguiente y cuánto
+  // no reaparece. La hoja de Esteban no se toca: es solo presentación.
+  let sinFechaCerrado = null;
+  const _idxHoy = new Date().getMonth();          // índice del mes actual en MES_ORDER
+  const _idxMes = MES_ORDER.indexOf(mesActual);
+  if (d && _idxMes >= 0 && _idxMes < _idxHoy && (d.sinFecha || []).length) {
+    const mesSig = MES_ORDER[_idxMes + 1];
+    const sig = COBROS_ESTEBAN[mesSig];
+    const enSig = it => !!sig && ['cobrados', 'facturados', 'noCobrados', 'sinFecha', 'menosProbable'].some(cat =>
+      (sig[cat] || []).some(x => (x.concepto || '') === (it.concepto || '') && (x.importe || 0) === (it.importe || 0)));
+    let pasaron = 0, noPasaron = 0, nP = 0, nNP = 0;
+    d.sinFecha.forEach(it => { if (enSig(it)) { pasaron += it.importe || 0; nP++; } else { noPasaron += it.importe || 0; nNP++; } });
+    sinFechaCerrado = { n: d.sinFecha.length, total: d.totalSinFecha || 0, pasaron, noPasaron, nP, nNP, mesSig };
+    d = Object.assign({}, d, { sinFecha: [], totalSinFecha: 0, nSinFecha: 0 });
+  }
 
   // ── KPI cards ──────────────────────────────────────────────────
   const _kpi = (id, val, cls, sub, subId) => {
@@ -4073,7 +4091,15 @@ function renderCobrosReal() {
     _kpi('kpi-cobrado-total',   d.totalCobrado,   'pos-val', d.nCobrado    + ' cobro'    + (d.nCobrado    !== 1 ? 's' : ''), 'kpi-cobrado-sub');
     _kpi('kpi-facturado-total', d.totalFacturado, '',        d.nFacturado  + ' factura'  + (d.nFacturado  !== 1 ? 's' : ''), 'kpi-facturado-sub');
     _kpi('kpi-nocobrado-total', d.totalNoCobrado || 0, 'neg-val', (d.nNoCobrado||0) + ' ítem' + ((d.nNoCobrado||0) !== 1 ? 's' : '') + ' N/C', 'kpi-nocobrado-sub');
-    _kpi('kpi-sinfecha-total',  d.totalSinFecha,  '',        d.nSinFecha   + ' ítem'     + (d.nSinFecha   !== 1 ? 's' : '') + ' sin fecha cargada', 'kpi-sinfecha-sub');
+    if (sinFechaCerrado) {
+      _kpi('kpi-sinfecha-total', 0, 'nd',
+        `mes cerrado — ${sinFechaCerrado.n} ítem${sinFechaCerrado.n !== 1 ? 's' : ''} sin fecha (${fmt(sinFechaCerrado.total)}) excluidos: ` +
+        `${fmt(sinFechaCerrado.pasaron)} pasaron a ${MES_LABEL[sinFechaCerrado.mesSig] || sinFechaCerrado.mesSig}` +
+        (sinFechaCerrado.noPasaron > 0 ? ` · ${fmt(sinFechaCerrado.noPasaron)} no reaparecen` : ''),
+        'kpi-sinfecha-sub');
+    } else {
+      _kpi('kpi-sinfecha-total',  d.totalSinFecha,  '',        d.nSinFecha   + ' ítem'     + (d.nSinFecha   !== 1 ? 's' : '') + ' sin fecha cargada', 'kpi-sinfecha-sub');
+    }
     const totalSum   = (d.totalCobrado || 0) + (d.totalFacturado || 0) + (d.totalNoCobrado || 0) + (d.totalSinFecha || 0);
     const totalCount = (d.nCobrado || 0) + (d.nFacturado || 0) + (d.nNoCobrado || 0) + (d.nSinFecha || 0);
     _kpi('kpi-total-cobros', totalSum, '', totalCount + ' ítem' + (totalCount !== 1 ? 's' : ''), 'kpi-total-cobros-sub');
