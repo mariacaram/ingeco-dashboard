@@ -5748,13 +5748,17 @@ function runAuditorias() {
   const estPend = {}, estCob = {};
   AUDIT_CATS_PEND.forEach(cat => (cobros[cat] || []).forEach(it => {
     const o = it.obra || '(sin obra)';
-    (estPend[o] = estPend[o] || { total: 0, totalComp: 0, items: [] });
+    (estPend[o] = estPend[o] || { total: 0, totalComp: 0, compFirme: 0, items: [] });
     estPend[o].total += it.importe || 0;
-    // totalComp: pendiente COMPARABLE contra Agustín — excluye redeterminaciones
-    // y fondos de reparo, que por convención solo sigue Esteban (los fondos
-    // tienen su chequeo propio).
+    // Comparables contra Agustín — excluyen redeterminaciones y fondos de
+    // reparo (solo los sigue Esteban). Dos niveles:
+    //   compFirme = pendiente firme (sin "menos probable", que es ayuda memoria)
+    //   totalComp = firme + lo mapeado como menos probable
     const esSoloEsteban = ES_FONDO_REPARO(it.obra) || ES_FONDO_REPARO(it.concepto) || ES_REDET(it.obra) || ES_REDET(it.concepto);
-    if (!esSoloEsteban) estPend[o].totalComp += it.importe || 0;
+    if (!esSoloEsteban) {
+      estPend[o].totalComp += it.importe || 0;
+      if (cat !== 'menosProbable') estPend[o].compFirme += it.importe || 0;
+    }
     estPend[o].items.push({ txt: it.concepto || '(sin concepto)', monto: it.importe || 0, cat, fila: it.fila, gid: it.gid, src: 'esteban' });
   }));
   (cobros.cobrados || []).forEach(it => {
@@ -5776,9 +5780,16 @@ function runAuditorias() {
     if (!nombres) return; // sin mapeo ni match directo -> lo cubre el chequeo de huérfanas
     nombres.forEach(n => usadosEsteban.add(n));
     const pendJ = oj.items.filter(i => i.estado === 'A Cobrar' && !ES_REDET(i.nombre) && !ES_FONDO_REPARO(i.nombre)).reduce((s, i) => s + (i.monto || 0), 0);
-    const pendE = nombres.reduce((s, n) => s + (estPend[n] ? estPend[n].totalComp : 0), 0);
-    const dif = pendJ - pendE;
-    if (Math.abs(dif) <= AUDIT_TOLERANCIA) return;
+    // Rango de Esteban: firme (sin "menos probable") a total (con lo mapeado).
+    // Agustín está OK si su pendiente cae dentro del rango — lo "menos
+    // probable" es ayuda memoria de Esteban y no se le exige a Agustín.
+    const pendEfirme = nombres.reduce((s, n) => s + (estPend[n] ? estPend[n].compFirme : 0), 0);
+    const pendEtotal = nombres.reduce((s, n) => s + (estPend[n] ? estPend[n].totalComp : 0), 0);
+    const pendE = pendJ > pendEtotal ? pendEtotal : pendEfirme;
+    const dif = pendJ > pendEtotal + AUDIT_TOLERANCIA ? pendJ - pendEtotal
+              : pendJ < pendEfirme - AUDIT_TOLERANCIA ? pendJ - pendEfirme
+              : 0;
+    if (dif === 0) return;
     const itemsJ = oj.items.filter(i => i.estado === 'A Cobrar').map(i => ({ txt: i.nombre, monto: i.monto || 0, cat: 'Agustín · A Cobrar', fila: i.fila, gid: i.gid, src: 'julia' }));
     const itemsE = nombres.flatMap(n => (estPend[n] ? estPend[n].items : []).map(i => ({ ...i, cat: 'Esteban · ' + i.cat })));
     AUDIT_RESULTADOS.push({
@@ -5786,9 +5797,18 @@ function runAuditorias() {
       titulo: oj.nombre,
       monto: Math.abs(dif),
       grave: Math.abs(dif) >= AUDIT_GRAVE,
-      resumen: dif > 0
-        ? `Agustín tiene ${fmt(dif)} más de pendiente que Esteban (Agustín ${fmt(pendJ)} vs Esteban ${fmt(pendE)}). ¿Esteban dejó de seguir algo o Agustín tiene ítems ya cobrados?`
-        : `A Agustín le faltan ${fmt(-dif)} de pendiente que Esteban sí registra (Agustín ${fmt(pendJ)} vs Esteban ${fmt(pendE)}). Probable atraso de carga o fondo de reparo sin desglosar.`,
+      resumen: (() => {
+        if (dif > 0) {
+          // Pista: si Esteban registró cobros del mes en esta obra, lo más
+          // probable es que parte del pendiente de Agustín ya esté cobrado.
+          const cobMes = nombres.reduce((s, n) => s + (estCob[n] ? estCob[n].total : 0), 0);
+          const pista = cobMes > AUDIT_TOLERANCIA
+            ? ` OJO: Esteban registró cobros por ${fmt(cobMes)} este mes en esta obra — probablemente parte de ese pendiente ya se cobró y falta marcarlo "Cobrada" en el archivo de Agustín.`
+            : ' ¿Esteban dejó de seguir algo o Agustín tiene ítems ya cobrados?';
+          return `Agustín tiene ${fmt(dif)} más de pendiente que TODO lo que Esteban lista, incluso lo mapeado como menos probable (Agustín ${fmt(pendJ)} vs Esteban ${fmt(pendE)}).${pista}`;
+        }
+        return `A Agustín le faltan ${fmt(-dif)} del pendiente FIRME de Esteban — sin contar lo "menos probable" (Agustín ${fmt(pendJ)} vs Esteban firme ${fmt(pendE)}). Probable atraso de carga.`;
+      })(),
       responsable: dif > 0 ? 'Esteban / Agustín' : 'Agustín',
       items: itemsJ.concat(itemsE),
     });
@@ -5796,13 +5816,13 @@ function runAuditorias() {
 
   // ── Chequeo 2: obras huérfanas (en un archivo y no en el otro) ──
   Object.keys(estPend).forEach(o => {
-    if (usadosEsteban.has(o) || estPend[o].totalComp <= AUDIT_TOLERANCIA) return;
+    if (usadosEsteban.has(o) || estPend[o].compFirme <= AUDIT_TOLERANCIA) return;
     AUDIT_RESULTADOS.push({
       chequeo: 'Obra huérfana',
       titulo: o,
-      monto: estPend[o].totalComp,
-      grave: estPend[o].totalComp >= AUDIT_GRAVE,
-      resumen: `Está en el archivo de Esteban con ${fmt(estPend[o].totalComp)} pendiente (sin redeterminaciones ni fondos de reparo) pero no existe (o no está mapeada) en el archivo de Agustín.`,
+      monto: estPend[o].compFirme,
+      grave: estPend[o].compFirme >= AUDIT_GRAVE,
+      resumen: `Está en el archivo de Esteban con ${fmt(estPend[o].compFirme)} de pendiente firme (sin redeterminaciones, fondos de reparo ni lo mapeado como menos probable) pero no existe (o no está mapeada) en el archivo de Agustín.`,
       responsable: 'Agustín',
       items: estPend[o].items.map(i => ({ ...i, cat: 'Esteban · ' + i.cat })),
     });
@@ -6071,15 +6091,24 @@ function _juliaPendPorCanon(obrasSeg) {
 function _segVeredictoJulia(n, o, jp) {
   if (!jp || !jp.hayEstados) return null;
   const jPend = jp.map[n] || 0;
-  // Comparable: sin redeterminaciones ni fondos de reparo (solo los sigue Esteban)
-  const pendComp = Math.max(0, (o.pend || 0) - (o.redetPend || 0) - (o.fondoPend || 0));
-  const dif = jPend - pendComp;
-  if (Math.abs(dif) <= AUDIT_TOLERANCIA) return { icon: '✅', tipo: 'ok', jPend, dif,
-    tip: `Coincide con Agustín (A Cobrar: ${fmt(jPend)})${(o.redetPend || 0) + (o.fondoPend || 0) > 0 ? ' — sin contar redeterminaciones/fondos de reparo, que solo sigue Esteban' : ''}` };
-  if (dif > 0) return { icon: '🔶', tipo: 'esteban', jPend, dif,
-    tip: `Esteban no programó ${fmt(dif)}: Agustín registra ${fmt(jPend)} A Cobrar y Esteban lista ${fmt(pendComp)} (sin redeterminaciones ni fondos)` };
+  // Comparables: sin redeterminaciones ni fondos de reparo (solo los sigue
+  // Esteban). Rango: firme (sin "menos probable", que es ayuda memoria) a
+  // total (con lo mapeado) — Agustín está OK dentro del rango.
+  const mapeado = o.itemsPend.filter(i => i.cat === 'menosProbable' && !i.esFondo && !i.esRedet).reduce((s, i) => s + i.monto, 0);
+  const compTotal = Math.max(0, (o.pend || 0) - (o.redetPend || 0) - (o.fondoPend || 0));
+  const compFirme = Math.max(0, compTotal - mapeado);
+  if (jPend >= compFirme - AUDIT_TOLERANCIA && jPend <= compTotal + AUDIT_TOLERANCIA) {
+    return { icon: '✅', tipo: 'ok', jPend, dif: 0,
+      tip: `Coincide con Agustín (A Cobrar: ${fmt(jPend)}, dentro del rango de Esteban: firme ${fmt(compFirme)} a ${fmt(compTotal)} con lo mapeado — sin redeterminaciones ni fondos)` };
+  }
+  if (jPend > compTotal) {
+    const dif = jPend - compTotal;
+    return { icon: '🔶', tipo: 'esteban', jPend, dif,
+      tip: `Esteban no programó ${fmt(dif)}: Agustín registra ${fmt(jPend)} A Cobrar y Esteban lista ${fmt(compTotal)} incluso con lo mapeado (sin redeterminaciones ni fondos)` };
+  }
+  const dif = jPend - compFirme;
   return { icon: '🔶', tipo: 'julia', jPend, dif,
-    tip: `Agustín registra ${fmt(jPend)} A Cobrar — ${fmt(-dif)} menos que Esteban (comparación sin redeterminaciones ni fondos de reparo); posible atraso de carga de Agustín` };
+    tip: `Agustín registra ${fmt(jPend)} A Cobrar — ${fmt(-dif)} menos que el pendiente firme de Esteban (${fmt(compFirme)}, sin lo mapeado como menos probable); posible atraso de carga de Agustín` };
 }
 
 // Diferencia contra el archivo de Julia (reusa el resultado de la auditoría).
