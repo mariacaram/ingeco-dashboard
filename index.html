@@ -5833,6 +5833,38 @@ function runAuditorias() {
     });
   }
 
+  // ── Chequeo 5: cobradas según Agustín sin cobro registrado por Esteban ──
+  // El caso "Agustín actualizó (sabe que entró la plata) y Esteban todavía no
+  // lo registró" — o la fila se marcó Cobrada antes de tiempo. Compara lo
+  // marcado Cobrada por obra contra el cobrado acumulado real de Esteban.
+  // Solo para obras con historial en la planilla de Esteban (los cobros
+  // anteriores a Mayo 2026 no están registrados y no se pueden contrastar).
+  const seg = _seguimientoCobros();
+  if (seg) {
+    obrasJ.forEach(oj => {
+      if (!oj.items) return;
+      const cobradasAg = oj.items.filter(i => /cobrad/i.test(i.estado || ''));
+      const agCob = cobradasAg.reduce((s, i) => s + (i.monto || 0), 0);
+      if (agCob <= AUDIT_TOLERANCIA) return;
+      const ens = MAPA_OBRAS_AUDIT[oj.nombre];
+      const canons = (ens && ens.length) ? ens.map(_segNorm) : [_segNorm(oj.nombre)];
+      const canon = canons.find(c => seg.obras[c]);
+      if (!canon) return; // sin historial en Esteban — no evaluable
+      const estCobTot = seg.obras[canon].cob || 0;
+      const dif = agCob - estCobTot;
+      if (dif <= AUDIT_TOLERANCIA) return;
+      AUDIT_RESULTADOS.push({
+        chequeo: 'Cobro sin registrar',
+        titulo: oj.nombre,
+        monto: dif,
+        grave: dif >= AUDIT_GRAVE,
+        resumen: `Agustín marca cobradas ${fmt(agCob)} pero Esteban registró cobros por ${fmt(estCobTot)}: hay ${fmt(dif)} marcados como cobrados sin cobro registrado en la planilla de Esteban. O Esteban está atrasado en registrarlo, o la fila de Agustín se marcó "Cobrada" antes de que entre la plata.`,
+        responsable: 'Esteban / Agustín',
+        items: cobradasAg.map(i => ({ txt: i.nombre, monto: i.monto || 0, cat: 'Agustín · Cobrada', fila: i.fila, gid: i.gid, src: 'julia' })),
+      });
+    });
+  }
+
   AUDIT_RESULTADOS.sort((a, b) => (b.grave - a.grave) || (b.monto - a.monto));
 }
 
