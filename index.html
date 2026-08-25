@@ -5769,6 +5769,9 @@ function runAuditorias() {
   });
 
   const usadosEsteban = new Set();
+  // Filas de Agustín con cobro EXACTO ya registrado por Esteban: se consideran
+  // cobradas (conciliación automática) y no cuentan como diferencia.
+  const concAuto = _conciliacionesAuto();
 
   // ── Chequeo 1: pendiente Agustín vs pendiente Esteban por obra ──
   obrasJ.forEach(oj => {
@@ -5782,7 +5785,7 @@ function runAuditorias() {
     if (nombres && !nombres.includes(oj.nombre) && (estPend[oj.nombre] || estCob[oj.nombre])) nombres = nombres.concat([oj.nombre]);
     if (!nombres) return; // sin mapeo ni match directo -> lo cubre el chequeo de huérfanas
     nombres.forEach(n => usadosEsteban.add(n));
-    const pendJ = oj.items.filter(i => i.estado === 'A Cobrar' && !ES_REDET(i.nombre) && !ES_FONDO_REPARO(i.nombre)).reduce((s, i) => s + (i.monto || 0), 0);
+    const pendJ = oj.items.filter(i => i.estado === 'A Cobrar' && !ES_REDET(i.nombre) && !ES_FONDO_REPARO(i.nombre) && !_estaConciliado(concAuto, oj.nombre, i)).reduce((s, i) => s + (i.monto || 0), 0);
     // Rango de Esteban: firme (sin "menos probable") a total (con lo mapeado).
     // Agustín está OK si su pendiente cae dentro del rango — lo "menos
     // probable" es ayuda memoria de Esteban y no se le exige a Agustín.
@@ -5895,6 +5898,20 @@ function runAuditorias() {
         responsable: 'Esteban / Agustín',
         items: cobradasAg.map(i => ({ txt: i.nombre, monto: i.monto || 0, cat: 'Agustín · Cobrada', fila: i.fila, gid: i.gid, src: 'julia' })),
       });
+    });
+  }
+
+  // ── Conciliaciones automáticas: informativa, para que Agustín confirme ──
+  if (concAuto.lista.length) {
+    const totC = concAuto.lista.reduce((s, l) => s + l.monto, 0);
+    AUDIT_RESULTADOS.push({
+      chequeo: 'Auto-conciliado',
+      titulo: `Conciliaciones automáticas por confirmar (${concAuto.lista.length})`,
+      monto: totC,
+      grave: false,
+      resumen: `${concAuto.lista.length} fila(s) "A Cobrar" del archivo de Agustín coinciden EXACTO (misma obra y monto al peso) con cobros ya registrados por Esteban. El tablero ya las descuenta solo del pendiente — solo falta confirmarlas en el archivo: marcar Estado $ = "Cobrada".`,
+      responsable: 'Agustín',
+      items: concAuto.lista.map(l => ({ txt: `${l.obraAg} — ${l.nombre}`, monto: l.monto, cat: '✓ auto', fila: l.fila, gid: l.gid, src: 'julia' })),
     });
   }
 
@@ -6072,10 +6089,11 @@ function _seguimientoCobros() {
 function _juliaPendPorCanon(obrasSeg) {
   const res = { map: {}, solo: [], hayEstados: false };
   const obrasJ = (GENERADO_POR_OBRA && GENERADO_POR_OBRA.obras) || [];
+  const conc = _conciliacionesAuto(); // filas con cobro exacto ya registrado por Esteban
   obrasJ.forEach(oj => {
     if (!oj.items) return;
     if (!res.hayEstados && oj.items.some(i => i.estado)) res.hayEstados = true;
-    const pend = oj.items.filter(i => i.estado === 'A Cobrar' && !ES_REDET(i.nombre) && !ES_FONDO_REPARO(i.nombre)).reduce((s, i) => s + (i.monto || 0), 0);
+    const pend = oj.items.filter(i => i.estado === 'A Cobrar' && !ES_REDET(i.nombre) && !ES_FONDO_REPARO(i.nombre) && !_estaConciliado(conc, oj.nombre, i)).reduce((s, i) => s + (i.monto || 0), 0);
     if (pend <= 0) return;
     const ens = MAPA_OBRAS_AUDIT[oj.nombre];
     let canon;
@@ -6113,6 +6131,69 @@ function _segVeredictoJulia(n, o, jp) {
   const dif = jPend - compFirme;
   return { icon: '🔶', tipo: 'julia', jPend, dif,
     tip: `Agustín registra ${fmt(jPend)} A Cobrar — ${fmt(-dif)} menos que el pendiente firme de Esteban (${fmt(compFirme)}, sin lo mapeado como menos probable); posible atraso de carga de Agustín` };
+}
+
+// ── Conciliación automática Agustín ↔ Esteban ──
+// Si una fila "A Cobrar" del archivo de Agustín coincide EXACTO (misma obra
+// canónica y mismo monto al peso) con un cobro ya registrado por Esteban, se
+// considera cobrada y se descuenta sola del pendiente. Cada cobro concilia
+// una sola fila. Si el monto no es exacto, NO se concilia y salta en la
+// auditoría (puede haber redeterminación, cobro parcial o error de tipeo).
+function _conciliacionesAuto() {
+  const vacio = { lista: [], keys: new Set() };
+  const seg = _seguimientoCobros();
+  if (!seg || !GENERADO_POR_OBRA || !GENERADO_POR_OBRA.obras) return vacio;
+  // Multiset de cobros de Esteban disponibles por (obra canónica, monto)
+  const disponibles = {};
+  Object.entries(seg.obras).forEach(([canon, o]) => {
+    o.itemsCob.forEach(c => {
+      const k = canon + '|' + Math.round(c.monto || 0);
+      disponibles[k] = (disponibles[k] || 0) + 1;
+    });
+  });
+  const canonsDe = oj => {
+    const ens = MAPA_OBRAS_AUDIT[oj.nombre];
+    const base = (ens && ens.length) ? ens.map(_segNorm) : [];
+    const propio = _segNorm(oj.nombre);
+    return base.includes(propio) ? base : base.concat([propio]);
+  };
+  // 1ra pasada: lo YA cobrado según Agustín consume sus cobros exactos, para
+  // no conciliar el mismo cobro dos veces. Cubre dos casos:
+  //   a) filas marcadas Cobrada (consume su monto)
+  //   b) la columna "Anticipo financiero" de cualquier fila (el anticipo se
+  //      cobró y NO es una fila propia — sin esto, el cobro del anticipo
+  //      matchearía por error contra el saldo pendiente del mismo monto)
+  GENERADO_POR_OBRA.obras.forEach(oj => (oj.items || []).forEach(i => {
+    const consumir = [];
+    if (/cobrad/i.test(i.estado || '') && i.monto > 0) consumir.push(Math.round(i.monto));
+    if (i.anticipo > 0) consumir.push(Math.round(i.anticipo));
+    consumir.forEach(m => {
+      for (const c of canonsDe(oj)) {
+        const k = c + '|' + m;
+        if (disponibles[k] > 0) { disponibles[k]--; break; }
+      }
+    });
+  }));
+  // 2da pasada: filas A Cobrar con match exacto → auto-conciliadas
+  const lista = [], keys = new Set();
+  GENERADO_POR_OBRA.obras.forEach(oj => (oj.items || []).forEach(i => {
+    if (i.estado !== 'A Cobrar' || !(i.monto > 0)) return;
+    if (ES_REDET(i.nombre) || ES_FONDO_REPARO(i.nombre)) return;
+    for (const c of canonsDe(oj)) {
+      const k = c + '|' + Math.round(i.monto);
+      if (disponibles[k] > 0) {
+        disponibles[k]--;
+        lista.push({ obraAg: oj.nombre, nombre: i.nombre, monto: i.monto, fila: i.fila, gid: i.gid });
+        keys.add(oj.nombre + '|' + i.fila);
+        break;
+      }
+    }
+  }));
+  return { lista, keys };
+}
+// ¿Este ítem de Agustín está auto-conciliado?
+function _estaConciliado(conc, nombreObra, item) {
+  return conc && conc.keys.has(nombreObra + '|' + item.fila);
 }
 
 // Diferencia contra el archivo de Julia (reusa el resultado de la auditoría).
