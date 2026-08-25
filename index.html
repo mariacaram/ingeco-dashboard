@@ -5723,6 +5723,10 @@ const AUDIT_TOLERANCIA = 5e6; // diferencias menores a $5M no se reportan
 const AUDIT_GRAVE = 100e6;    // monto en juego a partir del cual es "grave"
 const AUDIT_CATS_PEND = ['facturados', 'noCobrados', 'sinFecha', 'menosProbable'];
 const ES_FONDO_REPARO = t => /fdo\.?\s*rep|fondo\s+de\s+reparo/i.test(t || '');
+// Redeterminaciones de precio: por convención SOLO las sigue Esteban
+// (financiero) — Agustín no las carga en su archivo, así que no se le
+// reclaman en la auditoría ni entran en la comparación de pendientes.
+const ES_REDET = t => /redeterminad|redeterminaci/i.test(t || '');
 
 let AUDIT_RESULTADOS = [];
 
@@ -5744,8 +5748,13 @@ function runAuditorias() {
   const estPend = {}, estCob = {};
   AUDIT_CATS_PEND.forEach(cat => (cobros[cat] || []).forEach(it => {
     const o = it.obra || '(sin obra)';
-    (estPend[o] = estPend[o] || { total: 0, items: [] });
+    (estPend[o] = estPend[o] || { total: 0, totalComp: 0, items: [] });
     estPend[o].total += it.importe || 0;
+    // totalComp: pendiente COMPARABLE contra Agustín — excluye redeterminaciones
+    // y fondos de reparo, que por convención solo sigue Esteban (los fondos
+    // tienen su chequeo propio).
+    const esSoloEsteban = ES_FONDO_REPARO(it.obra) || ES_FONDO_REPARO(it.concepto) || ES_REDET(it.obra) || ES_REDET(it.concepto);
+    if (!esSoloEsteban) estPend[o].totalComp += it.importe || 0;
     estPend[o].items.push({ txt: it.concepto || '(sin concepto)', monto: it.importe || 0, cat, fila: it.fila, gid: it.gid, src: 'esteban' });
   }));
   (cobros.cobrados || []).forEach(it => {
@@ -5766,8 +5775,8 @@ function runAuditorias() {
     if (!nombres && (estPend[oj.nombre] || estCob[oj.nombre])) nombres = [oj.nombre];
     if (!nombres) return; // sin mapeo ni match directo -> lo cubre el chequeo de huérfanas
     nombres.forEach(n => usadosEsteban.add(n));
-    const pendJ = oj.items.filter(i => i.estado === 'A Cobrar').reduce((s, i) => s + (i.monto || 0), 0);
-    const pendE = nombres.reduce((s, n) => s + (estPend[n] ? estPend[n].total : 0), 0);
+    const pendJ = oj.items.filter(i => i.estado === 'A Cobrar' && !ES_REDET(i.nombre) && !ES_FONDO_REPARO(i.nombre)).reduce((s, i) => s + (i.monto || 0), 0);
+    const pendE = nombres.reduce((s, n) => s + (estPend[n] ? estPend[n].totalComp : 0), 0);
     const dif = pendJ - pendE;
     if (Math.abs(dif) <= AUDIT_TOLERANCIA) return;
     const itemsJ = oj.items.filter(i => i.estado === 'A Cobrar').map(i => ({ txt: i.nombre, monto: i.monto || 0, cat: 'Agustín · A Cobrar', fila: i.fila, gid: i.gid, src: 'julia' }));
@@ -5787,13 +5796,13 @@ function runAuditorias() {
 
   // ── Chequeo 2: obras huérfanas (en un archivo y no en el otro) ──
   Object.keys(estPend).forEach(o => {
-    if (usadosEsteban.has(o) || estPend[o].total <= AUDIT_TOLERANCIA) return;
+    if (usadosEsteban.has(o) || estPend[o].totalComp <= AUDIT_TOLERANCIA) return;
     AUDIT_RESULTADOS.push({
       chequeo: 'Obra huérfana',
       titulo: o,
-      monto: estPend[o].total,
-      grave: estPend[o].total >= AUDIT_GRAVE,
-      resumen: `Está en el archivo de Esteban con ${fmt(estPend[o].total)} pendiente pero no existe (o no está mapeada) en el archivo de Agustín.`,
+      monto: estPend[o].totalComp,
+      grave: estPend[o].totalComp >= AUDIT_GRAVE,
+      resumen: `Está en el archivo de Esteban con ${fmt(estPend[o].totalComp)} pendiente (sin redeterminaciones ni fondos de reparo) pero no existe (o no está mapeada) en el archivo de Agustín.`,
       responsable: 'Agustín',
       items: estPend[o].items.map(i => ({ ...i, cat: 'Esteban · ' + i.cat })),
     });
@@ -6029,7 +6038,7 @@ function _seguimientoCobros() {
   if (!meses.length) return null;
   const ult = meses[meses.length - 1];
   const obras = {};
-  const O = n => obras[n] || (obras[n] = { cob: 0, pend: 0, cats: {}, fondoPend: 0, itemsCob: [], itemsPend: [] });
+  const O = n => obras[n] || (obras[n] = { cob: 0, pend: 0, cats: {}, fondoPend: 0, redetPend: 0, itemsCob: [], itemsPend: [] });
 
   const vistos = new Set();
   meses.forEach(mes => (COBROS_ESTEBAN[mes].cobrados || []).forEach(it => {
@@ -6049,8 +6058,10 @@ function _seguimientoCobros() {
     o.pend += it.importe || 0;
     o.cats[cat] = (o.cats[cat] || 0) + (it.importe || 0);
     const esFondo = ES_FONDO_REPARO(it.obra) || ES_FONDO_REPARO(it.concepto);
+    const esRedet = !esFondo && (ES_REDET(it.obra) || ES_REDET(it.concepto));
     if (esFondo) o.fondoPend += it.importe || 0;
-    o.itemsPend.push({ txt: it.concepto || '(sin concepto)', monto: it.importe || 0, cat, fecha: it.fechaProb || '', esFondo, fila: it.fila, gid: it.gid, src: 'esteban' });
+    if (esRedet) o.redetPend += it.importe || 0;
+    o.itemsPend.push({ txt: it.concepto || '(sin concepto)', monto: it.importe || 0, cat, fecha: it.fechaProb || '', esFondo, esRedet, fila: it.fila, gid: it.gid, src: 'esteban' });
   }));
 
   return { meses, ult, obras };
@@ -6065,7 +6076,7 @@ function _juliaPendPorCanon(obrasSeg) {
   obrasJ.forEach(oj => {
     if (!oj.items) return;
     if (!res.hayEstados && oj.items.some(i => i.estado)) res.hayEstados = true;
-    const pend = oj.items.filter(i => i.estado === 'A Cobrar').reduce((s, i) => s + (i.monto || 0), 0);
+    const pend = oj.items.filter(i => i.estado === 'A Cobrar' && !ES_REDET(i.nombre) && !ES_FONDO_REPARO(i.nombre)).reduce((s, i) => s + (i.monto || 0), 0);
     if (pend <= 0) return;
     const ens = MAPA_OBRAS_AUDIT[oj.nombre];
     let canon;
@@ -6085,13 +6096,15 @@ function _juliaPendPorCanon(obrasSeg) {
 function _segVeredictoJulia(n, o, jp) {
   if (!jp || !jp.hayEstados) return null;
   const jPend = jp.map[n] || 0;
-  const dif = jPend - o.pend;
+  // Comparable: sin redeterminaciones ni fondos de reparo (solo los sigue Esteban)
+  const pendComp = Math.max(0, (o.pend || 0) - (o.redetPend || 0) - (o.fondoPend || 0));
+  const dif = jPend - pendComp;
   if (Math.abs(dif) <= AUDIT_TOLERANCIA) return { icon: '✅', tipo: 'ok', jPend, dif,
-    tip: `Coincide con Agustín (A Cobrar: ${fmt(jPend)})` };
+    tip: `Coincide con Agustín (A Cobrar: ${fmt(jPend)})${(o.redetPend || 0) + (o.fondoPend || 0) > 0 ? ' — sin contar redeterminaciones/fondos de reparo, que solo sigue Esteban' : ''}` };
   if (dif > 0) return { icon: '🔶', tipo: 'esteban', jPend, dif,
-    tip: `Esteban no programó ${fmt(dif)}: Agustín registra ${fmt(jPend)} A Cobrar y Esteban lista ${fmt(o.pend)}` };
+    tip: `Esteban no programó ${fmt(dif)}: Agustín registra ${fmt(jPend)} A Cobrar y Esteban lista ${fmt(pendComp)} (sin redeterminaciones ni fondos)` };
   return { icon: '🔶', tipo: 'julia', jPend, dif,
-    tip: `Agustín registra ${fmt(jPend)} A Cobrar — ${fmt(-dif)} menos que Esteban; posible atraso de carga de Agustín` };
+    tip: `Agustín registra ${fmt(jPend)} A Cobrar — ${fmt(-dif)} menos que Esteban (comparación sin redeterminaciones ni fondos de reparo); posible atraso de carga de Agustín` };
 }
 
 // Diferencia contra el archivo de Julia (reusa el resultado de la auditoría).
@@ -6250,6 +6263,7 @@ function openSeguimientoPanel(nombre) {
           <div class="panel-kpi-val" style="color:#b45309;">${o.fondoPend > 0 ? fmt(o.fondoPend) + (url && fi.fila ? ' <span style="font-size:11px;">↗</span>' : '') : '—'}</div>
         </div>`;
       })()}
+      ${o.redetPend > 0 ? `<div class="panel-kpi-item"><div class="panel-kpi-label">📈 Redeterminaciones pend.</div><div class="panel-kpi-val" style="color:#6d28d9;">${fmt(o.redetPend)}</div></div>` : ''}
     </div>
     <div style="font-size:10.5px;color:var(--muted);margin-top:8px;line-height:1.5;">
       ℹ️ <strong>Total registrado</strong> = cobrado desde ${MES[data.meses[0]] || data.meses[0]} + pendiente según la programación de ${MES[data.ult] || data.ult} (planilla de Esteban). No es el monto de contrato: no incluye lo cobrado antes de ${MES[data.meses[0]] || data.meses[0]} ni certificados aún no cargados.
@@ -6267,7 +6281,7 @@ function openSeguimientoPanel(nombre) {
     <div style="font-size:12px;font-weight:700;margin:16px 0 6px;">FALTA COBRAR (programación de ${MES[data.ult] || data.ult})</div>
     <table style="width:100%;font-size:12px;">
       ${o.itemsPend.sort((a, b) => b.monto - a.monto).map(i => `<tr style="border-bottom:1px solid var(--border);">
-        <td style="padding:6px 8px;">${i.esFondo ? '🔒 ' : ''}${i.txt}<br><span style="font-size:10px;color:${catColor[i.cat]};font-weight:600;">${catLbl[i.cat]}${i.fecha ? ' · prob. ' + i.fecha : ''}</span></td>
+        <td style="padding:6px 8px;">${i.esFondo ? '🔒 ' : ''}${i.esRedet ? '📈 ' : ''}${i.txt}<br><span style="font-size:10px;color:${catColor[i.cat]};font-weight:600;">${catLbl[i.cat]}${i.fecha ? ' · prob. ' + i.fecha : ''}</span></td>
         <td style="padding:6px 8px;text-align:right;font-weight:700;white-space:nowrap;">${fmt(i.monto)}</td>
         <td style="padding:6px 4px;text-align:right;">${_sheetLinkAudit(i)}</td>
       </tr>`).join('')}
