@@ -770,7 +770,7 @@
       <div class="kpi-value nd" id="kpi-generado">Actualizá datos</div>
       <div class="kpi-sub" id="kpi-generado-sub">Certificados por período (A Cobrar + Cobradas)</div>
       <div id="kpi-generado-breakdown" style="font-size:10px;color:var(--muted);margin-top:5px;line-height:1.7;display:flex;flex-wrap:wrap;gap:4px 10px;"></div>
-      <div class="fuente" id="kpi-generado-fuente"><a href="https://docs.google.com/spreadsheets/d/1Hl8HZqrH6lMwnAGpitA37ZGLg4szTcFGK7vmv92qkBA/edit" target="_blank" onclick="event.stopPropagation()">Obras activas (Fernando Solís)</a></div>
+      <div class="fuente" id="kpi-generado-fuente"><a href="https://docs.google.com/spreadsheets/d/1YldZRtbLh17Xqczl-omI0zjHcgvrhvp3QOsjWffEm_s/edit" target="_blank" onclick="event.stopPropagation()">Obras a cobrar (Agustín)</a></div>
     </div>
     <div class="kpi-card neg" style="cursor:pointer;" onclick="openOCInsumosPanel()" title="Ver detalle por obra">
       <div class="kpi-label">OC Insumos</div>
@@ -843,7 +843,7 @@
       </table>
       <div class="nota-fuente" style="margin-top:6px;">⚖️ <strong>MO prorrateada:</strong> MO total Obras (TANGO) × (tn caliente de la obra / tn caliente total del mes) — fuente tn: Remitos Oficiales columna OBRA</div>
     </div>
-    <div class="nota-fuente">A Cobrar: Fernando Solís · Insumos: OC Guillermo Konicek · Alquiler: Partes diarios Adrián Caram · MO: TANGO (total mensual estimado, no atribuible por obra)</div>
+    <div class="nota-fuente">A Cobrar: Obras a cobrar (Agustín) · Insumos: OC Guillermo Konicek · Alquiler: Partes diarios Adrián Caram · MO: TANGO (total mensual estimado, no atribuible por obra)</div>
 
     <!-- Otros Gastos o salidas: placeholders sin clasificar, NO son obras — se
          muestran aparte con un formato bien distinto a la tabla de arriba -->
@@ -869,7 +869,7 @@
       <div class="kpi-value nd" id="kpi-generado-t">Actualizá datos</div>
       <div class="kpi-sub" id="kpi-generado-sub-t">Certificados por período (A Cobrar + Cobradas)</div>
       <div id="kpi-generado-breakdown-t" style="font-size:10px;color:var(--muted);margin-top:5px;line-height:1.7;display:flex;flex-wrap:wrap;gap:4px 10px;"></div>
-      <div class="fuente"><a href="https://docs.google.com/spreadsheets/d/1Hl8HZqrH6lMwnAGpitA37ZGLg4szTcFGK7vmv92qkBA/edit" target="_blank" onclick="event.stopPropagation()">Obras activas (Fernando Solís)</a></div>
+      <div class="fuente"><a href="https://docs.google.com/spreadsheets/d/1YldZRtbLh17Xqczl-omI0zjHcgvrhvp3QOsjWffEm_s/edit" target="_blank" onclick="event.stopPropagation()">Obras a cobrar (Agustín)</a></div>
     </div>
     <div class="kpi-card neg" style="cursor:pointer;" onclick="openOCInsumosPanel()" title="Ver detalle por obra">
       <div class="kpi-label">OC Insumos</div>
@@ -1660,7 +1660,7 @@
       <button onclick="copiarAuditorias(this)" style="margin-left:auto;font-size:12px;padding:6px 14px;border:1px solid var(--border);border-radius:8px;background:#fff;cursor:pointer;font-weight:600;">📋 Copiar informe</button>
     </div>
     <div style="font-size:12px;color:var(--muted);margin:-4px 0 14px;">
-      Chequeos automáticos que cruzan el archivo de certificados de Julia contra la programación de cobranzas de Esteban.
+      Chequeos automáticos que cruzan el archivo de obras a cobrar de Agustín contra la programación de cobranzas de Esteban.
       Se recalculan cada vez que se actualizan los datos: cuando una inconsistencia se corrige en los archivos, desaparece sola de esta lista.
     </div>
     <div id="audit-resumen" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;"></div>
@@ -1690,7 +1690,7 @@
         <div style="font-size:13px;font-weight:800;color:#15803d;margin-bottom:10px;">🏗 MARGEN OBRAS</div>
         <div style="font-size:12px;line-height:2.1;color:var(--text);">
           <div><span style="color:#15803d;font-weight:700;">+</span> Ingresos certificados / facturados</div>
-          <div style="padding-left:14px;color:var(--muted);font-size:11px;">Fernando Solís — campo "A Cobrar"</div>
+          <div style="padding-left:14px;color:var(--muted);font-size:11px;">Obras a cobrar (Agustín) — campo "Monto a certificar"</div>
           <div><span style="color:#dc2626;font-weight:700;">−</span> OC Insumos de obra</div>
           <div><span style="color:#dc2626;font-weight:700;">−</span> Mano de obra Obras (TANGO)</div>
           <div><span style="color:#dc2626;font-weight:700;">−</span> Alquiler interno de máquinas <span style="font-size:10px;color:#6b7280;">↕</span></div>
@@ -2220,7 +2220,7 @@ let FECHAS_FUENTES = {};
 // porque su dato (OC_PLANTA) todavía es una carga manual, no lectura de Drive.
 const FUENTES = [
   // ── Obras: certificaciones e insumos ──────────────────────────────────
-  { archivo: 'Obras activas / Certificaciones (Fernando Solís)', responsable: 'Fernando Solís', fileKey: 'fernandoObras', ultimaActualizacion: '28/07/2026', estado: 'real', dato: 'Certificados por obra (A Cobrar): Municipio, Vialidad, Otros ingresos', accion: '✅ Accesible — alimenta Contribución marginal e ingresos' },
+  { archivo: 'Obras a cobrar (Agustín)', responsable: 'Agustín', fileKey: 'agustinObras', ultimaActualizacion: '13/08/2026', estado: 'real', dato: 'Por obra: Monto Total, Anticipo financiero y Monto a certificar (A Cobrar / Cobrada)', accion: '✅ Accesible — alimenta Contribución marginal, Auditorías y Seguimiento de cobros. Reemplaza al archivo de Julia' },
   { archivo: 'Maestro de obras NUEVO.xlsx', responsable: 'Adrián / Equipo', fileKey: 'maestroObras', ultimaActualizacion: '16/07/2026', estado: 'real', dato: '60+ obras con código canónico, cliente y tipo de contratación', accion: '✅ Accesible — cargado' },
   { archivo: 'ÓRDENES DE COMPRA DE INSUMOS PARA OBRAS (Guillermo Konicek)', responsable: 'Guillermo Konicek', fileKey: 'ocInsumos', ultimaActualizacion: '28/07/2026', estado: 'real', dato: 'OC de insumos por obra — costo de materiales', accion: '✅ Accesible — carpeta Guillermo (Drive)' },
   // ── Estado financiero ─────────────────────────────────────────────────
@@ -5615,7 +5615,8 @@ function renderFuentes() {
 }
 
 // ================================================================
-// AUDITORÍAS — chequeos automáticos Julia (certificados) vs Esteban (cobranzas)
+// AUDITORÍAS — chequeos automáticos Agustín (obras a cobrar) vs Esteban (cobranzas)
+// (las funciones internas conservan nombres *julia* por compatibilidad histórica)
 // ================================================================
 
 // Mapa de equivalencia de nombres: obra de Julia -> nombres con que aparece en
@@ -5645,7 +5646,7 @@ const MAPA_OBRAS_AUDIT = {
 // Si el ítem trae fila+gid (requiere .gs actualizado), el link salta a la celda
 // exacta; si no, abre el archivo completo.
 const SHEET_URLS_AUDIT = {
-  julia:   'https://docs.google.com/spreadsheets/d/1Hl8HZqrH6lMwnAGpitA37ZGLg4szTcFGK7vmv92qkBA/edit',
+  julia:   'https://docs.google.com/spreadsheets/d/1YldZRtbLh17Xqczl-omI0zjHcgvrhvp3QOsjWffEm_s/edit'  /* archivo de Agustín (la clave interna conserva el nombre viejo) */,
   esteban: 'https://docs.google.com/spreadsheets/d/1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY/edit',
 };
 function _sheetUrlAudit(it) {
@@ -5657,7 +5658,7 @@ function _sheetLinkAudit(it) {
   const url = _sheetUrlAudit(it);
   if (!url) return '';
   const lbl = (it.gid != null && it.fila) ? `fila ${it.fila} ↗` : 'archivo ↗';
-  return `<a href="${url}" target="_blank" onclick="event.stopPropagation()" title="Abrir en Google Sheets (${it.src === 'julia' ? 'archivo de Julia' : 'planilla de Esteban'})" style="font-size:10px;font-weight:700;white-space:nowrap;text-decoration:none;color:#2563eb;">${lbl}</a>`;
+  return `<a href="${url}" target="_blank" onclick="event.stopPropagation()" title="Abrir en Google Sheets (${it.src === 'julia' ? 'archivo de Agustín' : 'planilla de Esteban'})" style="font-size:10px;font-weight:700;white-space:nowrap;text-decoration:none;color:#2563eb;">${lbl}</a>`;
 }
 
 const AUDIT_TOLERANCIA = 5e6; // diferencias menores a $5M no se reportan
@@ -5698,27 +5699,30 @@ function runAuditorias() {
 
   const usadosEsteban = new Set();
 
-  // ── Chequeo 1: pendiente Julia vs pendiente Esteban por obra ──
+  // ── Chequeo 1: pendiente Agustín vs pendiente Esteban por obra ──
   obrasJ.forEach(oj => {
     if (!oj.items) return;
-    const nombres = MAPA_OBRAS_AUDIT[oj.nombre];
-    if (!nombres) return; // sin mapeo -> lo cubre el chequeo de huérfanas
+    // El archivo de Agustín usa los códigos canónicos (los mismos nombres que
+    // Esteban): si no hay entrada en el mapa, se matchea directo por nombre.
+    let nombres = MAPA_OBRAS_AUDIT[oj.nombre];
+    if (!nombres && (estPend[oj.nombre] || estCob[oj.nombre])) nombres = [oj.nombre];
+    if (!nombres) return; // sin mapeo ni match directo -> lo cubre el chequeo de huérfanas
     nombres.forEach(n => usadosEsteban.add(n));
     const pendJ = oj.items.filter(i => i.estado === 'A Cobrar').reduce((s, i) => s + (i.monto || 0), 0);
     const pendE = nombres.reduce((s, n) => s + (estPend[n] ? estPend[n].total : 0), 0);
     const dif = pendJ - pendE;
     if (Math.abs(dif) <= AUDIT_TOLERANCIA) return;
-    const itemsJ = oj.items.filter(i => i.estado === 'A Cobrar').map(i => ({ txt: i.nombre, monto: i.monto || 0, cat: 'Julia · A Cobrar', fila: i.fila, gid: i.gid, src: 'julia' }));
+    const itemsJ = oj.items.filter(i => i.estado === 'A Cobrar').map(i => ({ txt: i.nombre, monto: i.monto || 0, cat: 'Agustín · A Cobrar', fila: i.fila, gid: i.gid, src: 'julia' }));
     const itemsE = nombres.flatMap(n => (estPend[n] ? estPend[n].items : []).map(i => ({ ...i, cat: 'Esteban · ' + i.cat })));
     AUDIT_RESULTADOS.push({
-      chequeo: 'Julia vs Esteban',
+      chequeo: 'Agustín vs Esteban',
       titulo: oj.nombre,
       monto: Math.abs(dif),
       grave: Math.abs(dif) >= AUDIT_GRAVE,
       resumen: dif > 0
-        ? `Julia tiene ${fmt(dif)} más de pendiente que Esteban (Julia ${fmt(pendJ)} vs Esteban ${fmt(pendE)}). ¿Esteban dejó de seguir algo o Julia tiene ítems ya cobrados?`
-        : `A Julia le faltan ${fmt(-dif)} de pendiente que Esteban sí registra (Julia ${fmt(pendJ)} vs Esteban ${fmt(pendE)}). Probable atraso de carga o fondo de reparo sin desglosar.`,
-      responsable: dif > 0 ? 'Esteban / Julia' : 'Julia',
+        ? `Agustín tiene ${fmt(dif)} más de pendiente que Esteban (Agustín ${fmt(pendJ)} vs Esteban ${fmt(pendE)}). ¿Esteban dejó de seguir algo o Agustín tiene ítems ya cobrados?`
+        : `A Agustín le faltan ${fmt(-dif)} de pendiente que Esteban sí registra (Agustín ${fmt(pendJ)} vs Esteban ${fmt(pendE)}). Probable atraso de carga o fondo de reparo sin desglosar.`,
+      responsable: dif > 0 ? 'Esteban / Agustín' : 'Agustín',
       items: itemsJ.concat(itemsE),
     });
   });
@@ -5731,8 +5735,8 @@ function runAuditorias() {
       titulo: o,
       monto: estPend[o].total,
       grave: estPend[o].total >= AUDIT_GRAVE,
-      resumen: `Está en el archivo de Esteban con ${fmt(estPend[o].total)} pendiente pero no existe (o no está mapeada) en el archivo de Julia.`,
-      responsable: 'Julia',
+      resumen: `Está en el archivo de Esteban con ${fmt(estPend[o].total)} pendiente pero no existe (o no está mapeada) en el archivo de Agustín.`,
+      responsable: 'Agustín',
       items: estPend[o].items.map(i => ({ ...i, cat: 'Esteban · ' + i.cat })),
     });
   });
@@ -5745,7 +5749,7 @@ function runAuditorias() {
       monto: oj.aCobrar,
       grave: oj.aCobrar >= AUDIT_GRAVE,
       resumen: `${fmt(oj.aCobrar)} registrados sin código de obra asignado: imposible saber a qué obra corresponden ni cruzarlos con cobranzas.`,
-      responsable: 'Julia',
+      responsable: 'Agustín',
       items: [],
       link: 'julia',
     });
@@ -5763,8 +5767,8 @@ function runAuditorias() {
       monto: tot,
       grave: tot >= AUDIT_GRAVE,
       resumen: `${sinEstado.length} certificado(s) por ${fmt(tot)} sin estado cargado: no se sabe si están cobrados o pendientes.`,
-      responsable: 'Julia',
-      items: sinEstado.map(i => ({ txt: i.nombre, monto: i.monto || 0, cat: 'Julia · sin estado', fila: i.fila, gid: i.gid, src: 'julia' })),
+      responsable: 'Agustín',
+      items: sinEstado.map(i => ({ txt: i.nombre, monto: i.monto || 0, cat: 'Agustín · sin estado', fila: i.fila, gid: i.gid, src: 'julia' })),
     });
   });
 
@@ -5788,11 +5792,11 @@ function runAuditorias() {
   if (totFsolo > AUDIT_TOLERANCIA) {
     AUDIT_RESULTADOS.push({
       chequeo: 'Fondo de reparo',
-      titulo: 'Fondos de reparo sin espejo en Julia',
+      titulo: 'Fondos de reparo sin espejo en Agustín',
       monto: totFsolo,
       grave: totFsolo >= AUDIT_GRAVE,
-      resumen: `Esteban tiene ${fondosEsolo.length} fondo(s) de reparo pendientes por ${fmt(totFsolo)} que no aparecen desglosados en el archivo de Julia.`,
-      responsable: 'Julia',
+      resumen: `Esteban tiene ${fondosEsolo.length} fondo(s) de reparo pendientes por ${fmt(totFsolo)} que no aparecen desglosados en el archivo de Agustín.`,
+      responsable: 'Agustín',
       items: fondosEsolo,
     });
   }
@@ -5811,7 +5815,7 @@ function renderAuditorias() {
 
   if (!mesE || !(GENERADO_POR_OBRA && GENERADO_POR_OBRA.obras)) {
     resumen.innerHTML = '';
-    list.innerHTML = `<div class="alert info" style="font-size:13px;">Sin datos suficientes para auditar — presioná <strong>Actualizar datos</strong> para cargar los archivos de Julia y Esteban.</div>`;
+    list.innerHTML = `<div class="alert info" style="font-size:13px;">Sin datos suficientes para auditar — presioná <strong>Actualizar datos</strong> para cargar los archivos de Agustín y Esteban.</div>`;
     if (badge) badge.style.display = 'none';
     return;
   }
@@ -5843,7 +5847,7 @@ function renderAuditorias() {
     </div>`;
 
   if (!AUDIT_RESULTADOS.length) {
-    list.innerHTML = `<div class="alert info" style="font-size:13px;background:#dcfce7;border-color:#86efac;color:#166534;">✅ Sin inconsistencias por encima de ${fmt(AUDIT_TOLERANCIA)} entre los archivos de Julia y Esteban.</div>`;
+    list.innerHTML = `<div class="alert info" style="font-size:13px;background:#dcfce7;border-color:#86efac;color:#166534;">✅ Sin inconsistencias por encima de ${fmt(AUDIT_TOLERANCIA)} entre los archivos de Agustín y Esteban.</div>`;
     return;
   }
 
@@ -5874,7 +5878,7 @@ function copiarAuditorias(btn) {
   const mesE = _auditMesEsteban();
   const lineas = [
     `AUDITORÍA DE CONSISTENCIA — INGECO`,
-    `Comparación: certificados (Julia) vs cobranzas (Esteban · ${mesE ? (MES[mesE] || mesE) : 's/d'})`,
+    `Comparación: obras a cobrar (Agustín) vs cobranzas (Esteban · ${mesE ? (MES[mesE] || mesE) : 's/d'})`,
     `Generado: ${new Date().toLocaleString('es-AR')}`,
     ``,
   ];
@@ -5993,11 +5997,11 @@ function _segVeredictoJulia(n, o, jp) {
   const jPend = jp.map[n] || 0;
   const dif = jPend - o.pend;
   if (Math.abs(dif) <= AUDIT_TOLERANCIA) return { icon: '✅', tipo: 'ok', jPend, dif,
-    tip: `Coincide con Julia (certificados A Cobrar: ${fmt(jPend)})` };
+    tip: `Coincide con Agustín (A Cobrar: ${fmt(jPend)})` };
   if (dif > 0) return { icon: '🔶', tipo: 'esteban', jPend, dif,
-    tip: `Esteban no programó ${fmt(dif)}: Julia certificó ${fmt(jPend)} A Cobrar y Esteban lista ${fmt(o.pend)}` };
+    tip: `Esteban no programó ${fmt(dif)}: Agustín registra ${fmt(jPend)} A Cobrar y Esteban lista ${fmt(o.pend)}` };
   return { icon: '🔶', tipo: 'julia', jPend, dif,
-    tip: `Julia registra ${fmt(jPend)} A Cobrar — ${fmt(-dif)} menos que Esteban; posible atraso de carga de Julia` };
+    tip: `Agustín registra ${fmt(jPend)} A Cobrar — ${fmt(-dif)} menos que Esteban; posible atraso de carga de Agustín` };
 }
 
 // Diferencia contra el archivo de Julia (reusa el resultado de la auditoría).
@@ -6006,7 +6010,7 @@ function _segVeredictoJulia(n, o, jp) {
 function _segDifJulia(nombreEsteban) {
   for (const [jn, ens] of Object.entries(MAPA_OBRAS_AUDIT)) {
     if (!ens.map(_segNorm).includes(nombreEsteban)) continue;
-    const r = AUDIT_RESULTADOS.find(a => a.chequeo === 'Julia vs Esteban' && a.titulo === jn);
+    const r = AUDIT_RESULTADOS.find(a => a.chequeo === 'Agustín vs Esteban' && a.titulo === jn);
     if (r) return { monto: r.monto, titulo: jn };
   }
   return null;
@@ -6036,7 +6040,7 @@ function irAAuditoria(tituloJulia) {
   openTab('auditorias');
   setTimeout(() => {
     const cards = [...document.querySelectorAll('#audit-list [data-audit-titulo]')].filter(e => e.dataset.auditTitulo === tituloJulia);
-    const el = cards.find(e => e.dataset.auditChequeo === 'Julia vs Esteban') || cards[0];
+    const el = cards.find(e => e.dataset.auditChequeo === 'Agustín vs Esteban') || cards[0];
     if (el) el.open = true;
     _flashEl(el || document.getElementById('audit-list'));
   }, 120);
@@ -6060,7 +6064,7 @@ function renderSeguimientoCobros() {
     return;
   }
   const { meses, ult, obras } = data;
-  sub.innerHTML = `Acumulado desde <strong>${MES[meses[0]] || meses[0]}</strong> · pendiente según programación de <strong>${MES[ult] || ult}</strong> — fuente: planilla de Esteban, contrastada contra los certificados "A Cobrar" del archivo de Julia. Independiente del selector de mes. El % de avance es sobre lo registrado en este archivo, no sobre el total de contrato.`;
+  sub.innerHTML = `Acumulado desde <strong>${MES[meses[0]] || meses[0]}</strong> · pendiente según programación de <strong>${MES[ult] || ult}</strong> — fuente: planilla de Esteban, contrastada contra los certificados "A Cobrar" del archivo de Agustín. Independiente del selector de mes. El % de avance es sobre lo registrado en este archivo, no sobre el total de contrato.`;
 
   const nombres = Object.keys(obras).filter(n => obras[n].cob + obras[n].pend > 1e6);
   const activas = nombres.filter(n => obras[n].pend > 0).sort((a, b) => obras[b].pend - obras[a].pend);
@@ -6109,7 +6113,7 @@ function renderSeguimientoCobros() {
   const soloHtml = soloJulia.map(s => `
     <div style="background:#fff7ed;border:1px solid #fdba74;border-left:4px solid #ea580c;border-radius:10px;padding:9px 14px;margin-bottom:7px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
       <strong style="font-size:12.5px;">${s.nombre}</strong>
-      <span style="font-size:11px;color:#9a3412;font-weight:600;">⚠️ certificada por Julia, sin programación de cobro en Esteban</span>
+      <span style="font-size:11px;color:#9a3412;font-weight:600;">⚠️ cargada por Agustín, sin programación de cobro en Esteban</span>
       <span style="margin-left:auto;font-weight:800;font-size:13px;color:#ea580c;">${fmt(s.monto)}</span>
     </div>`).join('');
 
@@ -6253,7 +6257,7 @@ function renderCobranzaMargen() {
       .map(([n, o]) => {
         const pct = Math.round(o.cob / (o.cob + o.pend) * 100);
         const difJulia = jp.hayEstados && Math.abs((jp.map[n] || 0) - o.pend) > AUDIT_TOLERANCIA;
-        return `<span onclick="irASeguimiento('${n.replace(/'/g, "\\'")}')" title="${difJulia ? 'Difiere del archivo de Julia — ver seguimiento' : ''}" style="cursor:pointer;background:#fff;border:1px solid ${difJulia ? '#fdba74' : 'var(--border)'};border-radius:16px;padding:5px 12px;font-size:11px;white-space:nowrap;">
+        return `<span onclick="irASeguimiento('${n.replace(/'/g, "\\'")}')" title="${difJulia ? 'Difiere del archivo de Agustín — ver seguimiento' : ''}" style="cursor:pointer;background:#fff;border:1px solid ${difJulia ? '#fdba74' : 'var(--border)'};border-radius:16px;padding:5px 12px;font-size:11px;white-space:nowrap;">
           ${n} <strong style="color:${pct >= 80 ? '#16a34a' : pct >= 40 ? '#b45309' : '#dc2626'};">${pct}%</strong> · falta <strong>${fmt(o.pend)}</strong>${o.fondoPend > 0 ? ' 🔒' : ''}${difJulia ? ' ⚠️' : ''}</span>`;
       });
     // Obras certificadas por Julia que Esteban no programó — también como chip
@@ -6264,7 +6268,7 @@ function renderCobranzaMargen() {
     el.innerHTML = chips.length ? `
       <div class="section" style="margin-top:16px;">
         <div class="section-title" style="font-size:13px;">Cobranza de obras — ¿falta algo?</div>
-        <div style="font-size:11px;color:var(--muted);margin:-4px 0 10px;">Acumulado desde ${MES[data.meses[0]] || data.meses[0]} (planilla de Esteban) · click para ver el seguimiento completo · 🔒 = tiene fondo de reparo pendiente · ⚠️ = difiere del archivo de Julia</div>
+        <div style="font-size:11px;color:var(--muted);margin:-4px 0 10px;">Acumulado desde ${MES[data.meses[0]] || data.meses[0]} (planilla de Esteban) · click para ver el seguimiento completo · 🔒 = tiene fondo de reparo pendiente · ⚠️ = difiere del archivo de Agustín</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">${chips.join('')}</div>
       </div>` : '';
   });

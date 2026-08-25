@@ -24,7 +24,8 @@ const FILE_IDS = {
   tangoFolder:  '1hQZoJovbFDHNsJhNiGMEueH1bLfXuuCP',              // Carpeta liquidaciones TANGO (Mauro) — un archivo por mes
   ocInsumos:    '1UWUIW4sNtRBa90nYoGg88ghGK8SyyjKe9UdZLRcHMEE',  // Órdenes de Compra — Google Sheet (Guillermo) — hoja "ÓRDENES"
   maestroObras: '1VbG7DPqaOSlYkvQxbxag-4P2sOoRJQwWGccbx9OMyBM',  // Maestro de Obras con COD_OBRA
-  fernandoObras:'1Hl8HZqrH6lMwnAGpitA37ZGLg4szTcFGK7vmv92qkBA',  // Obras activas (nuevo archivo)
+  fernandoObras:'1Hl8HZqrH6lMwnAGpitA37ZGLg4szTcFGK7vmv92qkBA',  // Obras activas (archivo de Julia — LEGACY, reemplazado por agustinObras)
+  agustinObras: '1YldZRtbLh17Xqczl-omI0zjHcgvrhvp3QOsjWffEm_s',  // Obras a cobrar (Agustín) — Monto Total / Anticipo / Monto a certificar
   estebanSheet: '1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY',    // Cobros reales (Esteban) — una pestaña por mes (Google Sheets)
   equiposFlota: '1PEcPzwrQ8kE2evmUlrFq9wPbgWOR92MPl3LEqcSYbIk',  // Equipos + PF mensual (Adrián)
   usageEquipos:     '1e_emRVEUxTaNtLxeC0wXIWKzcKuoulZkFSS9O1e0XHo',  // Partes diarios — hoja única (Nico)
@@ -208,10 +209,47 @@ function actualizarNocturno() {
     if (data.gastosEstructura) PROPS.setProperty(CACHE_KEY + '_gest',    JSON.stringify(data.gastosEstructura));
     if (data.repuestosEquipos) PROPS.setProperty(CACHE_KEY + '_repuestos', JSON.stringify(data.repuestosEquipos));
     if (data.fechasFuentes)   PROPS.setProperty(CACHE_KEY + '_fechas',   JSON.stringify(data.fechasFuentes));
+    // Espejo de cobros reales en el archivo de Agustín (pestaña autogenerada)
+    try { escribirCobrosEnAgustin(data.cobrosEsteban); }
+    catch (e) { Logger.log('escribirCobrosEnAgustin error: ' + e); }
     Logger.log('Cache actualizado: ' + data.timestamp);
   } catch (err) {
     Logger.log('Error en trigger nocturno: ' + err.toString());
   }
+}
+
+// ============================================================
+// ESPEJO DE COBROS EN EL ARCHIVO DE AGUSTÍN
+// Mantiene una pestaña autogenerada "Cobros (auto - no editar)" con cada
+// cobro real registrado por Esteban (deduplicado entre hojas mensuales),
+// para que en el mismo archivo de Agustín se vea qué entró y qué falta
+// contra su "Monto a certificar". No toca ninguna otra pestaña.
+// ============================================================
+function escribirCobrosEnAgustin(cobros) {
+  if (!cobros) return;
+  const ss = SpreadsheetApp.openById(FILE_IDS.agustinObras);
+  const NOMBRE = 'Cobros (auto - no editar)';
+  let sh = ss.getSheetByName(NOMBRE);
+  if (!sh) sh = ss.insertSheet(NOMBRE);
+  const filas = [['Mes', 'Fecha real de cobro', 'Obra / Código', 'Concepto', 'Importe']];
+  const vistos = {};
+  const MESES_KEYS = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  const MES_LBL = { ene:'Enero', feb:'Febrero', mar:'Marzo', abr:'Abril', may:'Mayo', jun:'Junio',
+                    jul:'Julio', ago:'Agosto', sep:'Septiembre', oct:'Octubre', nov:'Noviembre', dic:'Diciembre' };
+  MESES_KEYS.forEach(function(mes) {
+    const cm = cobros[mes];
+    if (!cm || !cm.cobrados) return;
+    cm.cobrados.forEach(function(it) {
+      const k = (it.obra || '') + '|' + (it.concepto || '') + '|' + (it.importe || 0);
+      if (vistos[k]) return; // mismo cobro repetido en dos hojas mensuales
+      vistos[k] = true;
+      filas.push([MES_LBL[mes] || mes, it.fechaReal || '', it.obra || '', it.concepto || '', it.importe || 0]);
+    });
+  });
+  sh.clearContents();
+  sh.getRange(1, 1, filas.length, 5).setValues(filas);
+  sh.getRange(1, 1, 1, 5).setFontWeight('bold');
+  Logger.log('Cobros espejados en archivo Agustín: ' + (filas.length - 1) + ' filas');
 }
 
 // ============================================================
@@ -258,7 +296,7 @@ function buildData() {
 // ============================================================
 function leerFechasFuentes() {
   const resultado = {};
-  const claves = ['ocInsumos', 'maestroObras', 'fernandoObras', 'estebanSheet',
+  const claves = ['ocInsumos', 'maestroObras', 'fernandoObras', 'agustinObras', 'estebanSheet',
     'equiposFlota', 'usageEquipos', 'repuestosEquipos', 'remitosAsfalto',
     'ajusteStock', 'precioAsfalto', 'gastosEstructura'];
   claves.forEach(function(k) {
@@ -1013,12 +1051,102 @@ function leerGeneradoFernando() {
 }
 
 // ============================================================
-// COMBINAR MAESTRO + FERNANDO → GENERADO TEÓRICO POR OBRA
+// OBRAS A COBRAR (AGUSTÍN) — reemplaza al archivo de Julia como fuente de
+// certificación. Una fila por concepto: Nombre | Estado $ | Monto Total |
+// Anticipo financiero | Monto a certificar | ... | Código | Período.
+// Devuelve la MISMA forma intermedia que leerGeneradoFernando() para que
+// leerGeneradoPorObra() y todo el frontend sigan funcionando sin cambios.
+// ============================================================
+function leerAgustinIntermedio() {
+  const vacio = { aCobrar: {}, aCobrarPorMes: {}, aCobrarSinMes: {}, nombreFernando: {},
+                  detalles: {}, detallesPorMes: {}, detallesSinMes: {}, tabSrc: {}, tabsSinPeriodo: [] };
+  try {
+    const ss = SpreadsheetApp.openById(FILE_IDS.agustinObras);
+    const sheet = ss.getSheets()[0];
+    const gid = sheet.getSheetId();
+    const rows = sheet.getDataRange().getValues();
+    const curYear = new Date().getFullYear();
+
+    let hdrIdx = 0;
+    for (let i = 0; i < Math.min(6, rows.length); i++) {
+      const s = rows[i].map(c => String(c).toLowerCase()).join('|');
+      if (s.includes('monto a certificar') || s.includes('nombre obra')) { hdrIdx = i; break; }
+    }
+    const headers = rows[hdrIdx].map(h => String(h).toLowerCase().trim());
+    const iNom  = _findCol(headers, ['nombre obra', 'nombre']) ?? 0;
+    const iEst  = _findCol(headers, ['estado $', 'estado$']) ?? 1;
+    const iTot  = _findCol(headers, ['monto total']) ?? 2;
+    const iAnt  = _findCol(headers, ['anticipo']) ?? 3;
+    const iCert = _findCol(headers, ['monto a certificar', 'certificar']) ?? 4;
+    const iCod  = _findCol(headers, ['código', 'codigo']) ?? 8;
+    const iPer  = _findCol(headers, ['período de realización', 'periodo de realizacion', 'período', 'periodo']) ?? 9;
+    Logger.log('Agustín — cols: nom=' + iNom + ' est=' + iEst + ' cert=' + iCert + ' cod=' + iCod + ' per=' + iPer);
+
+    const out = { aCobrar: {}, aCobrarPorMes: {}, aCobrarSinMes: {}, nombreFernando: {},
+                  detalles: {}, detallesPorMes: {}, detallesSinMes: {}, tabSrc: {}, tabsSinPeriodo: [] };
+
+    for (let i = hdrIdx + 1; i < rows.length; i++) {
+      const row = rows[i];
+      const nombre = String(row[iNom] || '').trim();
+      if (!nombre) continue;
+      const nlow = nombre.toLowerCase();
+      // Filas de resumen al pie de la hoja
+      if (nlow.indexOf('total') === 0 || nlow.indexOf('sin expediente') === 0 || nlow.indexOf('con expediente') === 0) continue;
+
+      const estadoRaw  = String(row[iEst] || '').trim();
+      const montoTotal = parsearMonto(row[iTot]);
+      const anticipo   = parsearMonto(row[iAnt]);
+      const aCert      = parsearMonto(row[iCert]);
+      const esCobrada  = /cobrad/i.test(estadoRaw);
+
+      // Monto del ítem: lo que falta certificar. Si está Cobrada y no queda
+      // saldo, lo cobrado (anticipo o total) para el desglose de Cobradas.
+      let monto = aCert > 0 ? aCert : 0;
+      if (esCobrada && monto <= 0) monto = anticipo > 0 ? anticipo : (montoTotal > 0 ? montoTotal : 0);
+      // Estado normalizado: Cobrada / A Cobrar (cualquier otro texto con saldo
+      // pendiente cuenta como A Cobrar, ej. "Total")
+      const estado = esCobrada ? 'Cobrada' : (monto > 0 ? 'A Cobrar' : (estadoRaw || ''));
+
+      const cod = String(row[iCod] || '').trim() || 'SIN-CODIGO';
+      const mesKey = _parseMesKey(row[iPer], curYear);
+      const item = { nombre: nombre, codigo: cod, monto: Math.round(monto), estado: estado,
+                     montoTotal: Math.round(montoTotal || 0), anticipo: Math.round(anticipo || 0),
+                     fila: i + 1, gid: gid };
+
+      if (mesKey) {
+        if (!out.aCobrarPorMes[mesKey]) out.aCobrarPorMes[mesKey] = {};
+        out.aCobrarPorMes[mesKey][cod] = (out.aCobrarPorMes[mesKey][cod] || 0) + item.monto;
+        if (!out.detallesPorMes[mesKey]) out.detallesPorMes[mesKey] = {};
+        if (!out.detallesPorMes[mesKey][cod]) out.detallesPorMes[mesKey][cod] = [];
+        out.detallesPorMes[mesKey][cod].push(item);
+      } else {
+        out.aCobrarSinMes[cod] = (out.aCobrarSinMes[cod] || 0) + item.monto;
+        if (!out.detallesSinMes[cod]) out.detallesSinMes[cod] = [];
+        out.detallesSinMes[cod].push(item);
+      }
+      out.aCobrar[cod] = (out.aCobrar[cod] || 0) + item.monto;
+      if (!out.nombreFernando[cod]) out.nombreFernando[cod] = cod === 'SIN-CODIGO' ? nombre : cod;
+      if (!out.detalles[cod]) out.detalles[cod] = [];
+      out.detalles[cod].push(item);
+    }
+
+    Logger.log('Agustín — códigos: ' + Object.keys(out.aCobrar).length +
+               ' | por mes: ' + Object.keys(out.aCobrarPorMes).join(','));
+    return out;
+  } catch (err) {
+    Logger.log('leerAgustinIntermedio error: ' + err.toString());
+    return vacio;
+  }
+}
+
+// ============================================================
+// COMBINAR MAESTRO + AGUSTÍN → GENERADO TEÓRICO POR OBRA
+// (antes usaba leerGeneradoFernando — archivo de Julia, hoy legacy)
 // ============================================================
 function leerGeneradoPorObra() {
   try {
     const maestro = leerMaestroObras();
-    const { aCobrar, aCobrarPorMes, aCobrarSinMes, nombreFernando, detalles, detallesPorMes, detallesSinMes, tabSrc, tabsSinPeriodo } = leerGeneradoFernando();
+    const { aCobrar, aCobrarPorMes, aCobrarSinMes, nombreFernando, detalles, detallesPorMes, detallesSinMes, tabSrc, tabsSinPeriodo } = leerAgustinIntermedio();
 
     // Helper: construye lista de obras desde un mapa { cod: monto }.
     // detMap = mapa de detalles a usar (todos, los del mes, o los sin período).
