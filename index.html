@@ -2395,7 +2395,7 @@ function renderMargen() {
     }
     const descPeriodo = _sinP.length > 0 ? ` · ${_sinP.length} sin período` : '';
     if (kpiGenSub) kpiGenSub.textContent = _obrasMes.length + ' obras en ' + (MES[mesActual] || mesActual) + descPeriodo;
-    if (badge)     badge.textContent = (_obrasMes.length + _sinP.length) + ' obras · Fernando Solís';
+    if (badge)     badge.textContent = (_obrasMes.length + _sinP.length) + ' obras · Obras a cobrar (Agustín)';
 
     // Desglose por pestaña de origen
     const kpiBreak = document.getElementById('kpi-generado-breakdown');
@@ -3633,7 +3633,7 @@ function _recolectarDatosObra(codObra, nombreObra, soloMes) {
     tot.asf += r.costoAsfObra || 0; tot.alquiler += r.alquiler; tot.margen += r.margen;
     tot.tnCal += r.tnObra; tot.tnFrio += r.tnFrioObra;
 
-    // Certificados del mes (renglones de Fernando Solís)
+    // Certificados del mes (renglones del archivo de Agustín)
     (r.o.items || []).forEach(it => {
       const monto = it.monto ?? it.aCobrar ?? 0;
       if (monto <= 0) return;
@@ -3878,7 +3878,7 @@ function generarReportePDF(codObra, nombreObra, soloMes) {
     <div class="val">${est}${pf(margen)} <span style="font-size:14px;font-weight:600;">(${pct(margen, D.tot.aCobrar)})</span></div>
   </div>
 
-  ${seccion('1', 'Ingresos — Certificados', 'Certificados por período (Fernando Solís)', `
+  ${seccion('1', 'Ingresos — Certificados', 'Certificados por período (Obras a cobrar — Agustín)', `
     <table class="data">
       ${th([{ t: 'Mes' }, { t: 'Nº cert.', a: 'center' }, { t: 'Monto certificado', a: 'right' }])}
       <tbody>${certPorMes}
@@ -3933,7 +3933,7 @@ function generarReportePDF(codObra, nombreObra, soloMes) {
     La mano de obra se prorratea entre las obras según las toneladas de asfalto despachadas en el mes (fuente de tn: Remitos Oficiales).
     ${D.algunaEstim ? 'El símbolo <strong>~</strong> indica meses en los que la MO aún no estaba cargada en TANGO y se estimó a partir del último mes con datos. ' : ''}
     El costo de asfalto valoriza las toneladas despachadas al precio de mercado del mes (transferencia interna Planta → Obra).
-    <br><strong>Fuentes:</strong> Certificados — Fernando Solís · Insumos — Guillermo Konicek · Mano de obra — TANGO (Mauro Orellana) · Alquiler — Partes diarios (Nico) · Remitos — Planta de asfalto.
+    <br><strong>Fuentes:</strong> Certificados — Obras a cobrar (Agustín) · Insumos — Guillermo Konicek · Mano de obra — TANGO (Mauro Orellana) · Alquiler — Partes diarios (Nico) · Remitos — Planta de asfalto.
     Reporte generado automáticamente desde el Dashboard Ejecutivo INGECO el ${hoy}.
   </div>
 </div>
@@ -5089,7 +5089,7 @@ function _resultadoUnidadesMes(mes) {
     : (ingManual != null ? 'ingresado a mano' : 'pendiente criterio de valorización (falta precio × tn)');
   const detalle = {
     obras: { titulo: 'Margen Obras', color: '#15803d', tab: 'margen', resultado: margenObras,
-      ingresos: [{ l: 'Certificado / A cobrar', v: obACobrar, nota: 'Fernando Solís' }],
+      ingresos: [{ l: 'Certificado / A cobrar', v: obACobrar, nota: 'Obras a cobrar (Agustín)' }],
       egresos: [
         { l: 'OC Insumos de obra', v: obInsumos, nota: 'Guillermo Konicek' },
         { l: 'MO Asfalto (prorrateada)', v: obMO, nota: dObras && dObras.moEsEstim ? 'estimada' : 'TANGO' },
@@ -6340,14 +6340,14 @@ function openDetalleCelda(tipo, codObra, nombreObra) {
   let titulo = '', html = '';
 
   if (tipo === 'acobrar') {
-    // Certificados a cobrar — viene de items de Fernando Solís
+    // Certificados a cobrar — viene de items del archivo de Agustín
     titulo = 'A Cobrar — ' + (nombreObra || codObra);
     const obra = (_obrasActuales().concat(_obrasSinPeriodo())).find(o => o.cod_obra === codObra);
     const items = obra ? (obra.items || []) : [];
     if (items.length === 0) {
       html = '<p class="nd" style="padding:16px;">Sin certificados cargados</p>';
     } else {
-      html = `<div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Certificados · Planilla Fernando Solís · ${mes}</div>
+      html = `<div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Certificados · Obras a cobrar (Agustín) · ${mes}</div>
         <table style="width:100%;border-collapse:collapse;">
           <thead><tr style="background:#f1f5f9;"><th style="text-align:left;padding:7px 10px;font-size:11px;">Certificado</th><th style="text-align:left;padding:7px 10px;font-size:11px;">Código</th><th style="text-align:right;padding:7px 10px;font-size:11px;">Monto</th></tr></thead>
           <tbody>${items.map(it => `<tr style="border-top:1px solid var(--border);">
@@ -7430,7 +7430,7 @@ function openMargenPanel() {
   const pct        = (calculable && aCobrar) ? (margen / aCobrar * 100).toFixed(1) : null;
 
   const faltantes = [];
-  if (aCobrar == null) faltantes.push('A Cobrar — Fernando Solís');
+  if (aCobrar == null) faltantes.push('A Cobrar — Obras a cobrar (Agustín)');
   if (oc == null)      faltantes.push('OC Insumos — Guillermo');
   if (mo == null)      faltantes.push('MO TANGO — Mauro');
 
@@ -7566,7 +7566,10 @@ function openTotalACobrarPanel() {
 
   content.innerHTML = `
     <div class="panel-title">Total Certificado</div>
-    <div class="panel-sub">${mesLabel} · Planilla Fernando Solís</div>
+    <div class="panel-sub">${mesLabel} · archivo "Obras a cobrar" (Agustín)</div>
+    <div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:11.5px;line-height:1.55;color:var(--muted);margin-bottom:12px;">
+      ℹ️ <strong>Cómo se calcula:</strong> suma del <strong>Monto a certificar</strong> de las filas del archivo de Agustín cuyo <strong>Período de realización</strong> cae en ${mesLabel}. Las filas sin período van a la categoría "sin período" (no entran en ningún mes); las de otros meses aparecen en su mes; y las provisiones (asfalto, áridos) no entran acá — se siguen en "Otros Gastos o salidas" con su certificación teórica.
+    </div>
     <div class="panel-kpi">
       <div class="panel-kpi-item">
         <div class="panel-kpi-label">A cobrar</div>
