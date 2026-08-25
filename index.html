@@ -9118,9 +9118,9 @@ renderCobranzaMargen();
 
 // Auto-carga desde caché del Apps Script (sin tocar Drive)
 if (APPS_SCRIPT_URL) {
-  (async function autoCargarCache() {
+  async function cargarCache(silencioso) {
     const lastUpEl = document.getElementById('last-update');
-    if (lastUpEl) lastUpEl.textContent = 'Cargando datos guardados...';
+    if (lastUpEl && !silencioso) lastUpEl.textContent = 'Cargando datos guardados...';
     try {
       const res = await fetch('/api/datos?cache=1');
       if (!res.ok) throw new Error('Proxy HTTP ' + res.status);
@@ -9174,12 +9174,16 @@ if (APPS_SCRIPT_URL) {
         renderAll();
         updateTimestamp(data.timestamp);
       } else {
-        if (lastUpEl) lastUpEl.textContent = 'Datos locales — presioná "Actualizar datos" para conectar';
+        if (lastUpEl && !silencioso) lastUpEl.textContent = 'Datos locales — presioná "Actualizar datos" para conectar';
       }
     } catch (e) {
-      if (lastUpEl) lastUpEl.textContent = 'Datos locales — presioná "Actualizar datos" para conectar';
+      if (lastUpEl && !silencioso) lastUpEl.textContent = 'Datos locales — presioná "Actualizar datos" para conectar';
     }
-  })();
+  }
+  cargarCache(false);
+  // Auto-refresco: el Apps Script regenera el caché cada hora (trigger
+  // horario); si la pestaña queda abierta, el tablero lo recarga solo.
+  setInterval(function() { cargarCache(true); }, 60 * 60 * 1000);
 }
 
 </script>

@@ -193,6 +193,29 @@ function doGet(e) {
 // ============================================================
 // ACTUALIZACIÓN NOCTURNA — ejecutada por el trigger automático
 // ============================================================
+// ============================================================
+// ACTUALIZACIÓN HORARIA
+// Wrapper para el trigger cada 1 hora: refresca el caché solo entre las
+// 6 y las 22 (hora argentina) para no gastar cuota de ejecución de noche.
+// SETUP (una sola vez): ejecutar crearTriggerHorario() desde el editor.
+// ============================================================
+function actualizarHorario() {
+  const hora = parseInt(Utilities.formatDate(new Date(), 'America/Argentina/Buenos_Aires', 'H'), 10);
+  if (hora < 6 || hora > 22) { Logger.log('actualizarHorario: fuera de horario (' + hora + 'h), no se actualiza'); return; }
+  actualizarNocturno();
+}
+
+// Crea (o recrea) el trigger horario. Ejecutar UNA VEZ desde el editor.
+// Borra triggers previos de actualizarHorario/actualizarNocturno para no duplicar.
+function crearTriggerHorario() {
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    const fn = t.getHandlerFunction();
+    if (fn === 'actualizarHorario' || fn === 'actualizarNocturno') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('actualizarHorario').timeBased().everyHours(1).create();
+  Logger.log('Trigger horario creado: actualizarHorario() cada 1 hora (activo de 6 a 22h)');
+}
+
 function actualizarNocturno() {
   try {
     const data = buildData();
