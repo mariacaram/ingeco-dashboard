@@ -7568,7 +7568,7 @@ function openTotalACobrarPanel() {
     <div class="panel-title">Total Certificado</div>
     <div class="panel-sub">${mesLabel} · archivo "Obras a cobrar" (Agustín)</div>
     <div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:11.5px;line-height:1.55;color:var(--muted);margin-bottom:12px;">
-      ℹ️ <strong>Cómo se calcula:</strong> suma del <strong>Monto a certificar</strong> de las filas del archivo de Agustín cuyo <strong>Período de realización</strong> cae en ${mesLabel}. Las filas sin período van a la categoría "sin período" (no entran en ningún mes); las de otros meses aparecen en su mes; y las provisiones (asfalto, áridos) no entran acá — se siguen en "Otros Gastos o salidas" con su certificación teórica.
+      ℹ️ <strong>Cómo se calcula:</strong> suma del <strong>Monto a certificar</strong> de las filas del archivo de Agustín cuyo <strong>Período de realización</strong> cae en ${mesLabel}. Como una obra no necesariamente certifica todo junto, la convención es <strong>una fila por mes de certificación</strong> (ej. "Bacheo SMT mes julio"): cada fila suma en su mes, y el total de la obra es la suma de sus filas. Lo que todavía no se sabe cómo se reparte va <strong>sin período</strong> (queda en su categoría aparte, sin asignar a ningún mes). Las provisiones (asfalto, áridos) no entran acá — se siguen en "Otros Gastos o salidas" con su certificación teórica.
     </div>
     <div class="panel-kpi">
       <div class="panel-kpi-item">
