@@ -2386,20 +2386,25 @@ function renderMargen() {
 
   const _obrasMes = _obrasActuales();
   const _sinP     = _obrasSinPeriodo();
-  if (_obrasMes.length > 0 || _sinP.length > 0) {
-    // KPI muestra solo obras con período del mes seleccionado
-    const totalGen = _obrasMes.reduce((s, o) => s + (o.aCobrar ?? o.generado ?? 0), 0);
+  // Certificación de provisiones del mes (real de Esteban o teórica)
+  const provCert = mesActual !== 'total' ? _certProvisionesMes(mesActual) : { total: 0, items: [] };
+  if (_obrasMes.length > 0 || _sinP.length > 0 || provCert.total > 0) {
+    // KPI: obras con período del mes + certificación de provisiones del mes
+    const totalObras = _obrasMes.reduce((s, o) => s + (o.aCobrar ?? o.generado ?? 0), 0);
+    const totalGen = totalObras + provCert.total;
     if (kpiGen) {
-      kpiGen.textContent = _obrasMes.length > 0 ? fmt(totalGen) : '—';
-      kpiGen.className   = _obrasMes.length > 0 ? 'kpi-value pos-val' : 'kpi-value nd';
+      kpiGen.textContent = totalGen > 0 ? fmt(totalGen) : '—';
+      kpiGen.className   = totalGen > 0 ? 'kpi-value pos-val' : 'kpi-value nd';
     }
     const descPeriodo = _sinP.length > 0 ? ` · ${_sinP.length} sin período` : '';
-    if (kpiGenSub) kpiGenSub.textContent = _obrasMes.length + ' obras en ' + (MES[mesActual] || mesActual) + descPeriodo;
+    const descProv = provCert.total > 0 ? ` + ${provCert.items.length} ${provCert.items.length !== 1 ? 'provisiones' : 'provisión'}` : '';
+    if (kpiGenSub) kpiGenSub.textContent = _obrasMes.length + ' obras en ' + (MES[mesActual] || mesActual) + descProv + descPeriodo;
     if (badge)     badge.textContent = (_obrasMes.length + _sinP.length) + ' obras · Obras a cobrar (Agustín)';
 
-    // Desglose por pestaña de origen
+    // Desglose por pestaña de origen + provisiones
     const kpiBreak = document.getElementById('kpi-generado-breakdown');
     if (kpiBreak) {
+      const spans = [];
       if (_obrasMes.length > 0) {
         const TAB_LABELS = { 'MUNICIPIO': 'Municipio', 'VIALIDAD1': 'Vialidad', 'OTROS INGRESOS': 'Otros' };
         const byTab = {};
@@ -2408,13 +2413,16 @@ function renderMargen() {
           byTab[t] = (byTab[t] || 0) + (o.aCobrar ?? o.generado ?? 0);
         });
         const ORDER = ['MUNICIPIO', 'VIALIDAD1', 'OTROS INGRESOS'];
-        kpiBreak.innerHTML = ORDER
-          .filter(k => byTab[k] > 0)
-          .map(k => `<span style="white-space:nowrap;">${TAB_LABELS[k]}: <strong>${fmt(byTab[k])}</strong></span>`)
-          .join('<span style="color:var(--border);">·</span>');
-      } else {
-        kpiBreak.innerHTML = '';
+        ORDER.filter(k => byTab[k] > 0).forEach(k =>
+          spans.push(`<span style="white-space:nowrap;">${TAB_LABELS[k]}: <strong>${fmt(byTab[k])}</strong></span>`));
+        if (spans.length === 0 && totalObras > 0)
+          spans.push(`<span style="white-space:nowrap;">Obras: <strong>${fmt(totalObras)}</strong></span>`);
       }
+      if (provCert.total > 0) {
+        const esReal = provCert.items.every(i => i.esReal);
+        spans.push(`<span style="white-space:nowrap;" title="Certificación de provisiones: real cargada por Esteban si existe, sino la teórica (tn × precio)">Provisiones: <strong>${fmt(provCert.total)}</strong> <span style="font-size:9px;">(${esReal ? 'real' : provCert.items.some(i => i.esReal) ? 'real + teórica' : 'teórica'})</span></span>`);
+      }
+      kpiBreak.innerHTML = spans.join('<span style="color:var(--border);">·</span>');
     }
 
     const buildRow = o => {
@@ -2929,6 +2937,30 @@ function _certRealProvision(mes, obraNombre) {
   }));
   if (!items.length) return null;
   return { mesSig, total: items.reduce((s, i) => s + i.importe, 0), items };
+}
+
+// Certificación de provisiones del mes, para sumar al Total Certificado:
+// usa la REAL (lo que Esteban cargó en su planilla del mes siguiente) si ya
+// existe; si todavía no hay real, la TEÓRICA (tn × precio de convenio, neta
+// del excedente pagado de más el mes anterior).
+function _certProvisionesMes(mes) {
+  if (!mes || mes === 'total') return { total: 0, items: [] };
+  const d = computeMargenObrasMes(mes);
+  if (!d || !d.rows) return { total: 0, items: [] };
+  const items = [];
+  d.rows.forEach(r => {
+    if (!r.otroGasto) return;
+    const cod = r.o.cod_obra || r.o.nombre;
+    const real = _certRealProvision(mes, cod);
+    let teo = r.certTeorica || 0;
+    if (teo > 0) {
+      const aj = _certExcedentePrev(mes, cod);
+      if (aj) teo = Math.max(0, teo - aj.excedente);
+    }
+    const monto = real ? real.total : teo;
+    if (monto > 0) items.push({ obra: cod, monto: Math.round(monto), esReal: !!real, mesReal: real ? real.mesSig : null });
+  });
+  return { total: items.reduce((s, i) => s + i.monto, 0), items };
 }
 
 // Excedente pagado de más el mes anterior: si lo real que cargó Esteban para
@@ -7549,14 +7581,32 @@ function openTotalACobrarPanel() {
     <th style="text-align:right;padding:8px 10px;font-size:11px;color:var(--muted);font-weight:600;">MONTO</th>
   </tr></thead>`;
 
+  // Provisiones del mes: certificación real (Esteban, mes siguiente) o teórica
+  const provCert = mesActual !== 'total' ? _certProvisionesMes(mesActual) : { total: 0, items: [] };
+  const provFilas = provCert.items.map(i => `
+    <tr style="border-top:1px solid var(--border);background:#fafafa;">
+      <td style="padding:6px 10px 6px 24px;font-size:11px;">${i.obra}
+        <span style="font-size:9px;font-weight:700;background:${i.esReal ? '#dcfce7' : '#fef3c7'};color:${i.esReal ? '#166534' : '#92400e'};padding:1px 7px;border-radius:8px;white-space:nowrap;margin-left:8px;">${i.esReal ? 'real — Esteban · ' + (MES[i.mesReal] || i.mesReal) : 'teórica (tn × precio)'}</span>
+      </td>
+      <td style="text-align:right;padding:6px 10px;font-size:11px;white-space:nowrap;color:var(--pos);">${fmt(i.monto)}</td>
+    </tr>`).join('');
+  const provSection = provCert.total > 0 ? `
+    <tr style="border-top:2px solid var(--border);background:#eff6ff;">
+      <td style="padding:9px 10px;"><strong style="font-size:13px;color:var(--primary);">Provisiones</strong>
+        <span style="font-size:10px;color:var(--muted);margin-left:8px;">real si Esteban ya la cargó, sino teórica</span></td>
+      <td style="text-align:right;padding:9px 10px;white-space:nowrap;" class="pos-val"><strong style="font-size:14px;">${fmt(provCert.total)}</strong></td>
+    </tr>${provFilas}` : '';
+  const totalConProv = totalMes + provCert.total;
+
   let mesSection = '';
-  if (obrasMes.length > 0) {
+  if (obrasMes.length > 0 || provCert.total > 0) {
     mesSection = `
       <table style="width:100%;border-collapse:collapse;margin-top:12px;">${thead}<tbody>
         ${obrasMes.map(buildFila).join('')}
+        ${provSection}
         <tr style="background:#f0fdf4;border-top:2px solid #86efac;">
-          <td style="padding:8px 10px;font-size:12px;font-weight:700;">Total ${mesLabel}</td>
-          <td style="text-align:right;padding:8px 10px;font-size:14px;font-weight:700;" class="pos-val">${fmt(totalMes)}</td>
+          <td style="padding:8px 10px;font-size:12px;font-weight:700;">Total ${mesLabel}${provCert.total > 0 ? ' (obras + provisiones)' : ''}</td>
+          <td style="text-align:right;padding:8px 10px;font-size:14px;font-weight:700;" class="pos-val">${fmt(totalConProv)}</td>
         </tr>
       </tbody></table>`;
   } else {
@@ -7568,7 +7618,7 @@ function openTotalACobrarPanel() {
     <div class="panel-title">Total Certificado</div>
     <div class="panel-sub">${mesLabel} · archivo "Obras a cobrar" (Agustín)</div>
     <div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:11.5px;line-height:1.55;color:var(--muted);margin-bottom:12px;">
-      ℹ️ <strong>Cómo se calcula:</strong> suma del <strong>Monto a certificar</strong> de las filas del archivo de Agustín cuyo <strong>Período de realización</strong> cae en ${mesLabel}. Como una obra no necesariamente certifica todo junto, la convención es <strong>una fila por mes de certificación</strong> (ej. "Bacheo SMT mes julio"): cada fila suma en su mes, y el total de la obra es la suma de sus filas. Lo que todavía no se sabe cómo se reparte va <strong>sin período</strong> (queda en su categoría aparte, sin asignar a ningún mes). Las provisiones (asfalto, áridos) no entran acá — se siguen en "Otros Gastos o salidas" con su certificación teórica.
+      ℹ️ <strong>Cómo se calcula:</strong> suma del <strong>Monto a certificar</strong> de las filas del archivo de Agustín cuyo <strong>Período de realización</strong> cae en ${mesLabel}. Como una obra no necesariamente certifica todo junto, la convención es <strong>una fila por mes de certificación</strong> (ej. "Bacheo SMT mes julio"): cada fila suma en su mes, y el total de la obra es la suma de sus filas. Lo que todavía no se sabe cómo se reparte va <strong>sin período</strong> (queda en su categoría aparte, sin asignar a ningún mes). Las <strong>provisiones</strong> suman con su certificación <strong>real</strong> (lo que Esteban cargó en su planilla del mes siguiente) o, si todavía no hay real, con la <strong>teórica</strong> (tn × precio de convenio, neta de excedentes) — el detalle fino está en "Otros Gastos o salidas".
     </div>
     <div class="panel-kpi">
       <div class="panel-kpi-item">
