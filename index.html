@@ -5839,34 +5839,9 @@ function runAuditorias() {
     });
   });
 
-  // ── Chequeo 4: fondos de reparo que Esteban sigue y Julia no ──
-  const fondosJ = [];
-  obrasJ.forEach(oj => (oj.items || []).forEach(i => {
-    if (ES_FONDO_REPARO(oj.nombre) || ES_FONDO_REPARO(i.nombre)) fondosJ.push(i.nombre.toLowerCase());
-  }));
-  const fondosEsolo = [];
-  Object.keys(estPend).forEach(o => estPend[o].items.forEach(i => {
-    if (!ES_FONDO_REPARO(o) && !ES_FONDO_REPARO(i.txt)) return;
-    // ¿existe algo parecido en Julia? matching laxo por números de certificado
-    const nums = (i.txt.match(/\d+/g) || []).join(' ');
-    const hay = fondosJ.some(fj => {
-      const nj = (fj.match(/\d+/g) || []).join(' ');
-      return nums && nj === nums;
-    });
-    if (!hay) fondosEsolo.push({ txt: `${o} — ${i.txt}`, monto: i.monto, cat: 'Esteban · ' + i.cat, fila: i.fila, gid: i.gid, src: 'esteban' });
-  }));
-  const totFsolo = fondosEsolo.reduce((s, i) => s + i.monto, 0);
-  if (totFsolo > AUDIT_TOLERANCIA) {
-    AUDIT_RESULTADOS.push({
-      chequeo: 'Fondo de reparo',
-      titulo: 'Fondos de reparo sin espejo en Agustín',
-      monto: totFsolo,
-      grave: totFsolo >= AUDIT_GRAVE,
-      resumen: `Esteban tiene ${fondosEsolo.length} fondo(s) de reparo pendientes por ${fmt(totFsolo)} que no aparecen desglosados en el archivo de Agustín.`,
-      responsable: 'Agustín',
-      items: fondosEsolo,
-    });
-  }
+  // (El viejo chequeo de "fondos de reparo sin espejo" se retiró: por
+  // convención Agustín NO carga fondos de reparo — los sigue solo Esteban y
+  // tienen su tarjeta propia en Estado financiero → Fondos de reparo pendientes.)
 
   // ── Chequeo 5: cobradas según Agustín sin cobro registrado por Esteban ──
   // El caso "Agustín actualizó (sabe que entró la plata) y Esteban todavía no
