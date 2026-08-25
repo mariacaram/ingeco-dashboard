@@ -5681,7 +5681,7 @@ function renderFuentes() {
 // el archivo de Esteban. Se amplía a mano cuando aparece una obra nueva con
 // nombre distinto en cada archivo (no hay código de obra común entre planillas).
 const MAPA_OBRAS_AUDIT = {
-  'Avenida Nestor Kirchner': ['ROCA', 'Av. Roca', 'Canal Roca'],
+  'Avenida Nestor Kirchner': ['ROCA', 'Av. Roca', 'Canal Roca', 'Avenida Nestor Kirchner'],
   'Avenida Mitre': ['MITRE', 'Av. Mitre', 'Pintura Av. Mitre', 'Avenida Mitre'],
   'Papa Francisco': ['Papa Francisco', 'PAPA FRANCISCO'],
   'Ruta 357 - Quilmes': ['Ruta 357 - Quilmes', 'Ruta 307 - Quilmes'],
@@ -5777,6 +5777,9 @@ function runAuditorias() {
     // Esteban): si no hay entrada en el mapa, se matchea directo por nombre.
     let nombres = MAPA_OBRAS_AUDIT[oj.nombre];
     if (!nombres && (estPend[oj.nombre] || estCob[oj.nombre])) nombres = [oj.nombre];
+    // Esteban puede renombrar a lo canónico: si usa el mismo nombre que la
+    // obra de Agustín, incluirlo aunque el mapa tenga solo los alias viejos
+    if (nombres && !nombres.includes(oj.nombre) && (estPend[oj.nombre] || estCob[oj.nombre])) nombres = nombres.concat([oj.nombre]);
     if (!nombres) return; // sin mapeo ni match directo -> lo cubre el chequeo de huérfanas
     nombres.forEach(n => usadosEsteban.add(n));
     const pendJ = oj.items.filter(i => i.estado === 'A Cobrar' && !ES_REDET(i.nombre) && !ES_FONDO_REPARO(i.nombre)).reduce((s, i) => s + (i.monto || 0), 0);
@@ -5997,8 +6000,9 @@ function copiarAuditorias(btn) {
 const ALIAS_ESTEBAN = {
   // Esteban estandarizó los nombres (ago-2026) — estos alias cubren los rótulos
   // viejos que puedan quedar en pestañas históricas, apuntando al nombre actual.
-  'Av. Roca': 'Canal Roca',
-  'ROCA': 'Canal Roca',
+  'Av. Roca': 'Avenida Nestor Kirchner',
+  'ROCA': 'Avenida Nestor Kirchner',
+  'Canal Roca': 'Avenida Nestor Kirchner',
   'PAPA FRANCISCO': 'Papa Francisco',
   'Av. Mitre': 'Avenida Mitre',
   'MITRE': 'Avenida Mitre',
