@@ -2650,7 +2650,13 @@ function computeMargenObrasMes(mes) {
       tnCarpetaPorObraKey[k] = (tnCarpetaPorObraKey[k] || 0) + (v.carpeta || 0);
       tnBacheoPorObraKey[k]  = (tnBacheoPorObraKey[k]  || 0) + (v.bacheo  || 0);
       if (v.det && v.det.length) tnDetPorObraKey[k] = _tnDetMerge(tnDetPorObraKey[k] || [], v.det);
-      if (v.cat && v.cat.length) tnCatPorObraKey[k] = _tnDetMerge(tnCatPorObraKey[k] || [], v.cat);
+      if (v.cat && v.cat.length) {
+        const catNorm = v.cat.map(e => Object.assign({}, e, {
+          u: /^t/i.test(e.u || '') ? 'TN' : /viaje/i.test(e.u || '') ? 'Viaje' : (e.u || 'M3'),
+          tp: (e.tp || '').trim(),
+        }));
+        tnCatPorObraKey[k] = _tnDetMerge(tnCatPorObraKey[k] || [], catNorm);
+      }
       if (!tnDisplayName[k]) tnDisplayName[k] = obra.trim();
       tnTotalGlobal += (v.caliente || 0) + (v.frio || 0);
     });
@@ -2899,7 +2905,7 @@ function editarPrecioProvisionE(eEnc) {
   let e; try { e = JSON.parse(decodeURIComponent(eEnc)); } catch (err) { return; }
   const mesRef = mesActual !== 'total' ? mesActual : MES_ORDER[Math.min(new Date().getMonth(), MES_ORDER.length - 1)];
   const actual = _precioProvision(e, mesRef);
-  const unidad = e.u === 'M3' ? 'm3' : 'tn';
+  const unidad = e.u === 'M3' ? 'm3' : e.u === 'Viaje' ? 'viaje' : 'tn';
   const val = prompt(
     `Precio $/${unidad} — ${_tnDetLabel(e)}\n` +
     `Rige desde ${MES[mesRef] || mesRef} en adelante (los meses anteriores conservan el precio que tenían).`,
@@ -3079,7 +3085,11 @@ function _filasOtroGastoTR(r) {
 
   if ((r.tnCat && r.tnCat.length) || (r.tnDet && r.tnDet.length)) {
     // Formato nuevo (jun-2026): categorías desc+TIPO+destino, incluye áridos.
-    const usaCat = !!(r.tnCat && r.tnCat.length);
+    // Si la obra tiene un corte manual vigente este mes, se mantiene la vista
+    // vieja (det), que es donde el corte sabe aplicarse.
+    const tieneCorte = mesActual !== 'total' && (r.tnDet && r.tnDet.length) &&
+      CORTES_PROVISION.some(c => c.mes === mesActual && c.obraRe.test(o.cod_obra || o.nombre || ''));
+    const usaCat = !tieneCorte && !!(r.tnCat && r.tnCat.length);
     // Fila base con los montos que no son de remitos (si los hay)
     if (r.insumos > 0 || r.alquiler > 0 || r.aCobrar > 0) {
       filas.push(`<tr style="${trStyle}">${tdItem()}
@@ -3100,7 +3110,7 @@ function _filasOtroGastoTR(r) {
     detVisible.forEach(e => {
       const pTn = _precioProvision(e, mesActual);
       const eEnc = encodeURIComponent(JSON.stringify({ ds: e.ds, tp: e.tp, s: e.s, d: e.d, u: e.u })).replace(/'/g, '%27');
-      const unidad = e.u === 'M3' ? 'm3' : 'tn';
+      const unidad = e.u === 'M3' ? 'm3' : e.u === 'Viaje' ? 'viaje(s)' : 'tn';
       const precioCell = td(`<span onclick="event.stopPropagation();editarPrecioProvisionE('${eEnc}')" style="cursor:pointer;text-decoration:underline dotted;" title="Click para actualizar el precio de esta combinación — rige desde el mes visible en adelante">${pTn ? '$' + pTn.toLocaleString('es-AR') : '<span style="color:#9a3412;">poner precio</span>'} ✎</span>`);
       filas.push(`<tr style="${trStyle}">
         ${tdItem(` <span style="color:#9a3412;">· ${_tnDetLabel(e)}</span>`)}
