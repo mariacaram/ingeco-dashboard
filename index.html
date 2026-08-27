@@ -2544,16 +2544,21 @@ function _alqTotalPredio(alqObj) {
 
 // ── Detalle de tn de asfalto: subtipo (carpeta/bacheo) + destino (col H) ──
 const TN_SUB_LBL = { carpeta: 'Caliente p/carpeta', bacheo: 'Caliente p/bacheo', caliente: 'Caliente', frio: 'Frío' };
-function _tnDetLabel(e) { return (TN_SUB_LBL[e.s] || e.s) + (e.d ? ' → ' + e.d : ''); }
+function _tnDetLabel(e) {
+  // Formato nuevo (convención jun-2026): descripción · TIPO → destino
+  if (e.ds) return e.ds + (e.tp ? ' · ' + e.tp : '') + (e.d ? ' → ' + e.d : '');
+  return (TN_SUB_LBL[e.s] || e.s) + (e.d ? ' → ' + e.d : '');
+}
 // Fusiona dos listas de detalle agrupando por (subtipo, destino)
 function _tnDetMerge(a, b) {
-  const out = a.map(e => ({ s: e.s, d: e.d, t: e.t, tc: e.tc }));
+  const mk = e => [e.s || '', e.d || '', e.ds || '', e.tp || '', e.u || ''].join('|');
+  const out = a.map(e => Object.assign({}, e));
   (b || []).forEach(e => {
-    const ex = out.find(x => x.s === e.s && x.d === e.d);
+    const ex = out.find(x => mk(x) === mk(e));
     if (ex) {
       ex.t = Math.round((ex.t + e.t) * 10) / 10;
       if (e.tc != null) ex.tc = Math.round(((ex.tc || 0) + e.tc) * 10) / 10;
-    } else out.push({ s: e.s, d: e.d, t: e.t, tc: e.tc });
+    } else out.push(Object.assign({}, e));
   });
   return out.sort((x, y) => y.t - x.t);
 }
@@ -2634,6 +2639,7 @@ function computeMargenObrasMes(mes) {
   const tnPorObraKey = {}, tnFrioPorObraKey = {}, tnDisplayName = {};
   const tnCarpetaPorObraKey = {}, tnBacheoPorObraKey = {}; // sub-destino del caliente
   const tnDetPorObraKey = {}; // detalle legible [{s, d, t}] — subtipo + destino (col H)
+  const tnCatPorObraKey = {}; // categorías jun-2026 [{ds, tp, d, u, t}] — desc + TIPO + destino
   let tnTotalGlobal = 0; // caliente + frío — denominador del prorrateo de MO
   if (remitosMes && remitosMes.porObra) {
     Object.entries(remitosMes.porObra).forEach(([obra, v]) => {
@@ -2644,6 +2650,7 @@ function computeMargenObrasMes(mes) {
       tnCarpetaPorObraKey[k] = (tnCarpetaPorObraKey[k] || 0) + (v.carpeta || 0);
       tnBacheoPorObraKey[k]  = (tnBacheoPorObraKey[k]  || 0) + (v.bacheo  || 0);
       if (v.det && v.det.length) tnDetPorObraKey[k] = _tnDetMerge(tnDetPorObraKey[k] || [], v.det);
+      if (v.cat && v.cat.length) tnCatPorObraKey[k] = _tnDetMerge(tnCatPorObraKey[k] || [], v.cat);
       if (!tnDisplayName[k]) tnDisplayName[k] = obra.trim();
       tnTotalGlobal += (v.caliente || 0) + (v.frio || 0);
     });
@@ -2663,6 +2670,7 @@ function computeMargenObrasMes(mes) {
     const tnCarpeta  = tnCarpetaPorObraKey[ck] || tnCarpetaPorObraKey[nk] || 0;
     const tnBacheo   = tnBacheoPorObraKey[ck]  || tnBacheoPorObraKey[nk]  || 0;
     const tnDet      = tnDetPorObraKey[ck]     || tnDetPorObraKey[nk]     || [];
+    const tnCat      = tnCatPorObraKey[ck]     || tnCatPorObraKey[nk]     || [];
     const tnObraTotal = tnObra + tnFrioObra;
     const moObra = (moTotal != null && tnTotalGlobal > 0 && tnObraTotal > 0)
       ? Math.round(moTotal * (tnObraTotal / tnTotalGlobal)) : null;
@@ -2671,13 +2679,13 @@ function computeMargenObrasMes(mes) {
       : null;
     // Certificación teórica de provisiones (tn × precio de convenio — hoy solo
     // asfalto caliente a Muni SMT). Informativa: NO suma al margen real.
-    const certTeorica = (tnDet || []).reduce((s, e) => {
+    const certTeorica = ((tnCat && tnCat.length) ? tnCat : (tnDet || [])).reduce((s, e) => {
       const pTn = _precioProvision(e, mes);
       return s + (pTn ? Math.round(e.t * pTn) : 0);
     }, 0);
     const margen  = aCobrar - insumos - moHormigon - (moObra || 0) - (costoAsfObra || 0) - alquiler;
     const hasData = aCobrar > 0 || insumos > 0 || moHormigon > 0 || alquiler > 0 || tnObraTotal > 0 || moObra != null;
-    return { o, aCobrar, certTeorica, insumos, moHormigon, alquiler, tnObra, tnFrioObra, tnCarpeta, tnBacheo, tnDet, tnObraTotal, moObra, costoAsfObra, margen, hasData, extra: !!extra };
+    return { o, aCobrar, certTeorica, insumos, moHormigon, alquiler, tnObra, tnFrioObra, tnCarpeta, tnBacheo, tnDet, tnCat, tnObraTotal, moObra, costoAsfObra, margen, hasData, extra: !!extra };
   };
 
   const rows = obras.map(o => buildDatosObra(o, false));
@@ -2770,7 +2778,7 @@ function computeMargenObrasTotal() {
       let acc = porObra[key];
       if (!acc) {
         acc = porObra[key] = { o: Object.assign({}, r.o), aCobrar: 0, insumos: 0, moHormigon: 0, alquiler: 0,
-          tnObra: 0, tnFrioObra: 0, tnCarpeta: 0, tnBacheo: 0, tnDet: [], tnObraTotal: 0, moObra: null, costoAsfObra: null,
+          tnObra: 0, tnFrioObra: 0, tnCarpeta: 0, tnBacheo: 0, tnDet: [], tnCat: [], tnObraTotal: 0, moObra: null, costoAsfObra: null,
           margen: 0, hasData: false, extra: r.extra };
       }
       acc.aCobrar  += r.aCobrar;
@@ -2782,6 +2790,7 @@ function computeMargenObrasTotal() {
       acc.tnCarpeta   += r.tnCarpeta || 0;
       acc.tnBacheo    += r.tnBacheo  || 0;
       if (r.tnDet && r.tnDet.length) acc.tnDet = _tnDetMerge(acc.tnDet, r.tnDet);
+      if (r.tnCat && r.tnCat.length) acc.tnCat = _tnDetMerge(acc.tnCat, r.tnCat);
       acc.tnObraTotal += r.tnObraTotal;
       if (r.moObra       != null) acc.moObra       = (acc.moObra       || 0) + r.moObra;
       if (r.costoAsfObra != null) acc.costoAsfObra = (acc.costoAsfObra || 0) + r.costoAsfObra;
@@ -2854,13 +2863,19 @@ const PRECIOS_PROVISION_TN = [
 // Cada entrada {key, desde, precio} rige desde ese mes hasta que se actualice.
 const PRECIOS_PROVISION_LS = 'ingeco_precios_provision';
 function _provKey(s, d) { return (s === 'frio' ? 'frio' : 'caliente') + '|' + (d || '').toLowerCase().trim(); }
+// Clave de precio de una entrada: formato nuevo = descripción|TIPO|destino;
+// formato viejo = frio/caliente|destino (compatible con lo ya guardado).
+function _provKeyEntry(e) {
+  if (e.ds) return (e.ds + '|' + (e.tp || '') + '|' + (e.d || '')).toLowerCase().trim();
+  return _provKey(e.s, e.d);
+}
 function _preciosProvisionGuardados() {
   try { return JSON.parse(localStorage.getItem(PRECIOS_PROVISION_LS) || '[]'); } catch (e) { return []; }
 }
 // Precio efectivo para una entrada de detalle en un mes dado:
 // 1) el ajuste guardado más reciente con desde <= mes; 2) la tabla base.
 function _precioProvision(e, mes) {
-  const k = _provKey(e.s, e.d);
+  const k = _provKeyEntry(e);
   const idxM = (mes && mes !== 'total') ? MES_ORDER.indexOf(mes) : MES_ORDER.length;
   let mejor = null, mejorIdx = -1;
   _preciosProvisionGuardados().forEach(p => {
@@ -2870,28 +2885,38 @@ function _precioProvision(e, mes) {
     if (i >= mejorIdx) { mejor = p; mejorIdx = i; }
   });
   if (mejor) return mejor.precio;
+  const esPavimax = e.ds === 'Pavimax';
+  const esFrioE = e.ds ? /fr[íi]o/i.test(e.ds) || esPavimax : e.s === 'frio';
+  const esAsfalto = e.ds ? e.ds.indexOf('Asfalto') === 0 : true;
   for (const p of PRECIOS_PROVISION_TN) {
-    if ((e.s === 'frio') === p.esFrio && p.destinoRe.test(e.d || '')) return p.precio;
+    if (esAsfalto && !esPavimax && esFrioE === p.esFrio && p.destinoRe.test(e.d || '')) return p.precio;
   }
   return null;
 }
-// Edición desde la tabla: el precio nuevo rige desde el mes visible en adelante
-function editarPrecioProvision(sTipo, dest) {
+// Edición desde la tabla: el precio nuevo rige desde el mes visible en adelante.
+// Recibe la entrada codificada (soporta formato nuevo desc|TIPO|destino y viejo).
+function editarPrecioProvisionE(eEnc) {
+  let e; try { e = JSON.parse(decodeURIComponent(eEnc)); } catch (err) { return; }
   const mesRef = mesActual !== 'total' ? mesActual : MES_ORDER[Math.min(new Date().getMonth(), MES_ORDER.length - 1)];
-  const actual = _precioProvision({ s: sTipo, d: dest }, mesRef);
+  const actual = _precioProvision(e, mesRef);
+  const unidad = e.u === 'M3' ? 'm3' : 'tn';
   const val = prompt(
-    `Precio $/tn — ${sTipo === 'frio' ? 'asfalto frío' : 'asfalto caliente'} → ${dest}\n` +
+    `Precio $/${unidad} — ${_tnDetLabel(e)}\n` +
     `Rige desde ${MES[mesRef] || mesRef} en adelante (los meses anteriores conservan el precio que tenían).`,
     actual || '');
   if (val == null) return;
   const precio = parseInt(String(val).replace(/[^\d]/g, ''), 10);
-  if (!precio) { alert('Precio inválido — ingresá solo el número en $/tn (ej. 119500)'); return; }
+  if (!precio) { alert('Precio inválido — ingresá solo el número (ej. 119500)'); return; }
   const arr = _preciosProvisionGuardados();
-  const k = _provKey(sTipo, dest);
+  const k = _provKeyEntry(e);
   const ex = arr.find(p => p.key === k && p.desde === mesRef);
   if (ex) ex.precio = precio; else arr.push({ key: k, desde: mesRef, precio });
   localStorage.setItem(PRECIOS_PROVISION_LS, JSON.stringify(arr));
   renderAll();
+}
+// Compatibilidad con el panel de frío → Otros (formato viejo)
+function editarPrecioProvision(sTipo, dest) {
+  editarPrecioProvisionE(encodeURIComponent(JSON.stringify({ s: sTipo, d: dest })));
 }
 
 // Cortes manuales de provisiones: todo lo despachado ANTES de la fecha de
@@ -3052,7 +3077,9 @@ function _filasOtroGastoTR(r) {
   const tdItem = extra => `<td style="padding:8px 4px;font-size:12.5px;">${nombreLink}${extra || ''}</td>`;
   const filas = [];
 
-  if (r.tnDet && r.tnDet.length) {
+  if ((r.tnCat && r.tnCat.length) || (r.tnDet && r.tnDet.length)) {
+    // Formato nuevo (jun-2026): categorías desc+TIPO+destino, incluye áridos.
+    const usaCat = !!(r.tnCat && r.tnCat.length);
     // Fila base con los montos que no son de remitos (si los hay)
     if (r.insumos > 0 || r.alquiler > 0 || r.aCobrar > 0) {
       filas.push(`<tr style="${trStyle}">${tdItem()}
@@ -3061,24 +3088,26 @@ function _filasOtroGastoTR(r) {
         ${tdV}${tdV}${tdV}${tdV}
       </tr>`);
     }
-    // Una fila por combinación subtipo + destino (con cortes manuales aplicados)
-    const corte = mesActual !== 'total'
+    // Una fila por combinación (con cortes manuales aplicados en el formato viejo)
+    const corte = (!usaCat && mesActual !== 'total')
       ? _aplicarCorteDet(mesActual, o.cod_obra || o.nombre, r.tnDet)
-      : { det: r.tnDet, notas: [] };
-    // El frío que NO va a Muni SMT se agrupa en una sola fila "Otros" (detalle al click)
+      : { det: usaCat ? r.tnCat : r.tnDet, notas: [] };
+    // El frío que NO va a Muni SMT se agrupa en una sola fila "Otros" (detalle
+    // al click) — solo en el formato viejo; el nuevo muestra cada categoría.
     const esMuniSMT = dd => /san miguel de tucum/i.test(dd || '');
-    const otrosFrio = corte.det.filter(e => e.s === 'frio' && !esMuniSMT(e.d));
-    const detVisible = corte.det.filter(e => !(e.s === 'frio' && !esMuniSMT(e.d)));
+    const otrosFrio = usaCat ? [] : corte.det.filter(e => e.s === 'frio' && !esMuniSMT(e.d));
+    const detVisible = usaCat ? corte.det.slice().sort((a, b) => b.t - a.t) : corte.det.filter(e => !(e.s === 'frio' && !esMuniSMT(e.d)));
     detVisible.forEach(e => {
       const pTn = _precioProvision(e, mesActual);
-      const dEsc = (e.d || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
-      const precioCell = td(`<span onclick="event.stopPropagation();editarPrecioProvision('${e.s === 'frio' ? 'frio' : 'caliente'}','${dEsc}')" style="cursor:pointer;text-decoration:underline dotted;" title="Click para actualizar el precio — rige desde el mes visible en adelante">${pTn ? '$' + pTn.toLocaleString('es-AR') : '<span style="color:#9a3412;">poner precio</span>'} ✎</span>`);
+      const eEnc = encodeURIComponent(JSON.stringify({ ds: e.ds, tp: e.tp, s: e.s, d: e.d, u: e.u })).replace(/'/g, '%27');
+      const unidad = e.u === 'M3' ? 'm3' : 'tn';
+      const precioCell = td(`<span onclick="event.stopPropagation();editarPrecioProvisionE('${eEnc}')" style="cursor:pointer;text-decoration:underline dotted;" title="Click para actualizar el precio de esta combinación — rige desde el mes visible en adelante">${pTn ? '$' + pTn.toLocaleString('es-AR') : '<span style="color:#9a3412;">poner precio</span>'} ✎</span>`);
       filas.push(`<tr style="${trStyle}">
         ${tdItem(` <span style="color:#9a3412;">· ${_tnDetLabel(e)}</span>`)}
         ${tdV}${tdV}
-        ${td(`<strong>${e.nota ? '✂️ ' : ''}${fmtTn(e.t)} tn${e.s === 'frio' ? ' frío' : ''}</strong>`)}
+        ${td(`<strong>${e.nota ? '✂️ ' : ''}${fmtTn(e.t)} ${unidad}${(!e.ds && e.s === 'frio') ? ' frío' : ''}</strong>`)}
         ${precioCell}
-        ${pTn ? td(`<strong class="pos-val" title="${fmtTn(e.t)} tn × $${pTn.toLocaleString('es-AR')}/tn">${fmt(Math.round(e.t * pTn))}</strong>`) : tdV}
+        ${pTn ? td(`<strong class="pos-val" title="${fmtTn(e.t)} ${unidad} × $${pTn.toLocaleString('es-AR')}/${unidad}">${fmt(Math.round(e.t * pTn))}</strong>`) : tdV}
         ${tdV}
       </tr>`);
       // La nota del corte va pegada a la fila que modifica

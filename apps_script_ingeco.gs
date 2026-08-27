@@ -1821,7 +1821,7 @@ function leerRemitosAsfalto() {
       const rows = sheet.getDataRange().getValues();
 
       // Buscar fila de encabezados que tenga CANT. y U.D./U.M.
-      let hdrIdx = -1, iCant = -1, iUD = -1, iDesc = -1, iMes = -1, iAnio = -1, iFecha = -1, iObra = -1, iDest = -1;
+      let hdrIdx = -1, iCant = -1, iUD = -1, iDesc = -1, iMes = -1, iAnio = -1, iFecha = -1, iObra = -1, iDest = -1, iTipoCol = -1;
       for (let i = 0; i < Math.min(20, rows.length); i++) {
         const cells = rows[i].map(c => String(c).toUpperCase().trim());
         const iC = cells.findIndex(c => c === 'CANT.' || c === 'CANT' || c === 'CANTIDAD' || c === 'TOTAL' || c === 'TN' || c === 'TONELADAS');
@@ -1845,6 +1845,7 @@ function leerRemitosAsfalto() {
           iFecha = iFe >= 0 ? iFe : cells.findIndex(c => c === 'FECHA');
           iObra  = iOb;
           iDest  = iDs >= 0 ? iDs : 7; // col H por defecto
+          iTipoCol = cells.findIndex(c => c === 'TIPO'); // col F (convención jun-2026)
           break;
         }
       }
@@ -1906,24 +1907,58 @@ function leerRemitosAsfalto() {
         // ── Registrar la obra de CUALQUIER salida (piedra, escombro, base, asfalto, etc.) ──
         if (obra) resultado[mesKey].obrasSalida[obra] = (resultado[mesKey].obrasSalida[obra] || 0) + 1;
 
+        const desc = String(iDesc >= 0 ? row[iDesc] || '' : '').toUpperCase().trim();
+        const cant = typeof row[iCant] === 'number' ? row[iCant]
+                   : parseFloat(String(row[iCant] || '').replace(',', '.')) || 0;
+        // Col TIPO (convención jun-2026): Provision / Carpeta Ingeco / Bacheo Ingeco
+        const tipoColRaw = iTipoCol >= 0 ? String(row[iTipoCol] || '').trim() : '';
+        const tipoColU   = tipoColRaw.toUpperCase();
+        // Destino/cliente del remito (col H) — relevante en provisiones a terceros
+        const destino = iDest >= 0 ? String(row[iDest] || '').trim() : '';
+
+        // ── Desglose por CATEGORÍA para provisiones/ventas (convención jun-2026):
+        // descripción normalizada + col TIPO + destino, incluye áridos en M3.
+        // El precio (y el certificado teórico) depende de esta combinación.
+        if (cant > 0 && /^(provisi|venta de|muestra)/i.test(obra || '')) {
+          const CAT_ARIDOS = { '0-6': '0-6', '6-19': '6-19', '19-36': '19-36',
+                               'BASE': 'Base', 'BRUTO': 'Bruto', 'ESCOMBRO': 'Escombro', 'FRESADO': 'Fresado' };
+          let dsCat = null;
+          if (desc.includes('PAVIMAX')) dsCat = 'Pavimax';
+          else if (desc.includes('ASFALTO') && desc.includes('CALIENTE')) dsCat = 'Asfalto en caliente';
+          else if (desc.includes('ASFALTO') && (desc.includes('FRI') || desc.includes('FRÍO'))) dsCat = 'Asfalto en frío';
+          else if (CAT_ARIDOS[desc]) dsCat = CAT_ARIDOS[desc];
+          if (dsCat) {
+            const udC = iUD >= 0 ? String(row[iUD] || '').toUpperCase().trim() : '';
+            const uCat = (dsCat === 'Pavimax' || dsCat.indexOf('Asfalto') === 0) ? 'TN' : (udC || 'M3');
+            if (!resultado[mesKey].porObra[obra]) resultado[mesKey].porObra[obra] = { caliente: 0, frio: 0 };
+            const po = resultado[mesKey].porObra[obra];
+            if (!po.cat) po.cat = [];
+            let ec = null;
+            for (var qc = 0; qc < po.cat.length; qc++) {
+              const x = po.cat[qc];
+              if (x.ds === dsCat && (x.tp || '') === tipoColRaw && x.d === destino && x.u === uCat) { ec = x; break; }
+            }
+            if (!ec) { ec = { ds: dsCat, tp: tipoColRaw, d: destino, u: uCat, t: 0 }; po.cat.push(ec); }
+            ec.t = Math.round((ec.t + cant) * 10) / 10;
+          }
+        }
+
         // ── De acá en adelante: solo asfalto en toneladas (para tn y prorrateo de MO) ──
         if (iUD >= 0) {
           const ud = String(row[iUD] || '').toUpperCase().trim();
           if (ud !== 'TN' && ud !== 'TON' && ud !== 'TONS' && ud !== 'TM' && ud !== 'TONELADAS') continue;
         }
-        const desc = String(iDesc >= 0 ? row[iDesc] || '' : '').toUpperCase().trim();
         if (!desc.includes('ASFALTO')) continue;
-        const cant = typeof row[iCant] === 'number' ? row[iCant]
-                   : parseFloat(String(row[iCant] || '').replace(',', '.')) || 0;
         if (cant <= 0) continue;
+        // Pavimax es asfalto frío embolsado: cuenta como frío para tn/stock
         const tipo = desc.includes('CALIENTE') ? 'caliente'
-                   : (desc.includes('FRI') || desc.includes('FRÍO')) ? 'frio' : null;
-        // Sub-destino del caliente (col E: "Asfalto caliente para carpeta/bacheo")
+                   : (desc.includes('FRI') || desc.includes('FRÍO') || desc.includes('PAVIMAX')) ? 'frio' : null;
+        // Sub-destino del caliente: descripción vieja ("...para carpeta/bacheo")
+        // o col TIPO nueva ("Carpeta Ingeco" / "Bacheo Ingeco")
         const subTipo = tipo === 'caliente'
-          ? (desc.includes('CARPETA') ? 'carpeta' : desc.includes('BACHEO') ? 'bacheo' : null)
+          ? ((desc.includes('CARPETA') || tipoColU === 'CARPETA INGECO') ? 'carpeta'
+             : (desc.includes('BACHEO') || tipoColU === 'BACHEO INGECO') ? 'bacheo' : null)
           : null;
-        // Destino/cliente del remito (col H) — relevante en provisiones a terceros
-        const destino = iDest >= 0 ? String(row[iDest] || '').trim() : '';
 
         if (fechaObj && !isNaN(fechaObj.getTime())) {
           detalle.push({ fecha: fechaObj, fechaStr: Utilities.formatDate(fechaObj, TZ, 'dd/MM/yyyy'), tipo: tipo, cant: Math.round(cant * 10) / 10, obra: obra });
