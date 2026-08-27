@@ -2685,7 +2685,8 @@ function computeMargenObrasMes(mes) {
       : null;
     // Certificación teórica de provisiones (tn × precio de convenio — hoy solo
     // asfalto caliente a Muni SMT). Informativa: NO suma al margen real.
-    const certTeorica = ((tnCat && tnCat.length) ? tnCat : (tnDet || [])).reduce((s, e) => {
+    const certBase = (tnCat && tnCat.length) ? tnCat : (tnDet || []);
+    const certTeorica = _aplicarCorteDet(mes, o.cod_obra || o.nombre, certBase).det.reduce((s, e) => {
       const pTn = _precioProvision(e, mes);
       return s + (pTn ? Math.round(e.t * pTn) : 0);
     }, 0);
@@ -2930,23 +2931,28 @@ function editarPrecioProvision(sTipo, dest) {
 // jul-2026 / frío → Muni SMT: corte al 30/07, salieron 8 tn desde esa fecha.
 // Agosto en adelante cuenta normal (el corte aplica solo al mes indicado).
 const CORTES_PROVISION = [
-  // base = tn que quedaron pendientes al corte; se les suma lo despachado desde
-  // el 30/07 inclusive (e.tc, calculado por fecha en el .gs).
-  { mes: 'jul', s: 'frio', obraRe: /asfalto fr/i, destinoRe: /san miguel de tucum/i, base: 8 },
+  // Borrón y cuenta nueva: lo despachado antes del corte ya está pagado.
+  // tnFijo = tn que cuentan ese mes (julio cerró: 8 pendientes + 6 del
+  // 30-31/07 = 14, valor definitivo). Aplica al frío → Muni SMT.
+  { mes: 'jul', frio: true, obraRe: /asfalto fr/i, destinoRe: /san miguel de tucum/i, tnFijo: 14,
+    nota: 'Corte al 30/07 — borrón y cuenta nueva: lo despachado antes del 30/07 ya está pagado. Julio cuenta solo 14,0 tn (8,0 pendientes + 6,0 del 30-31/07)' },
 ];
-// Aplica los cortes al detalle de una obra. La nota queda adjunta a la entrada
-// cortada (e.nota) para que se dibuje pegada a SU fila, no al final del grupo.
+// Aplica los cortes al detalle de una obra — funciona con el formato viejo
+// (s: frio/carpeta/...) y el nuevo por categorías (ds/tp). La nota queda
+// adjunta a la entrada cortada (e.nota) para dibujarse pegada a SU fila.
+// También lo usa el cálculo de la certificación teórica.
 function _aplicarCorteDet(mes, obraNombre, det) {
   const out = (det || []).map(e => {
+    const esFrioE = e.s === 'frio' || (!!e.ds && /fr[íi]o/i.test(e.ds) && e.ds !== 'Pavimax');
     const c = CORTES_PROVISION.find(c => c.mes === mes
-      && (c.s ? e.s === c.s : true)
+      && (c.frio == null || c.frio === esFrioE)
       && c.obraRe.test(obraNombre || '')
       && c.destinoRe.test(e.d || ''));
     if (!c) return e;
-    const tCorte = Math.round((c.base + (e.tc || 0)) * 10) / 10;
+    const tCorte = c.tnFijo != null ? c.tnFijo : Math.round(((c.base || 0) + (e.tc || 0)) * 10) / 10;
     if (tCorte >= e.t) return e;
-    return { s: e.s, d: e.d, t: tCorte,
-      nota: `Corte al 30/07 — provisión de frío a Muni. S.M. Tucumán: 8,0 tn de base + ${fmtTn(e.tc || 0)} tn despachadas el 30-31/07 = ${fmtTn(tCorte)} tn. Lo despachado antes del 30/07 ya está pagado (en los remitos figuran ${fmtTn(e.t)} tn del mes completo).` };
+    return Object.assign({}, e, { t: tCorte,
+      nota: `${c.nota} (en los remitos figuran ${fmtTn(e.t)} tn del mes completo).` });
   });
   return { det: out };
 }
@@ -3085,11 +3091,8 @@ function _filasOtroGastoTR(r) {
 
   if ((r.tnCat && r.tnCat.length) || (r.tnDet && r.tnDet.length)) {
     // Formato nuevo (jun-2026): categorías desc+TIPO+destino, incluye áridos.
-    // Si la obra tiene un corte manual vigente este mes, se mantiene la vista
-    // vieja (det), que es donde el corte sabe aplicarse.
-    const tieneCorte = mesActual !== 'total' && (r.tnDet && r.tnDet.length) &&
-      CORTES_PROVISION.some(c => c.mes === mesActual && c.obraRe.test(o.cod_obra || o.nombre || ''));
-    const usaCat = !tieneCorte && !!(r.tnCat && r.tnCat.length);
+    // Los cortes manuales se aplican también en este formato.
+    const usaCat = !!(r.tnCat && r.tnCat.length);
     // Fila base con los montos que no son de remitos (si los hay)
     if (r.insumos > 0 || r.alquiler > 0 || r.aCobrar > 0) {
       filas.push(`<tr style="${trStyle}">${tdItem()}
@@ -3098,9 +3101,9 @@ function _filasOtroGastoTR(r) {
         ${tdV}${tdV}${tdV}${tdV}
       </tr>`);
     }
-    // Una fila por combinación (con cortes manuales aplicados en el formato viejo)
-    const corte = (!usaCat && mesActual !== 'total')
-      ? _aplicarCorteDet(mesActual, o.cod_obra || o.nombre, r.tnDet)
+    // Una fila por combinación, con cortes manuales aplicados en ambos formatos
+    const corte = mesActual !== 'total'
+      ? _aplicarCorteDet(mesActual, o.cod_obra || o.nombre, usaCat ? r.tnCat : r.tnDet)
       : { det: usaCat ? r.tnCat : r.tnDet, notas: [] };
     // El frío que NO va a Muni SMT se agrupa en una sola fila "Otros" (detalle
     // al click) — solo en el formato viejo; el nuevo muestra cada categoría.
