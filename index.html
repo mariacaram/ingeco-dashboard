@@ -1279,37 +1279,37 @@
 <!-- ================================================================ -->
 <div class="tab-panel" id="tab-taller" data-restrict="sueldos">
   <div class="kpi-grid">
-    <div class="kpi-card neg">
+    <div class="kpi-card neg" style="cursor:pointer;" onclick="openTallerPanel('mec')" title="Click para ver detalle">
       <div class="kpi-label">MO Mecánicos Taller · <span id="mes-label-mo-taller"></span></div>
       <div class="kpi-value nd" id="kpi-taller-mo">sin dato</div>
       <div class="kpi-sub" id="kpi-taller-mo-sub">Actualizá datos para cargar desde TANGO</div>
       <div class="fuente">TANGO (Mauro Orellana) — col R "Taller Mecánico" (desde jul-2026)</div>
     </div>
-    <div class="kpi-card neg">
+    <div class="kpi-card neg" style="cursor:pointer;" onclick="openTallerPanel('maq')" title="Click para ver detalle">
       <div class="kpi-label">MO Maquinistas</div>
       <div class="kpi-value nd" id="kpi-taller-maq">sin dato</div>
       <div class="kpi-sub" id="kpi-taller-maq-sub">Operadores de equipos — por obra</div>
       <div class="fuente">TANGO — col S "Maquinista" (desde jul-2026); se muestra la obra donde operó</div>
     </div>
-    <div class="kpi-card pos">
+    <div class="kpi-card pos" style="cursor:pointer;" onclick="openTallerPanel('alqIngeco')" title="Click para ver detalle">
       <div class="kpi-label">Alquiler equipos INGECO</div>
       <div class="kpi-value pos-val" id="kpi-taller-alquiler">sin dato</div>
       <div class="kpi-sub" id="kpi-taller-alquiler-sub">Período seleccionado</div>
       <div class="fuente">Uso interno de equipos (Partes diarios, col. OBRA GENERAL ≠ "Alquiler de equipos") — obras + áreas internas, a tarifa de flota</div>
     </div>
-    <div class="kpi-card pos">
+    <div class="kpi-card pos" style="cursor:pointer;" onclick="openTallerPanel('alqExterno')" title="Click para ver detalle">
       <div class="kpi-label">Alquiler equipos a externos</div>
       <div class="kpi-value pos-val" id="kpi-taller-alq-externo">sin dato</div>
       <div class="kpi-sub" id="kpi-taller-alq-externo-sub">Período seleccionado</div>
       <div class="fuente">Máquinas prestadas a otras empresas (Partes diarios, col. OBRA GENERAL = "Alquiler de equipos") — a tarifa de flota; el ingreso facturado real lo carga Agustín</div>
     </div>
-    <div class="kpi-card accent">
+    <div class="kpi-card accent" style="cursor:pointer;" onclick="openRepuestosPanel()" title="Click para ver detalle">
       <div class="kpi-label">Repuestos · <span id="mes-label-repuestos-kpi"></span></div>
       <div class="kpi-value nd" id="kpi-repuestos-total">sin dato</div>
       <div class="kpi-sub" id="kpi-repuestos-sub">Entregas del mes seleccionado</div>
       <div class="fuente"><a href="https://docs.google.com/spreadsheets/d/1JpXjGTJwlvMuEI-rFTd4KeKvzd708-yuSLAhIRuCFC0/edit" target="_blank">ENTREGAS DE REPUESTOS (Nico Dall'Agata)</a> — costo del Taller</div>
     </div>
-    <div class="kpi-card neg">
+    <div class="kpi-card neg" style="cursor:pointer;" onclick="openRepuestosPanel()" title="Click para ver detalle">
       <div class="kpi-label">Mayor gasto en repuestos</div>
       <div class="kpi-value nd" id="kpi-repuestos-top">sin dato</div>
       <div class="kpi-sub" id="kpi-repuestos-top-sub">Equipo con más gasto del mes</div>
@@ -5181,6 +5181,92 @@ function renderRepuestosMes() {
         <button onclick="openRepuestosPanel()" style="background:var(--primary);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;">Ver detalle por equipo</button>
       </div>`;
   }
+}
+
+// Paneles de detalle de las tarjetas del Taller (MO mecánicos/maquinistas,
+// alquiler INGECO/externos) — se abren al click en cada tarjeta
+function openTallerPanel(tipo) {
+  const panel   = document.getElementById('sidePanel');
+  const overlay = document.getElementById('overlay');
+  const content = document.getElementById('panelContent');
+  if (!panel || !content) return;
+  const mesLabel = MES[mesActual] || mesActual;
+  const thL = t => `<th style="text-align:left;padding:7px 10px;font-size:11px;">${t}</th>`;
+  const thR = t => `<th style="text-align:right;padding:7px 10px;font-size:11px;">${t}</th>`;
+  const tdL = h => `<td style="padding:7px 10px;font-size:12px;font-weight:600;">${h}</td>`;
+  const tdR = (h, cls) => `<td style="padding:7px 10px;font-size:12px;text-align:right;white-space:nowrap;" class="${cls || ''}">${h}</td>`;
+  const totRow = (label, val, cls) => `<tr style="background:#fef2f2;border-top:2px solid #fca5a5;font-weight:700;">
+    <td style="padding:8px 10px;font-size:12px;">${label}</td><td></td>
+    <td style="padding:8px 10px;text-align:right;" class="${cls || 'neg-val'}">${val}</td></tr>`;
+  let titulo = '', sub = '', html = '';
+
+  if (tipo === 'mec' || tipo === 'maq') {
+    const esMaq = tipo === 'maq';
+    const arr = getMO(mesActual).filter(r => esMaq ? r.clasificacion === 'Maquinista' : r.clasificacion === 'Taller')
+      .slice().sort((a, b) => b.monto - a.monto);
+    titulo = (esMaq ? 'MO Maquinistas' : 'MO Mecánicos Taller') + ' — ' + mesLabel;
+    sub = esMaq
+      ? 'Operadores de equipos (col S "Maquinista" en TANGO) — imputados a la obra donde operaron. Su costo es del Taller, no de la obra.'
+      : 'Mecánicos del taller (col R "Taller Mecánico" en TANGO), ambas quincenas.';
+    if (!arr.length) {
+      html = `<p class="nd" style="padding:16px;">Sin ${esMaq ? 'maquinistas' : 'mecánicos'} cargados en TANGO para ${mesLabel}</p>`;
+    } else {
+      const total = arr.reduce((s, r) => s + r.monto, 0);
+      html = `<table style="width:100%;border-collapse:collapse;margin-top:10px;">
+        <thead><tr style="background:#f1f5f9;">${thL(esMaq ? 'Obra donde operó' : 'Centro')}<th></th>${thR('MO del mes')}</tr></thead>
+        <tbody>
+          ${arr.map(r => `<tr style="border-top:1px solid var(--border);">${tdL(r.centro)}<td></td>${tdR('<strong>' + fmt(r.monto) + '</strong>', 'neg-val')}</tr>`).join('')}
+          ${totRow('TOTAL', fmt(total))}
+        </tbody></table>`;
+    }
+
+  } else if (tipo === 'alqIngeco' || tipo === 'alqExterno') {
+    const datos = ALQUILER_EQUIPOS[mesActual];
+    const esExt = tipo === 'alqExterno';
+    titulo = (esExt ? 'Alquiler de equipos a externos' : 'Alquiler de equipos INGECO') + ' — ' + mesLabel;
+    sub = esExt
+      ? 'Máquinas prestadas a otras empresas (Partes diarios, col. OBRA GENERAL = "Alquiler de equipos") — valuadas a tarifa de flota (USD × TC por horas). El ingreso facturado real lo carga Agustín.'
+      : 'Uso interno de equipos a tarifa de flota — obras y áreas internas (Partes diarios, col. OBRA GENERAL).';
+    if (!datos || !datos.porObra || !datos.porObra.length) {
+      html = `<p class="nd" style="padding:16px;">Sin partes diarios cargados para ${mesLabel}</p>`;
+    } else if (esExt) {
+      const ext = datos.porObra.find(o => esAlquilerExterno(o.obra));
+      if (!ext) {
+        html = `<p class="nd" style="padding:16px;">Sin equipos prestados a externos en ${mesLabel}</p>`;
+      } else {
+        html = `<table style="width:100%;border-collapse:collapse;margin-top:10px;">
+          <thead><tr style="background:#f1f5f9;">${thL('Equipo')}${thR('Horas')}${thR('Valor tarifa')}</tr></thead>
+          <tbody>
+            ${ext.equipos.map(eq => {
+              const dests = Object.entries(eq.destinos || {}).sort((a, b) => b[1] - a[1])
+                .map(d => `${d[0]} (${d[1]} hs)`).join(' · ');
+              return `<tr style="border-top:1px solid var(--border);">
+                <td style="padding:7px 10px;font-size:12px;"><strong>${eq.codigo}</strong> — ${eq.clasificacion} ${eq.marca} ${eq.modelo}${dests ? '<br><span style="font-size:11px;color:var(--muted);">→ ' + dests + '</span>' : ''}</td>
+                ${tdR(eq.horas + ' hs')}${tdR('<strong>' + fmt(eq.costoArs) + '</strong>', 'pos-val')}
+              </tr>`;
+            }).join('')}
+            ${totRow('TOTAL · ' + ext.equipos.length + ' equipos · ' + ext.horasTot + ' hs', fmt(ext.costoArs), 'pos-val')}
+          </tbody></table>`;
+      }
+    } else {
+      const internos = datos.porObra.filter(o => !esAlquilerExterno(o.obra)).slice().sort((a, b) => b.costoArs - a.costoArs);
+      const total = internos.reduce((s, o) => s + o.costoArs, 0);
+      html = `<table style="width:100%;border-collapse:collapse;margin-top:10px;">
+        <thead><tr style="background:#f1f5f9;">${thL('Obra / área')}${thR('Horas')}${thR('Valor tarifa')}</tr></thead>
+        <tbody>
+          ${internos.map(o => `<tr style="border-top:1px solid var(--border);cursor:pointer;" onclick="openAlquilerPanel('${(o.obra || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')" title="Ver equipos de ${o.obra}">
+            ${tdL(o.obra)}${tdR(o.horasTot + ' hs')}${tdR('<strong>' + fmt(o.costoArs) + '</strong>', 'pos-val')}
+          </tr>`).join('')}
+          ${totRow('TOTAL', fmt(total), 'pos-val')}
+        </tbody></table>
+        <div style="font-size:10.5px;color:var(--muted);margin-top:8px;">Click en una fila para ver los equipos usados en esa obra/área.</div>`;
+    }
+  }
+
+  content.innerHTML = `<div class="panel-title">${titulo}</div>
+    <div class="panel-sub">${sub}</div>${html}`;
+  panel.classList.add('open');
+  if (overlay) overlay.classList.add('open');
 }
 
 function openRepuestosPanel() {
