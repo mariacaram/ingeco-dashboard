@@ -2978,7 +2978,12 @@ function _certRealProvision(mes, obraNombre) {
     if (_segNorm(it.obra) === canon) items.push({ concepto: it.concepto || '', importe: it.importe || 0, cat, fila: it.fila, gid: it.gid, src: 'esteban' });
   }));
   if (!items.length) return null;
-  return { mesSig, total: items.reduce((s, i) => s + i.importe, 0), items };
+  // Firme = cobrado o facturado. Lo programado sin factura (noCobrados /
+  // sinFecha) NO cuenta como certificación real del mes — ej. un saldo con
+  // fecha probable de cobro en septiembre no suma en julio (criterio sep-2026).
+  const FIRME = { cobrados: 1, facturados: 1 };
+  const totalFirme = items.reduce((s, i) => s + (FIRME[i.cat] ? i.importe : 0), 0);
+  return { mesSig, total: items.reduce((s, i) => s + i.importe, 0), totalFirme, items };
 }
 
 // Certificación de provisiones del mes, para sumar al Total Certificado:
@@ -3001,8 +3006,11 @@ function _certProvisionesMes(mes) {
       const aj = _certExcedentePrev(mes, cod);
       if (aj) teo = Math.max(0, teo - aj.excedente);
     }
-    const monto = real ? real.total : teo;
-    if (monto > 0) items.push({ obra: cod, monto: Math.round(monto), esReal: !!real, mesReal: real ? real.mesSig : null });
+    // Solo lo cobrado/facturado es real; si Esteban cargó ítems pero ninguno
+    // firme (todo programado sin factura), se usa la teórica.
+    const usaReal = !!(real && real.totalFirme > 0);
+    const monto = usaReal ? real.totalFirme : teo;
+    if (monto > 0) items.push({ obra: cod, monto: Math.round(monto), esReal: usaReal, mesReal: usaReal ? real.mesSig : null });
   });
   return { total: items.reduce((s, i) => s + i.monto, 0), items };
 }
@@ -3023,9 +3031,9 @@ function _certExcedentePrev(mes, obraNombre) {
   if (teoPrev <= 0) return null; // sin teórica previa no hay contra qué comparar
   const realPrev = _certRealProvision(mesPrev, obraNombre);
   if (!realPrev) return null;
-  const excedente = realPrev.total - teoPrev;
+  const excedente = realPrev.totalFirme - teoPrev;
   if (excedente <= 0) return null;
-  return { mesPrev, teoPrev, realPrev: realPrev.total, excedente };
+  return { mesPrev, teoPrev, realPrev: realPrev.totalFirme, excedente };
 }
 
 // Detalle de la fila agrupada "Frío → Otros" (se llena al renderizar el bloque)
@@ -3150,8 +3158,9 @@ function _filasOtroGastoTR(r) {
     const descuento = aj ? Math.min(aj.excedente, r.certTeorica || 0) : 0;
     const teoAjust = Math.max(0, (r.certTeorica || 0) - descuento);
     if (r.certTeorica > 0 || real) {
-      const dif = (real ? real.total : 0) - teoAjust;
-      const tipReal = real ? real.items.map(i => `${i.concepto}: ${fmt(i.importe)}`).join(' · ') : '';
+      const dif = (real ? real.totalFirme : 0) - teoAjust;
+      const pendReal = real ? real.total - real.totalFirme : 0;
+      const tipReal = real ? real.items.map(i => `${i.concepto}: ${fmt(i.importe)}${i.cat === 'cobrados' || i.cat === 'facturados' ? '' : ' (programado — no suma)'}`).join(' · ') : '';
       const urlReal = (real && typeof _sheetUrlAudit === 'function' && real.items[0]) ? _sheetUrlAudit(real.items[0]) : '';
       filas.push(`<tr style="${trStyle}background:#fff7ed;">
         ${tdItem(` <span style="color:#9a3412;">· Σ certificación${real ? ` — real cargada por Esteban en ${MES[real.mesSig] || real.mesSig}` : ''}</span>`)}
@@ -3159,7 +3168,11 @@ function _filasOtroGastoTR(r) {
         ${r.certTeorica > 0
           ? td(`<strong class="pos-val" ${aj ? `title="Teórica del mes ${fmt(r.certTeorica)} − ${fmt(descuento)} pagados de más en ${MES[aj.mesPrev] || aj.mesPrev}"` : ''}>${aj ? '≈ ' : ''}${fmt(teoAjust)}</strong>`)
           : tdV}
-        ${real ? td(`<strong class="pos-val" title="${tipReal.replace(/"/g, '&quot;')}" ${urlReal ? `style="cursor:pointer;text-decoration:underline dotted;" onclick="window.open('${urlReal}','_blank')"` : ''}>${fmt(real.total)}${urlReal ? ' ↗' : ''}</strong>`) : td(`<span style="color:#dc2626;font-size:11px;font-weight:600;" title="No se encontró ningún ítem de esta provisión en la planilla de Esteban del mes siguiente">sin cargar</span>`)}
+        ${real ? td(
+          real.totalFirme > 0
+            ? `<strong class="pos-val" title="${tipReal.replace(/"/g, '&quot;')}" ${urlReal ? `style="cursor:pointer;text-decoration:underline dotted;" onclick="window.open('${urlReal}','_blank')"` : ''}>${fmt(real.totalFirme)}${urlReal ? ' ↗' : ''}</strong>${pendReal > 0 ? `<br><small style="color:#b45309;font-size:10px;" title="Programado sin factura ni cobro — no cuenta como certificación del mes">+${fmt(pendReal)} programado (no suma)</small>` : ''}`
+            : `<span style="color:#b45309;font-size:11px;font-weight:600;" title="${tipReal.replace(/"/g, '&quot;')}" ${urlReal ? `onclick="window.open('${urlReal}','_blank')" style="cursor:pointer;color:#b45309;font-size:11px;font-weight:600;text-decoration:underline dotted;"` : ''}>${fmt(real.total)} programado — sin facturar, no suma</span>`
+        ) : td(`<span style="color:#dc2626;font-size:11px;font-weight:600;" title="No se encontró ningún ítem de esta provisión en la planilla de Esteban del mes siguiente">sin cargar</span>`)}
       </tr>`);
       if (aj) {
         filas.push(`<tr><td colspan="7" style="padding:2px 4px 8px;font-size:11px;color:#b45309;">
@@ -3217,7 +3230,7 @@ function _renderOtrosGastosBlock(otrosGastos) {
     totCert += teoObra;
     if (mesActual !== 'total' && r.tnDet && r.tnDet.length) {
       const real = _certRealProvision(mesActual, r.o.cod_obra || r.o.nombre);
-      if (real) { totReal += real.total; hayReal = true; }
+      if (real && real.totalFirme > 0) { totReal += real.totalFirme; hayReal = true; }
     }
   });
   const _tnTot = [];
@@ -7848,7 +7861,7 @@ function openTotalACobrarPanel() {
     <div class="panel-title">Total Certificado</div>
     <div class="panel-sub">${mesLabel} · archivo "Obras a cobrar" (Agustín)</div>
     <div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:11.5px;line-height:1.55;color:var(--muted);margin-bottom:12px;">
-      ℹ️ <strong>Cómo se calcula:</strong> suma del <strong>Monto a certificar</strong> de las filas del archivo de Agustín cuyo <strong>Período de realización</strong> cae en ${mesLabel}. Como una obra no necesariamente certifica todo junto, la convención es <strong>una fila por mes de certificación</strong> (ej. "Bacheo SMT mes julio"): cada fila suma en su mes, y el total de la obra es la suma de sus filas. Lo que todavía no se sabe cómo se reparte va <strong>sin período</strong> (queda en su categoría aparte, sin asignar a ningún mes). Las <strong>provisiones suman siempre</strong>: con su certificación <strong>real</strong> (lo que Esteban cargó en su planilla del mes siguiente) o, si todavía no hay real, con la <strong>teórica</strong> (tn × precio de convenio, neta de excedentes y cortes) — el desglose aclara cuánto es teórico. El detalle fino está en "Otros Gastos o salidas".
+      ℹ️ <strong>Cómo se calcula:</strong> suma del <strong>Monto a certificar</strong> de las filas del archivo de Agustín cuyo <strong>Período de realización</strong> cae en ${mesLabel}. Como una obra no necesariamente certifica todo junto, la convención es <strong>una fila por mes de certificación</strong> (ej. "Bacheo SMT mes julio"): cada fila suma en su mes, y el total de la obra es la suma de sus filas. Lo que todavía no se sabe cómo se reparte va <strong>sin período</strong> (queda en su categoría aparte, sin asignar a ningún mes). Las <strong>provisiones suman siempre</strong>: con su certificación <strong>real</strong> — solo lo <strong>cobrado o facturado</strong> que Esteban cargó en su planilla del mes siguiente; lo programado sin factura (ej. un saldo con fecha probable a 2 meses) no suma — o, si no hay nada firme, con la <strong>teórica</strong> (tn × precio de convenio, neta de excedentes y cortes) — el desglose aclara cuánto es teórico. El detalle fino está en "Otros Gastos o salidas".
     </div>
     <div class="panel-kpi">
       <div class="panel-kpi-item">
