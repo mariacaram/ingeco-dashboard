@@ -435,7 +435,7 @@ function parsearGSheetTangoMO(file) {
   for (const sheet of sheets) {
     const rows = sheet.getDataRange().getValues();
 
-    let hdrIdx = -1, iClave = -1, iMonto = -1, iClasif = -1, modo = null;
+    let hdrIdx = -1, iClave = -1, iMonto = -1, iClasif = -1, modo = null, iClaveFallback = -1;
 
     for (let i = 0; i < Math.min(25, rows.length); i++) {
       const cells = rows[i].map(c => String(c).toUpperCase().trim());
@@ -447,12 +447,19 @@ function parsearGSheetTangoMO(file) {
       // la de redondeo, o viceversa) — por eso NO alcanza con quedarse con la
       // primera que matchee ambas palabras. Se prioriza la de "REDONDEO" (es el
       // total final de pago) y se cae a la plana solo si no existe esa columna.
-      const iObra          = cells.findIndex(c => c === 'OBRA');
+      // Desde jul-2026 hay DOS columnas "OBRA": la vieja de texto libre (col E)
+      // y la nueva con nombres del Maestro de obras (col R, junto a
+      // "Clasificación"). Se prioriza la ÚLTIMA (la del Maestro) y se cae a la
+      // vieja fila a fila si la nueva viene vacía. En archivos viejos con una
+      // sola columna, ambas apuntan al mismo índice.
+      const iObra          = cells.lastIndexOf('OBRA');
+      const iObraVieja     = cells.indexOf('OBRA');
       const iTotalRedondeo = cells.findIndex(c => c.includes('TOTAL') && c.includes('QUINCENA') && c.includes('REDONDEO'));
       const iTotalPlano    = cells.findIndex(c => c.includes('TOTAL') && c.includes('QUINCENA') && !c.includes('REDONDEO'));
       const iTotalQ = iTotalRedondeo >= 0 ? iTotalRedondeo : iTotalPlano;
       if (iObra >= 0 && iTotalQ >= 0) {
         hdrIdx = i; iClave = iObra; iMonto = iTotalQ; modo = 'obra';
+        iClaveFallback = iObraVieja !== iObra ? iObraVieja : -1;
         iClasif = cells.findIndex(c => c.includes('CLASIF'));
         break;
       }
@@ -478,7 +485,8 @@ function parsearGSheetTangoMO(file) {
 
     for (let i = hdrIdx + 1; i < rows.length; i++) {
       const row   = rows[i];
-      const clave = String(row[iClave] || '').trim();
+      let clave = String(row[iClave] || '').trim();
+      if (!clave && iClaveFallback >= 0) clave = String(row[iClaveFallback] || '').trim();
       if (!clave || clave.toUpperCase().includes('TOTAL') || clave === '') continue;
 
       const raw   = row[iMonto];

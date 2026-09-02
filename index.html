@@ -830,7 +830,7 @@
             <th>Cód. Obra</th>
             <th class="num">A Cobrar</th>
             <th class="num">Insumos</th>
-            <th class="num" title="MO de asfalto — prorrateada por tn despachadas (TANGO)">MO Asfalto (prorrateada)</th>
+            <th class="num" title="MO de asfalto — desde jul-2026 imputada por obra (col. OBRA de TANGO); antes, o sin TANGO cargado, prorrateada por tn despachadas">MO Asfalto</th>
             <th class="num" title="MO de hormigón tercerizada — OC de Guillermo con 'Mano de obra' en Descripción">MO Hormigón</th>
             <th class="num">Asfalto (tn)</th>
             <th class="num">Alquiler</th>
@@ -841,7 +841,7 @@
           <tr><td colspan="8" class="nd" style="text-align:center;padding:20px;">Presioná "Actualizar datos" para cargar desde Drive</td></tr>
         </tbody>
       </table>
-      <div class="nota-fuente" style="margin-top:6px;">⚖️ <strong>MO prorrateada:</strong> MO total Obras (TANGO) × (tn de asfalto de la obra / tn de asfalto total del mes) — caliente + frío, es todo asfalto · fuente tn: Remitos Oficiales columna OBRA GENERAL</div>
+      <div class="nota-fuente" style="margin-top:6px;">⚖️ <strong>MO Asfalto:</strong> desde jul-2026, imputada por obra según la col. OBRA (R) de TANGO (ambas quincenas). Hasta junio, o si TANGO no está cargado, se prorratea: MO total Obras × (tn de asfalto de la obra / tn total del mes)</div>
     </div>
     <div class="nota-fuente">A Cobrar: Obras a cobrar (Agustín) · Insumos: OC Guillermo Konicek · Alquiler: Partes diarios Adrián Caram · MO: TANGO (total mensual estimado, no atribuible por obra)</div>
 
@@ -2639,6 +2639,19 @@ function computeMargenObrasMes(mes) {
   const moTotal    = moReal ?? moEstim; // null si no hay dato ni estimado
   const moEsEstim  = moReal == null && moEstim != null;
 
+  // Imputación DIRECTA de MO por obra (desde jul-2026): la col. OBRA (R) de
+  // las quincenas de TANGO trae los nombres del Maestro de obras, así que la
+  // MO real se asigna exacta a cada obra. Hasta junio, o cuando TANGO no está
+  // cargado (estimado), se mantiene el prorrateo por tn de asfalto.
+  const moImputada = moReal != null && MES_ORDER.indexOf(mes) >= MES_ORDER.indexOf('jul');
+  const moPorObraKey = {}, moDisplayName = {};
+  if (moImputada) moArr2.forEach(r => {
+    const k = (r.centro || '').toLowerCase().trim();
+    if (!k) return;
+    moPorObraKey[k] = (moPorObraKey[k] || 0) + r.monto;
+    if (!moDisplayName[k]) moDisplayName[k] = (r.centro || '').trim();
+  });
+
   // Tn caliente/frío por obra desde remitos — base para prorratear MO y costo asfalto
   const remitosMes = REMITOS_ASFALTO[mes];
   const tnPorObraKey = {}, tnFrioPorObraKey = {}, tnDisplayName = {};
@@ -2683,8 +2696,10 @@ function computeMargenObrasMes(mes) {
     const tnDet      = tnDetPorObraKey[ck]     || tnDetPorObraKey[nk]     || [];
     const tnCat      = tnCatPorObraKey[ck]     || tnCatPorObraKey[nk]     || [];
     const tnObraTotal = tnObra + tnFrioObra;
-    const moObra = (moTotal != null && tnTotalGlobal > 0 && tnObraTotal > 0)
-      ? Math.round(moTotal * (tnObraTotal / tnTotalGlobal)) : null;
+    const moObra = moImputada
+      ? (((moPorObraKey[ck] || 0) + (nk !== ck ? (moPorObraKey[nk] || 0) : 0)) || null)
+      : (moTotal != null && tnTotalGlobal > 0 && tnObraTotal > 0)
+        ? Math.round(moTotal * (tnObraTotal / tnTotalGlobal)) : null;
     const costoAsfObra = (precioMesResumen != null && (tnObra > 0 || tnFrioObra > 0))
       ? Math.round((tnObra * (precioMesResumen.caliente || 0)) + (tnFrioObra * (precioMesResumen.frio || 0)))
       : null;
@@ -2697,7 +2712,7 @@ function computeMargenObrasMes(mes) {
     }, 0);
     const margen  = aCobrar - insumos - moHormigon - (moObra || 0) - (costoAsfObra || 0) - alquiler;
     const hasData = aCobrar > 0 || insumos > 0 || moHormigon > 0 || alquiler > 0 || tnObraTotal > 0 || moObra != null;
-    return { o, aCobrar, certTeorica, insumos, moHormigon, alquiler, tnObra, tnFrioObra, tnCarpeta, tnBacheo, tnDet, tnCat, tnObraTotal, moObra, costoAsfObra, margen, hasData, extra: !!extra };
+    return { o, aCobrar, certTeorica, insumos, moHormigon, alquiler, tnObra, tnFrioObra, tnCarpeta, tnBacheo, tnDet, tnCat, tnObraTotal, moObra, moImputada, costoAsfObra, margen, hasData, extra: !!extra };
   };
 
   const rows = obras.map(o => buildDatosObra(o, false));
@@ -2733,6 +2748,8 @@ function computeMargenObrasMes(mes) {
   Object.keys(salidaDisplay).forEach(k => candidatos.push({ cod: salidaDisplay[k] || k, nombre: '', origen: 'Remito' }));
   // Alquiler de maquinaria del mes (Partes diarios — Nico)
   Object.keys(alqDisplay).forEach(k => candidatos.push({ cod: alqDisplay[k] || k, nombre: '', origen: 'Alquiler' }));
+  // MO imputada (TANGO col. OBRA) a obras que no certifican este mes
+  if (moImputada) Object.keys(moDisplayName).forEach(k => candidatos.push({ cod: moDisplayName[k] || k, nombre: '', origen: 'MO' }));
 
   // Construir filas extra deduplicando por clave (nombre o código ya representado)
   candidatos.forEach(c => {
@@ -2746,7 +2763,7 @@ function computeMargenObrasMes(mes) {
     // de Pavimax") — se muestra igual, marcado, para poder investigarlo.
     const sinClasificar = esInterno && !esCentroInternoConocido(c.cod) && !esCentroInternoConocido(c.nombre);
     if (esInterno && !sinClasificar) return;
-    const _lblOrigen = { 'OC': 'Con OC de insumos', 'Remito': 'Con salida en Remitos', 'Alquiler': 'Con alquiler de maquinaria' };
+    const _lblOrigen = { 'OC': 'Con OC de insumos', 'Remito': 'Con salida en Remitos', 'Alquiler': 'Con alquiler de maquinaria', 'MO': 'Con mano de obra imputada' };
     const nombreFila = sinClasificar
       ? '⚠ ' + (c.cod || c.nombre) + ' — revisar imputación'
       : (c.nombre || _lblOrigen[c.origen] || 'Con gasto del mes');
@@ -2841,9 +2858,12 @@ function _filaMargenHTML(r, moEsEstim, tnTotalGlobal) {
   const tnCell = (r.tnObra > 0 || r.tnFrioObra > 0)
     ? `<span style="font-size:12px;" title="${(r.tnDet || []).map(e => _tnDetLabel(e) + ': ' + fmtTn(e.t) + ' tn').join(' · ') || tnLabel}">${tnLabel}${r.costoAsfObra != null ? '<br><small class="neg-val" style="font-size:10px;">' + fmt(r.costoAsfObra) + '</small>' : ''}</span>`
     : '<span class="nd">—</span>';
+  const moTitle = r.moImputada
+    ? 'MO imputada por obra — col. OBRA (R) de TANGO, ambas quincenas'
+    : (moEsEstim ? 'MO estimada' : 'MO real') + ' × ' + fmtTn(r.tnObraTotal) + 'tn / ' + fmtTn(tnTotalGlobal) + 'tn total';
   const moCell = r.moObra != null
-    ? `<span class="neg-val" title="${moEsEstim ? 'MO estimada' : 'MO real'} × ${fmtTn(r.tnObraTotal)}tn / ${fmtTn(tnTotalGlobal)}tn total">${moEsEstim ? '~' : ''}${fmt(r.moObra)}</span>`
-    : '<span class="nd" title="Sin dato MO o sin tn">—</span>';
+    ? `<span class="neg-val" title="${moTitle}">${moEsEstim ? '~' : ''}${fmt(r.moObra)}</span>`
+    : `<span class="nd" title="${r.moImputada ? 'Sin MO imputada a esta obra en TANGO' : 'Sin dato MO o sin tn'}">—</span>`;
   const codEsc2 = (o.cod_obra || '').replace(/'/g, "\\'");
   const nomEsc  = (o.nombre  || '').replace(/'/g, "\\'");
   const cellStyle = 'cursor:pointer;transition:background 0.15s;';
@@ -3556,7 +3576,7 @@ function renderResumenTipoContrato() {
     <th>Cód. Obra</th>
     <th class="num">A Cobrar</th>
     <th class="num">Insumos</th>
-    <th class="num">MO Asfalto (prorrateada)</th>
+    <th class="num">MO Asfalto</th>
     <th class="num">MO Hormigón</th>
     <th class="num">Asfalto (tn)</th>
     <th class="num">Alquiler</th>
@@ -4078,7 +4098,7 @@ function generarReportePDF(codObra, nombreObra, soloMes) {
 
   <div class="nota">
     <strong>Nota metodológica.</strong> Margen de contribución = Certificado − Insumos − Mano de obra prorrateada − Costo de asfalto − Alquiler de equipos.
-    La mano de obra se prorratea entre las obras según las toneladas de asfalto despachadas en el mes (fuente de tn: Remitos Oficiales).
+    La mano de obra, desde jul-2026, se imputa a cada obra según la col. OBRA de las quincenas de TANGO; hasta junio, o cuando TANGO no está cargado, se prorratea según las toneladas de asfalto despachadas en el mes (fuente de tn: Remitos Oficiales).
     ${D.algunaEstim ? 'El símbolo <strong>~</strong> indica meses en los que la MO aún no estaba cargada en TANGO y se estimó a partir del último mes con datos. ' : ''}
     El costo de asfalto valoriza las toneladas despachadas al precio de mercado del mes (transferencia interna Planta → Obra).
     <br><strong>Fuentes:</strong> Certificados — Obras a cobrar (Agustín) · Insumos — Guillermo Konicek · Mano de obra — TANGO (Mauro Orellana) · Alquiler — Partes diarios (Nico) · Remitos — Planta de asfalto.
@@ -6762,6 +6782,25 @@ function openDetalleCelda(tipo, codObra, nombreObra) {
       const entry = Object.entries(remitosMes.porObra).find(([k]) => k.toLowerCase()===nk||k.toLowerCase()===ck);
       if (entry) tnObra = entry[1].caliente || 0;
     }
+    // Desde jul-2026 con TANGO cargado: la MO está imputada por obra (col. OBRA
+    // R de las quincenas), no prorrateada — el panel muestra la imputación real.
+    const esImputadaP = moArr.length > 0 && MES_ORDER.indexOf(mesActual) >= MES_ORDER.indexOf('jul');
+    if (esImputadaP) {
+      const propias = moArr.filter(r => { const c = (r.centro || '').toLowerCase().trim(); return c === nk || c === ck; });
+      const moObraI = propias.reduce((s, r) => s + r.monto, 0);
+      html = `<div style="font-size:12px;color:var(--muted);margin-bottom:12px;">MO imputada por obra — col. OBRA (R) de TANGO, ambas quincenas · ${mes} · Fuente: TANGO (Mauro)</div>
+        <div style="display:grid;gap:8px;">
+          <div style="background:#f8fafc;border-radius:8px;padding:12px;">
+            <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">MO total obras del mes</div>
+            <div style="font-size:18px;font-weight:700;" class="neg-val">${moTotal>0?fmt(moTotal):'sin dato'}</div>
+          </div>
+          <div style="background:#fef2f2;border-radius:8px;padding:12px;border:1px solid #fca5a5;">
+            <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">MO imputada a esta obra</div>
+            <div style="font-size:20px;font-weight:700;" class="neg-val">${moObraI>0?fmt(moObraI):'—'}</div>
+            <div style="font-size:10px;color:var(--muted);margin-top:4px;">Suma de los sueldos de ambas quincenas cuya col. OBRA es "${nombreObra || codObra}"</div>
+          </div>
+        </div>`;
+    } else {
     const moObra = (moTotal > 0 && tnTotal > 0 && tnObra > 0) ? Math.round(moTotal*(tnObra/tnTotal)) : null;
     html = `<div style="font-size:12px;color:var(--muted);margin-bottom:12px;">MO prorrateada por tn de asfalto (caliente + frío) · ${mes} · Fuente: TANGO (Mauro)</div>
       <div style="display:grid;gap:8px;">
@@ -6779,6 +6818,7 @@ function openDetalleCelda(tipo, codObra, nombreObra) {
           <div style="font-size:10px;color:var(--muted);margin-top:4px;">${fmt(moTotal)} × ${fmtTn(tnObra)}tn / ${fmtTn(tnTotal)}tn total</div>
         </div>
       </div>`;
+    }
 
   } else if (tipo === 'tn') {
     titulo = 'Tn Asfalto — ' + (nombreObra || codObra);
