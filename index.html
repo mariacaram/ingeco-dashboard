@@ -1283,7 +1283,7 @@
       <div class="kpi-label">MO Taller · <span id="mes-label-mo-taller"></span></div>
       <div class="kpi-value nd" id="kpi-taller-mo">sin dato</div>
       <div class="kpi-sub" id="kpi-taller-mo-sub">Actualizá datos para cargar desde TANGO</div>
-      <div class="fuente">TANGO (Mauro Orellana) — clasificación: Taller</div>
+      <div class="fuente">TANGO (Mauro Orellana) — mecánicos (col R "Taller Mecánico") + maquinistas (col S "Maquinista")</div>
     </div>
     <div class="kpi-card pos">
       <div class="kpi-label">Alquiler equipos INGECO</div>
@@ -2093,7 +2093,9 @@ function getMOEstimadoGenerico(mesKey, getFn) {
   };
 }
 function getMOEstimado(mesKey) { return getMOEstimadoGenerico(mesKey, getMOObra); }
-function getMOTaller(mes) { return getMO(mes).filter(r => r.clasificacion === 'Taller'); }
+// MO Taller = mecánicos (clasif Taller) + maquinistas (operadores de equipos,
+// col S "Maquinista" desde jul-2026 — su centro es la obra donde operaron)
+function getMOTaller(mes) { return getMO(mes).filter(r => r.clasificacion === 'Taller' || r.clasificacion === 'Maquinista'); }
 function getMOEstimadoTaller(mesKey) { return getMOEstimadoGenerico(mesKey, getMOTaller); }
 function getMOPlanta(mes) { return getMO(mes).filter(r => r.clasificacion === 'Pta. Asfalto'); }
 function getMOEstimadoPlanta(mesKey) { return getMOEstimadoGenerico(mesKey, getMOPlanta); }
@@ -8757,9 +8759,12 @@ function renderMOClasif() {
   if (kpiTaller) {
     if (tallerArr.length > 0) {
       const total = tallerArr.reduce((s, r) => s + r.monto, 0);
+      const maq = tallerArr.filter(r => r.clasificacion === 'Maquinista').reduce((s, r) => s + r.monto, 0);
       kpiTaller.textContent = fmt(total);
       kpiTaller.className = 'kpi-value neg-val';
-      if (kpiTallerSub) kpiTallerSub.textContent = tallerArr.map(r => r.centro).join(', ');
+      if (kpiTallerSub) kpiTallerSub.textContent = maq > 0
+        ? 'Mecánicos ' + fmt(total - maq) + ' · Maquinistas ' + fmt(maq)
+        : tallerArr.map(r => r.centro).join(', ');
     } else {
       // Sin datos del mes → estimar prorrateando el último mes con Taller cargado
       // (misma lógica que Contribución marginal). Clasificación Taller = col S de

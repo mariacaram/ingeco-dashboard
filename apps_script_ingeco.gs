@@ -506,17 +506,22 @@ function parsearGSheetTangoMO(file) {
       if (!monto || monto <= 0) continue;
 
       const key    = modo === 'ctro' ? mapearCentro(clave) : clave;
-      // Con la col R nueva (dos columnas OBRA) se ignora la col S "Clasificación"
-      // y se clasifica por el nombre del Maestro; en archivos viejos se sigue
-      // usando la col S como siempre.
-      const clasif = (modo === 'obra' && iClaveFallback >= 0)
-        ? clasificarMOPorNombre(clave)
-        : (iClasif >= 0 ? String(row[iClasif] || '').trim() || 'Obra' : 'Obra');
+      // Con la col R nueva (dos columnas OBRA) la clasificación sale del nombre
+      // del Maestro — EXCEPTO los "Maquinista" de la col S: son los operadores
+      // de equipos del Taller, van a MO Taller aunque la col R tenga una obra.
+      // En archivos viejos (una sola col OBRA) se sigue usando la col S.
+      let clasif;
+      if (modo === 'obra' && iClaveFallback >= 0) {
+        const colS = iClasif >= 0 ? String(row[iClasif] || '').trim() : '';
+        clasif = /maquinista/i.test(colS) ? 'Maquinista' : clasificarMOPorNombre(clave);
+      } else {
+        clasif = iClasif >= 0 ? String(row[iClasif] || '').trim() || 'Obra' : 'Obra';
+      }
       const totKey = key + '||' + clasif;
       totales[totKey] = (totales[totKey] || 0) + monto;
 
       qTotal += monto;
-      if (clasif === 'Taller') qTaller += monto;
+      if (clasif === 'Taller' || clasif === 'Maquinista') qTaller += monto;
       else if (clasif === 'Pta. Asfalto') qPlanta += monto;
       else if (clasif === 'Interno') { /* Predio/Trituración/Cantera/Admin — no es MO de obras */ }
       else qObra += monto;
