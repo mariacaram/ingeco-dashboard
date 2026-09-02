@@ -848,6 +848,7 @@
     <!-- Otros Gastos o salidas: placeholders sin clasificar, NO son obras — se
          muestran aparte con un formato bien distinto a la tabla de arriba -->
     <div id="otros-gastos-obra"></div>
+    <div id="alquiler-terceros-obra"></div>
 
     <!-- Gráficos de barras por categoría -->
     <div id="charts-por-obra" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:20px;"></div>
@@ -3356,6 +3357,55 @@ function ocultarDropdownBusquedaDelay(tab) {
   setTimeout(() => ocultarDropdownBusqueda(tab), 150);
 }
 
+// Sección "Alquiler de equipos a terceros": el taller le presta máquinas a
+// OTRAS empresas (col OBRA GENERAL = "Alquiler de equipos" en Partes diarios).
+// Muestra qué equipos, a qué obras/destinos fueron (col Obra Particular) y el
+// ingreso que Agustín carga en su archivo con código "Alquiler de equipos".
+function _renderAlquilerTercerosBlock() {
+  if (mesActual === 'total') return '';
+  const alqM = ALQUILER_EQUIPOS && ALQUILER_EQUIPOS[mesActual];
+  const ext = alqM && alqM.porObra ? alqM.porObra.find(o => esAlquilerExterno(o.obra)) : null;
+  const obrasAlq = ((GENERADO_POR_OBRA && GENERADO_POR_OBRA.obrasPorMes && GENERADO_POR_OBRA.obrasPorMes[mesActual]) || [])
+    .filter(o => esAlquilerExterno(o.cod_obra) || esAlquilerExterno(o.nombre));
+  const ingreso = obrasAlq.reduce((s, o) => s + (o.aCobrar ?? 0), 0);
+  const itemsIng = [];
+  obrasAlq.forEach(o => (o.items || []).forEach(it => itemsIng.push(it)));
+  if (!ext && ingreso <= 0) return '';
+  const destinosSet = new Set();
+  (ext ? ext.equipos : []).forEach(eq => Object.keys(eq.destinos || {}).forEach(d => destinosSet.add(d)));
+  const thA = t => `<th style="text-align:left;padding:6px 8px;font-size:10px;font-weight:700;color:#0c4a6e;text-transform:uppercase;letter-spacing:.04em;">${t}</th>`;
+  const thN = t => `<th style="text-align:right;padding:6px 8px;font-size:10px;font-weight:700;color:#0c4a6e;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;">${t}</th>`;
+  const filasEq = (ext ? ext.equipos : []).map(eq => {
+    const dests = Object.entries(eq.destinos || {}).sort((a, b) => b[1] - a[1])
+      .map(([d, h]) => `${d} <span style="color:var(--muted);">(${h} hs)</span>`).join(' · ');
+    return `<tr style="border-bottom:1px solid var(--border);">
+      <td style="padding:7px 8px;font-size:12px;white-space:nowrap;"><strong>${eq.codigo}</strong> — ${eq.clasificacion} ${eq.marca} ${eq.modelo}</td>
+      <td style="padding:7px 8px;font-size:12px;">${dests || '<span class="nd" title="El detalle de destino aparece con la próxima actualización del backend">sin detalle de destino</span>'}</td>
+      <td style="padding:7px 8px;font-size:12px;text-align:right;white-space:nowrap;">${eq.horas} hs</td>
+      <td style="padding:7px 8px;font-size:12px;text-align:right;white-space:nowrap;" title="Referencia interna: pauta de flota USD ${(eq.pfUsd || 0).toLocaleString('es-AR')}/mes × TC, prorrateada por horas de uso">${fmt(eq.costoArs)}</td>
+    </tr>`;
+  }).join('');
+  const filasIng = itemsIng.map(it =>
+    `<div style="font-size:11.5px;padding:2px 0;">${it.estado === 'Cobrada' ? '✅' : '🕓'} ${it.nombre} — <strong>${fmt(it.monto)}</strong> <span style="color:var(--muted);">(${it.estado === 'Cobrada' ? 'cobrado' : 'a cobrar'})</span></div>`).join('');
+  const kpi = (l, v, cls) => `<div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">${l}</div><div style="font-size:15px;font-weight:700;" class="${cls || ''}">${v}</div></div>`;
+  return `<div style="margin-top:16px;background:#f0f9ff;border:1.5px solid #bae6fd;border-radius:10px;padding:12px 16px;">
+    <div style="font-size:12px;font-weight:700;color:#0c4a6e;margin-bottom:8px;">🚜 Alquiler de equipos a terceros <span style="font-weight:400;">· ${MES[mesActual] || mesActual} — máquinas de INGECO prestadas a otras empresas</span></div>
+    <div style="display:flex;gap:22px;flex-wrap:wrap;margin-bottom:8px;">
+      ${kpi('Ingreso (Agustín)', ingreso > 0 ? fmt(ingreso) : '—', ingreso > 0 ? 'pos-val' : '')}
+      ${kpi('Equipos prestados', ext ? ext.equipos.length : 0)}
+      ${kpi('Obras / destinos', destinosSet.size || '—')}
+      ${kpi('Horas del mes', (ext ? ext.horasTot : 0) + ' hs')}
+    </div>
+    ${filasIng
+      ? `<div style="margin-bottom:8px;">${filasIng}</div>`
+      : `<div style="font-size:11.5px;color:#b45309;margin-bottom:8px;">⚠️ Agustín todavía no cargó la prestación de máquinas de ${MES[mesActual] || mesActual} en su archivo (código "Alquiler de equipos").</div>`}
+    ${ext ? `<div class="table-wrap"><table style="width:100%;border-collapse:collapse;">
+      <thead><tr style="background:#e0f2fe;">${thA('Equipo')}${thA('Destino (obra particular)')}${thN('Horas')}${thN('Valor tarifa interna')}</tr></thead>
+      <tbody>${filasEq}</tbody></table></div>` : ''}
+    <div style="font-size:10.5px;color:var(--muted);margin-top:8px;">El ingreso real lo carga Agustín en su archivo como prestación de máquinas (código "Alquiler de equipos"). El valor tarifa interna es solo referencia (pauta de flota USD × TC prorrateada por horas), no lo facturado. Este costo no se imputa a las obras de INGECO.</div>
+  </div>`;
+}
+
 function renderResumenObra() {
   const tbody   = document.getElementById('tbody-resumen-obra');
   const mesLabel = document.getElementById('mes-label-resumen-obra');
@@ -3367,10 +3417,12 @@ function renderResumenObra() {
   if (tbody && !datos) {
     tbody.innerHTML = '<tr><td colspan="8" class="nd" style="text-align:center;padding:20px;">Presioná "Actualizar datos" para cargar desde Drive</td></tr>';
     if (otrosGastosDivEl) otrosGastosDivEl.innerHTML = '';
+    const _atd1 = document.getElementById('alquiler-terceros-obra'); if (_atd1) _atd1.innerHTML = '';
   } else if (tbody && busq && !datos.rows.some(r => _obraMatchBusqueda(r.o, busq))) {
     tbody.innerHTML = `<tr><td colspan="8" class="nd" style="text-align:center;padding:20px;">Sin obras que coincidan con "${busq}" en este período</td></tr>`;
     renderChartsObra({ insumos: [], mo: [], alquiler: [], tn: [] });
     if (otrosGastosDivEl) otrosGastosDivEl.innerHTML = '';
+    const _atd2 = document.getElementById('alquiler-terceros-obra'); if (_atd2) _atd2.innerHTML = '';
   } else if (tbody) {
     const rows = busq ? datos.rows.filter(r => _obraMatchBusqueda(r.o, busq)) : datos.rows;
     const { moEsEstim, tnTotalGlobal } = datos;
@@ -3407,6 +3459,8 @@ function renderResumenObra() {
     // Provisión de Pavimax/asfalto frío/caliente, etc.) — no son un contrato de
     // obra. Van en un bloque aparte (fuera de la tabla), no como filas más.
     if (otrosGastosDivEl) otrosGastosDivEl.innerHTML = _renderOtrosGastosBlock(rows.filter(r => r.otroGasto));
+    const alqTercerosDivEl = document.getElementById('alquiler-terceros-obra');
+    if (alqTercerosDivEl) alqTercerosDivEl.innerHTML = _renderAlquilerTercerosBlock();
 
     // Fila total — MO es la suma de la MO prorateada de las obras mostradas (no el
     // total de la empresa vía TANGO), para que coincida exactamente con la suma de

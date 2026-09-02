@@ -1419,6 +1419,7 @@ function leerAlquilerEquipos() {
     // Las posiciones viejas quedan como fallback si no se reconoce el header.
     let COL_FECHA_PD    = 0;  // A: Fecha
     let COL_COD_EQ      = 2;  // C: Código de equipo
+    let COL_OBRA_PART   = 5;  // F: Ubicación / Obra Particular (destino del alquiler a terceros)
     let COL_HORAS_PD    = 8;  // fallback layout viejo: I = Total de horas
     let COL_COD_OBRA_PD = 15; // fallback layout viejo: P = Obra General
 
@@ -1433,6 +1434,8 @@ function leerAlquilerEquipos() {
         const iCo = cells.findIndex(c => c === 'CODIGO' || c === 'COD. EQUIPO' || c === 'CODIGO EQUIPO');
         const iHs = cells.findIndex(c => /TIEMPO.*TRABAJO|HORAS TRABAJADAS|TOTAL.*HORAS?$/.test(c));
         const iOg = cells.findIndex(c => c === 'OBRA GENERAL');
+        const iOp = cells.findIndex(c => c.indexOf('OBRA PARTICULAR') >= 0);
+        if (iOp >= 0) COL_OBRA_PART   = iOp;
         if (iFe >= 0) COL_FECHA_PD    = iFe;
         if (iCo >= 0) COL_COD_EQ      = iCo;
         if (iHs >= 0) COL_HORAS_PD    = iHs;
@@ -1472,6 +1475,13 @@ function leerAlquilerEquipos() {
       if (!acum[mes][codEq][obra]) acum[mes][codEq][obra] = 0;
       acum[mes][codEq][obra]  += horas;
       acum[mes][codEq]._total += horas;
+      // Destino real del alquiler a terceros (col Ubicación/Obra Particular) —
+      // alimenta la sección "Alquiler de equipos" del tablero
+      if (esAlquilerExterno(obra)) {
+        const destPart = String(row[COL_OBRA_PART] || '').trim() || 'Sin destino';
+        if (!acum[mes][codEq]._dest) acum[mes][codEq]._dest = {};
+        acum[mes][codEq]._dest[destPart] = Math.round(((acum[mes][codEq]._dest[destPart] || 0) + horas) * 10) / 10;
+      }
     }
 
     // 3. Calcular costos prorrateados por horas
@@ -1489,12 +1499,12 @@ function leerAlquilerEquipos() {
         const pfArs = info.pf_usd * tc;
 
         for (const [obra, horas] of Object.entries(datos)) {
-          if (obra === '_total') continue;
+          if (obra.charAt(0) === '_') continue; // _total, _dest
           const costoArs = Math.round((horas / totalHoras) * pfArs);
           if (!porObra[obra]) porObra[obra] = { costoArs: 0, horasTot: 0, equipos: [] };
           porObra[obra].costoArs += costoArs;
           porObra[obra].horasTot += horas;
-          porObra[obra].equipos.push({
+          const eqEntry = {
             codigo:       cod,
             clasificacion: info.clasificacion,
             marca:        info.marca,
@@ -1502,7 +1512,10 @@ function leerAlquilerEquipos() {
             pfUsd:        info.pf_usd,
             horas:        Math.round(horas * 10) / 10,
             costoArs:     costoArs
-          });
+          };
+          // Alquiler a terceros: a qué obras/destinos fue el equipo (col F)
+          if (esAlquilerExterno(obra) && datos._dest) eqEntry.destinos = datos._dest;
+          porObra[obra].equipos.push(eqEntry);
           totalMes += costoArs;
         }
       }
