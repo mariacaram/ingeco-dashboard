@@ -1822,11 +1822,14 @@ function leerRemitosAsfalto() {
 
       // Buscar fila de encabezados que tenga CANT. y U.D./U.M.
       let hdrIdx = -1, iCant = -1, iUD = -1, iDesc = -1, iMes = -1, iAnio = -1, iFecha = -1, iObra = -1, iDest = -1, iTipoCol = -1;
+      let iCant2 = -1, iUD2 = -1, iDesc2 = -1; // segundo material por fila (layout sep-2026)
       for (let i = 0; i < Math.min(20, rows.length); i++) {
-        const cells = rows[i].map(c => String(c).toUpperCase().trim());
-        const iC = cells.findIndex(c => c === 'CANT.' || c === 'CANT' || c === 'CANTIDAD' || c === 'TOTAL' || c === 'TN' || c === 'TONELADAS');
-        const iU = cells.findIndex(c => c === 'U.D.' || c === 'U.M.' || c === 'UD' || c === 'UI' || c === 'U.I.' || c === 'UNIDAD' || c === 'I');
-        const iDt = cells.findIndex(c => c === 'DESCRIPCION' || c === 'DESCRIPCIÓN' || c === 'DESCRIPCION' || c === 'PRODUCTO' || c === 'ARTICULO' || c === 'ARTÍCULO' || c === 'MATERIAL' || c === 'ITEM');
+        // Sin acentos ni variantes Unicode: "DESCRIPCIÓN" (NFC o NFD) → "DESCRIPCION"
+        const cells = rows[i].map(c => String(c).toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim());
+        // Layout sep-2026: "CANTIDAD 1"/"CANTIDAD 2", "UNIDAD 1"/"UNIDAD 2", "DESCRIPCIÓN 1"/"DESCRIPCIÓN 2"
+        const iC = cells.findIndex(c => c === 'CANT.' || c === 'CANT' || c === 'CANTIDAD' || c === 'CANTIDAD 1' || c === 'TOTAL' || c === 'TN' || c === 'TONELADAS');
+        const iU = cells.findIndex(c => c === 'U.D.' || c === 'U.M.' || c === 'UD' || c === 'UI' || c === 'U.I.' || c === 'UNIDAD' || c === 'UNIDAD 1' || c === 'I');
+        const iDt = cells.findIndex(c => c === 'DESCRIPCION' || c === 'DESCRIPCIÓN' || c === 'DESCRIPCION 1' || c === 'DESCRIPCIÓN 1' || c === 'PRODUCTO' || c === 'ARTICULO' || c === 'ARTÍCULO' || c === 'MATERIAL' || c === 'ITEM');
         const iMt = cells.findIndex(c => c === 'MES');
         // Obra: preferir OBRA GENERAL (col K). Fallback a OBRA / OBRA PARTICULAR / DESTINO.
         let iOb = cells.findIndex(c => c === 'OBRA GENERAL');
@@ -1846,6 +1849,9 @@ function leerRemitosAsfalto() {
           iObra  = iOb;
           iDest  = iDs >= 0 ? iDs : 7; // col H por defecto
           iTipoCol = cells.findIndex(c => c === 'TIPO'); // col F (convención jun-2026)
+          iCant2 = cells.findIndex(c => c === 'CANTIDAD 2');
+          iUD2   = cells.findIndex(c => c === 'UNIDAD 2');
+          iDesc2 = cells.findIndex(c => c === 'DESCRIPCION 2' || c === 'DESCRIPCIÓN 2');
           break;
         }
       }
@@ -1907,14 +1913,22 @@ function leerRemitosAsfalto() {
         // ── Registrar la obra de CUALQUIER salida (piedra, escombro, base, asfalto, etc.) ──
         if (obra) resultado[mesKey].obrasSalida[obra] = (resultado[mesKey].obrasSalida[obra] || 0) + 1;
 
-        const desc = String(iDesc >= 0 ? row[iDesc] || '' : '').toUpperCase().trim();
-        const cant = typeof row[iCant] === 'number' ? row[iCant]
-                   : parseFloat(String(row[iCant] || '').replace(',', '.')) || 0;
         // Col TIPO (convención jun-2026): Provision / Carpeta Ingeco / Bacheo Ingeco
         const tipoColRaw = iTipoCol >= 0 ? String(row[iTipoCol] || '').trim() : '';
         const tipoColU   = tipoColRaw.toUpperCase();
         // Destino/cliente del remito (col H) — relevante en provisiones a terceros
         const destino = iDest >= 0 ? String(row[iDest] || '').trim() : '';
+
+        // Una fila puede traer hasta 2 materiales (layout sep-2026:
+        // DESCRIPCIÓN 1/CANTIDAD 1/UNIDAD 1 y DESCRIPCIÓN 2/CANTIDAD 2/UNIDAD 2)
+        const matSlots = [[iDesc, iCant, iUD]];
+        if (iDesc2 >= 0 || iCant2 >= 0) matSlots.push([iDesc2, iCant2, iUD2]);
+        for (var slot = 0; slot < matSlots.length; slot++) {
+        const iDescS = matSlots[slot][0], iCantS = matSlots[slot][1], iUDS = matSlots[slot][2];
+        // Sin acentos: "FRÍO" (NFC o NFD) → "FRIO" — los includes() de abajo quedan estables
+        const desc = String(iDescS >= 0 ? row[iDescS] || '' : '').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+        const cant = typeof row[iCantS] === 'number' ? row[iCantS]
+                   : parseFloat(String(row[iCantS] || '').replace(',', '.')) || 0;
 
         // ── Desglose por CATEGORÍA para provisiones/ventas (convención jun-2026):
         // descripción normalizada + col TIPO + destino, incluye áridos en M3.
@@ -1928,7 +1942,7 @@ function leerRemitosAsfalto() {
           else if (desc.includes('ASFALTO') && (desc.includes('FRI') || desc.includes('FRÍO'))) dsCat = 'Asfalto en frío';
           else if (CAT_ARIDOS[desc]) dsCat = CAT_ARIDOS[desc];
           if (dsCat) {
-            const udC = iUD >= 0 ? String(row[iUD] || '').toUpperCase().trim() : '';
+            const udC = iUDS >= 0 ? String(row[iUDS] || '').toUpperCase().trim() : '';
             const uCat = (dsCat === 'Pavimax' || dsCat.indexOf('Asfalto') === 0) ? 'TN' : (udC || 'M3');
             if (!resultado[mesKey].porObra[obra]) resultado[mesKey].porObra[obra] = { caliente: 0, frio: 0 };
             const po = resultado[mesKey].porObra[obra];
@@ -1944,8 +1958,8 @@ function leerRemitosAsfalto() {
         }
 
         // ── De acá en adelante: solo asfalto en toneladas (para tn y prorrateo de MO) ──
-        if (iUD >= 0) {
-          const ud = String(row[iUD] || '').toUpperCase().trim();
+        if (iUDS >= 0) {
+          const ud = String(row[iUDS] || '').toUpperCase().trim();
           if (ud !== 'TN' && ud !== 'TON' && ud !== 'TONS' && ud !== 'TM' && ud !== 'TONELADAS') continue;
         }
         if (!desc.includes('ASFALTO')) continue;
@@ -1999,6 +2013,7 @@ function leerRemitosAsfalto() {
           }
         }
         resultado[mesKey].total += cant;
+        } // fin loop de materiales (slot 1 y 2)
       }
     }
 
