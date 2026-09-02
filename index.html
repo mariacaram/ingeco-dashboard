@@ -1286,10 +1286,16 @@
       <div class="fuente">TANGO (Mauro Orellana) — clasificación: Taller</div>
     </div>
     <div class="kpi-card pos">
-      <div class="kpi-label">Ingreso alquiler equipos</div>
+      <div class="kpi-label">Alquiler equipos INGECO</div>
       <div class="kpi-value pos-val" id="kpi-taller-alquiler">sin dato</div>
       <div class="kpi-sub" id="kpi-taller-alquiler-sub">Período seleccionado</div>
-      <div class="fuente">Alquiler interno cobrado a obras — mismo valor que aparece como costo en Contribución marginal por obra</div>
+      <div class="fuente">Uso interno de equipos (Partes diarios, col. OBRA GENERAL ≠ "Alquiler de equipos") — obras + áreas internas, a tarifa de flota</div>
+    </div>
+    <div class="kpi-card pos">
+      <div class="kpi-label">Alquiler equipos a externos</div>
+      <div class="kpi-value pos-val" id="kpi-taller-alq-externo">sin dato</div>
+      <div class="kpi-sub" id="kpi-taller-alq-externo-sub">Período seleccionado</div>
+      <div class="fuente">Máquinas prestadas a otras empresas (Partes diarios, col. OBRA GENERAL = "Alquiler de equipos") — a tarifa de flota; el ingreso facturado real lo carga Agustín</div>
     </div>
     <div class="kpi-card accent">
       <div class="kpi-label">Repuestos Abr 2026 (visible)</div>
@@ -4970,12 +4976,33 @@ function renderAlquilerEquipos() {
       : MES[mesActual] || mesActual;
   }
 
-  // Actualizar KPI de Taller también (mismo valor que el costo de obras — ver footnote)
+  // KPIs del Taller: alquiler INGECO (uso interno: obras + áreas internas,
+  // col. OBRA GENERAL ≠ "Alquiler de equipos") y alquiler a EXTERNOS
+  // (col. OBRA GENERAL = "Alquiler de equipos"), ambos a tarifa de flota.
+  const extEntry   = datos && datos.porObra ? datos.porObra.find(o => esAlquilerExterno(o.obra)) : null;
+  const alqExterno = extEntry ? extEntry.costoArs : 0;
+  const alqIngeco  = datos ? Math.max(0, (datos.totalArs || 0) - alqExterno) : 0;
   const tallerKpi    = document.getElementById('kpi-taller-alquiler');
   const tallerKpiSub = document.getElementById('kpi-taller-alquiler-sub');
-  if (datos && totalObrasAlq) {
-    if (tallerKpi)    { tallerKpi.textContent = fmt(totalObrasAlq); }
-    if (tallerKpiSub) tallerKpiSub.textContent = MES[mesActual] || mesActual;
+  if (tallerKpi) {
+    if (alqIngeco > 0) {
+      tallerKpi.textContent = fmt(alqIngeco); tallerKpi.className = 'kpi-value pos-val';
+      if (tallerKpiSub) tallerKpiSub.textContent = fmt(totalObrasAlq || 0) + ' a obras · resto a áreas internas · ' + (MES[mesActual] || mesActual);
+    } else {
+      tallerKpi.textContent = 'sin dato'; tallerKpi.className = 'kpi-value nd';
+      if (tallerKpiSub) tallerKpiSub.textContent = 'Actualizá datos para cargar';
+    }
+  }
+  const tallerKpiExt    = document.getElementById('kpi-taller-alq-externo');
+  const tallerKpiExtSub = document.getElementById('kpi-taller-alq-externo-sub');
+  if (tallerKpiExt) {
+    if (alqExterno > 0) {
+      tallerKpiExt.textContent = fmt(alqExterno); tallerKpiExt.className = 'kpi-value pos-val';
+      if (tallerKpiExtSub) tallerKpiExtSub.textContent = (extEntry.equipos || []).length + ' equipo' + ((extEntry.equipos || []).length !== 1 ? 's' : '') + ' · ' + (extEntry.horasTot || 0) + ' hs · ' + (MES[mesActual] || mesActual);
+    } else {
+      tallerKpiExt.textContent = alqIngeco > 0 ? '—' : 'sin dato'; tallerKpiExt.className = 'kpi-value nd';
+      if (tallerKpiExtSub) tallerKpiExtSub.textContent = alqIngeco > 0 ? 'Sin equipos prestados a externos en ' + (MES[mesActual] || mesActual) : 'Actualizá datos para cargar';
+    }
   }
 
   // Tabla de detalle — solo si existe el elemento en el DOM
