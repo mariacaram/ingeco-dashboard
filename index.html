@@ -3624,27 +3624,30 @@ function openHistorialObra(codObra, nombreObra) {
   const tot = { aCobrar: 0, insumos: 0, mo: 0, moh: 0, asf: 0, alquiler: 0, margen: 0, tnCal: 0, tnFrio: 0 };
   let algunaEstim = false;
   let hayDatosMesActual = false;
-  let futuroGenerado = 0;
+  let futuroGenerado = 0, enCursoGenerado = 0;
   const filasMes = [];
-  // Meses futuros: se MUESTRAN (para ver el plan de certificación) pero NO
-  // suman al total ni al margen — lo que se va a generar es una estimación.
+  // Solo los meses CERRADOS suman: el mes en curso se está generando (⏳) y
+  // los futuros son el plan de certificación (📅) — ambos se muestran pero
+  // no entran al total ni al margen realizado.
   const idxHoyHist = new Date().getMonth();
   MES_ORDER.forEach(m => {
     const d = computeMargenObrasMes(m);
     const r = buscaFila(d);
     if (!r || !r.hasData) return;
     if (m === mesActual) hayDatosMesActual = true;
-    if (MES_ORDER.indexOf(m) > idxHoyHist) {
-      futuroGenerado += r.aCobrar || 0;
-      filasMes.push(`<tr style="border-top:1px solid var(--border);background:#f8fafc;color:var(--muted);font-style:italic;">
-        <td style="padding:7px 10px;font-size:12px;font-weight:600;">📅 ${(MES[m] || m).replace(' 2026', '')}</td>
+    const idxM = MES_ORDER.indexOf(m);
+    if (idxM >= idxHoyHist) {
+      const esEnCurso = idxM === idxHoyHist;
+      if (esEnCurso) enCursoGenerado += r.aCobrar || 0; else futuroGenerado += r.aCobrar || 0;
+      filasMes.push(`<tr style="border-top:1px solid var(--border);background:${esEnCurso ? '#fffbeb' : '#f8fafc'};color:var(--muted);font-style:italic;">
+        <td style="padding:7px 10px;font-size:12px;font-weight:600;">${esEnCurso ? '⏳' : '📅'} ${(MES[m] || m).replace(' 2026', '')}</td>
         <td style="padding:7px 10px;font-size:12px;text-align:right;">${r.aCobrar > 0 ? fmt(r.aCobrar) : '—'}</td>
         <td style="padding:7px 10px;font-size:12px;text-align:right;">${r.insumos > 0 ? fmt(r.insumos) : '—'}</td>
-        <td style="padding:7px 10px;font-size:12px;text-align:right;" data-restrict="sueldos">—</td>
-        <td style="padding:7px 10px;font-size:12px;text-align:right;">—</td>
-        <td style="padding:7px 10px;font-size:12px;text-align:right;">—</td>
-        <td style="padding:7px 10px;font-size:12px;text-align:right;">—</td>
-        <td style="padding:7px 10px;font-size:11px;text-align:right;">programado — no suma</td>
+        <td style="padding:7px 10px;font-size:12px;text-align:right;" data-restrict="sueldos">${esEnCurso && r.moObra != null ? fmt(r.moObra) : '—'}</td>
+        <td style="padding:7px 10px;font-size:12px;text-align:right;">${esEnCurso && r.moHormigon > 0 ? fmt(r.moHormigon) : '—'}</td>
+        <td style="padding:7px 10px;font-size:12px;text-align:right;">${esEnCurso && r.costoAsfObra != null ? fmt(r.costoAsfObra) : '—'}</td>
+        <td style="padding:7px 10px;font-size:12px;text-align:right;">${esEnCurso && r.alquiler > 0 ? fmt(r.alquiler) : '—'}</td>
+        <td style="padding:7px 10px;font-size:11px;text-align:right;">${esEnCurso ? 'en curso — no suma' : 'programado — no suma'}</td>
       </tr>`);
       return;
     }
@@ -3686,14 +3689,18 @@ function openHistorialObra(codObra, nombreObra) {
       <div class="panel-kpi">
         <div class="panel-kpi-item">
           <div class="panel-kpi-label">Margen realizado</div>
-          <div class="panel-kpi-val ${mgColorT}" title="Solo meses transcurridos — lo programado a futuro no cuenta">${algunaEstim ? '~' : ''}${fmt(tot.margen)}</div>
+          <div class="panel-kpi-val ${mgColorT}" title="Solo meses cerrados — ni el mes en curso ni lo programado a futuro">${algunaEstim ? '~' : ''}${fmt(tot.margen)}</div>
         </div>
         <div class="panel-kpi-item">
           <div class="panel-kpi-label">Generado realizado</div>
           <div class="panel-kpi-val pos-val">${fmt(tot.aCobrar)}</div>
         </div>
+        ${enCursoGenerado > 0 ? `<div class="panel-kpi-item">
+          <div class="panel-kpi-label">⏳ En curso (${(MES[MES_ORDER[idxHoyHist]] || '').replace(' 2026', '')})</div>
+          <div class="panel-kpi-val" style="color:#b45309;" title="Se está generando — suma recién cuando cierre el mes">${fmt(enCursoGenerado)}</div>
+        </div>` : ''}
         ${futuroGenerado > 0 ? `<div class="panel-kpi-item">
-          <div class="panel-kpi-label">Programado a futuro</div>
+          <div class="panel-kpi-label">📅 Programado a futuro</div>
           <div class="panel-kpi-val" style="color:var(--muted);" title="Plan de certificación — no suma al total ni al margen">${fmt(futuroGenerado)}</div>
         </div>` : ''}
       </div>
@@ -3710,7 +3717,7 @@ function openHistorialObra(codObra, nombreObra) {
         </tr></thead>
         <tbody>${filasMes.join('')}
           <tr style="background:#f8fafc;font-weight:700;border-top:2px solid var(--border);">
-            <td style="padding:8px 10px;font-size:12px;">TOTAL realizado${futuroGenerado > 0 ? ' <span style="font-weight:400;font-size:10px;color:var(--muted);">(sin lo programado)</span>' : ''}</td>
+            <td style="padding:8px 10px;font-size:12px;">TOTAL realizado${(futuroGenerado > 0 || enCursoGenerado > 0) ? ' <span style="font-weight:400;font-size:10px;color:var(--muted);">(meses cerrados)</span>' : ''}</td>
             <td style="padding:8px 10px;font-size:12px;text-align:right;" class="pos-val">${fmt(tot.aCobrar)}</td>
             <td style="padding:8px 10px;font-size:12px;text-align:right;" class="neg-val">${fmt(tot.insumos)}</td>
             <td style="padding:8px 10px;font-size:12px;text-align:right;" class="neg-val" data-restrict="sueldos">${tot.mo > 0 ? (algunaEstim ? '~' : '') + fmt(tot.mo) : '—'}</td>
@@ -3722,14 +3729,15 @@ function openHistorialObra(codObra, nombreObra) {
         </tbody>
       </table>
       ${tnTotStr}
-      <div style="font-size:11px;color:var(--muted);margin-top:10px;">Margen mensual = Generado − Insumos − MO Asfalto − MO Hormigón tercerizada − Costo asfalto − Alquiler. Los meses 📅 son el plan de certificación: se muestran pero no suman. ${algunaEstim ? '~ incluye MO estimada en meses sin TANGO cargado.' : ''}</div>`;
+      <div style="font-size:11px;color:var(--muted);margin-top:10px;">Margen mensual = Generado − Insumos − MO Asfalto − MO Hormigón tercerizada − Costo asfalto − Alquiler. El mes ⏳ está en curso (se está generando) y los 📅 son el plan de certificación: se muestran pero no suman. ${algunaEstim ? '~ incluye MO estimada en meses sin TANGO cargado.' : ''}</div>`;
   }
 
   const codEsc3 = (codObra    || '').replace(/'/g, "\\'");
   const nomEsc3 = (nombreObra || '').replace(/'/g, "\\'");
   const idxHoyBtn = Math.min(new Date().getMonth(), MES_ORDER.length - 1);
+  const idxDefBtn = Math.max(0, idxHoyBtn - 1); // último mes CERRADO
   const opcionesHasta = MES_ORDER.slice(0, idxHoyBtn + 1).map((m, i) =>
-    `<option value="${m}" ${i === idxHoyBtn ? 'selected' : ''}>hasta ${(MES[m] || m).replace(' 2026', '')}</option>`).join('');
+    `<option value="${m}" ${i === idxDefBtn ? 'selected' : ''}>hasta ${(MES[m] || m).replace(' 2026', '')}${i === idxHoyBtn ? ' (en curso)' : ''}</option>`).join('');
   const btnPDFTotal = filasMes.length > 0
     ? `<div style="display:flex;gap:8px;margin-top:12px;align-items:stretch;">
          <button onclick="generarReportePDF('${codEsc3}','${nomEsc3}', null, document.getElementById('pdf-hasta-mes').value)"
@@ -3786,8 +3794,9 @@ function _recolectarDatosObra(codObra, nombreObra, soloMes, hastaMes) {
   // Estado de resultados: SOLO lo realizado. Sin soloMes va desde enero hasta
   // hastaMes (o el mes calendario actual) — nunca incluye meses futuros.
   const idxHoyPDF = new Date().getMonth();
-  let idxHasta = hastaMes ? MES_ORDER.indexOf(hastaMes) : idxHoyPDF;
-  if (idxHasta < 0 || idxHasta > idxHoyPDF) idxHasta = idxHoyPDF;
+  // Default: hasta el último mes CERRADO (el actual se está generando).
+  let idxHasta = hastaMes ? MES_ORDER.indexOf(hastaMes) : Math.max(0, idxHoyPDF - 1);
+  if (idxHasta < 0 || idxHasta > idxHoyPDF) idxHasta = Math.max(0, idxHoyPDF - 1);
   const mesesAIterar = soloMes ? [soloMes] : MES_ORDER.slice(0, idxHasta + 1);
   mesesAIterar.forEach(m => {
     const d = computeMargenObrasMes(m);
