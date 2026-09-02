@@ -841,7 +841,7 @@
           <tr><td colspan="8" class="nd" style="text-align:center;padding:20px;">Presioná "Actualizar datos" para cargar desde Drive</td></tr>
         </tbody>
       </table>
-      <div class="nota-fuente" style="margin-top:6px;">⚖️ <strong>MO prorrateada:</strong> MO total Obras (TANGO) × (tn caliente de la obra / tn caliente total del mes) — fuente tn: Remitos Oficiales columna OBRA</div>
+      <div class="nota-fuente" style="margin-top:6px;">⚖️ <strong>MO prorrateada:</strong> MO total Obras (TANGO) × (tn de asfalto de la obra / tn de asfalto total del mes) — caliente + frío, es todo asfalto · fuente tn: Remitos Oficiales columna OBRA GENERAL</div>
     </div>
     <div class="nota-fuente">A Cobrar: Obras a cobrar (Agustín) · Insumos: OC Guillermo Konicek · Alquiler: Partes diarios Adrián Caram · MO: TANGO (total mensual estimado, no atribuible por obra)</div>
 
@@ -2419,8 +2419,12 @@ function renderMargen() {
           spans.push(`<span style="white-space:nowrap;">Obras: <strong>${fmt(totalObras)}</strong></span>`);
       }
       if (provCert.total > 0) {
-        const esReal = provCert.items.every(i => i.esReal);
-        spans.push(`<span style="white-space:nowrap;" title="Certificación de provisiones: real cargada por Esteban si existe, sino la teórica (tn × precio)">Provisiones: <strong>${fmt(provCert.total)}</strong> <span style="font-size:9px;">(${esReal ? 'real' : provCert.items.some(i => i.esReal) ? 'real + teórica' : 'teórica'})</span></span>`);
+        const totReal = provCert.items.filter(i => i.esReal).reduce((s, i) => s + i.monto, 0);
+        const totTeo  = provCert.total - totReal;
+        const detLbl = totTeo <= 0 ? 'real'
+          : totReal <= 0 ? 'teórica — Esteban aún no cargó la real'
+          : `real ${fmt(totReal)} · teórica ${fmt(totTeo)}`;
+        spans.push(`<span style="white-space:nowrap;" title="Certificación de provisiones: real cargada por Esteban si existe, sino la teórica (tn × precio de convenio)">Provisiones: <strong>${fmt(provCert.total)}</strong> <span style="font-size:9px;">(${detLbl})</span></span>`);
       }
       kpiBreak.innerHTML = spans.join('<span style="color:var(--border);">·</span>');
     }
@@ -2984,22 +2988,13 @@ function _certProvisionesMes(mes) {
   if (!mes || mes === 'total') return { total: 0, items: [] };
   const d = computeMargenObrasMes(mes);
   if (!d || !d.rows) return { total: 0, items: [] };
-  const idxMes = MES_ORDER.indexOf(mes);
-  const mesCerrado = idxMes >= 0 && idxMes < new Date().getMonth();
   const items = [];
   d.rows.forEach(r => {
     if (!r.otroGasto) return;
     const cod = r.o.cod_obra || r.o.nombre;
     const real = _certRealProvision(mes, cod);
-    if (mesCerrado) {
-      // Mes CERRADO: solo cuenta lo efectivamente COBRADO (con fecha real).
-      // Lo facturado/programado que no se cobró ya no va — y la teórica
-      // tampoco: si el mes cerró sin cobro, no se estima.
-      const cobrado = real ? real.items.filter(i => i.cat === 'cobrados').reduce((s, i) => s + (i.importe || 0), 0) : 0;
-      if (cobrado > 0) items.push({ obra: cod, monto: Math.round(cobrado), esReal: true, mesReal: real.mesSig });
-      return;
-    }
-    // Mes en curso: real cargada por Esteban si existe, sino la teórica
+    // Siempre suman: la REAL de Esteban si está cargada; si no, la TEÓRICA
+    // (tn × precio, neta de excedentes y cortes) marcada como tal.
     let teo = r.certTeorica || 0;
     if (teo > 0) {
       const aj = _certExcedentePrev(mes, cod);
@@ -6700,7 +6695,7 @@ function openDetalleCelda(tipo, codObra, nombreObra) {
       if (entry) tnObra = entry[1].caliente || 0;
     }
     const moObra = (moTotal > 0 && tnTotal > 0 && tnObra > 0) ? Math.round(moTotal*(tnObra/tnTotal)) : null;
-    html = `<div style="font-size:12px;color:var(--muted);margin-bottom:12px;">MO prorrateada por Tn caliente · ${mes} · Fuente: TANGO (Mauro)</div>
+    html = `<div style="font-size:12px;color:var(--muted);margin-bottom:12px;">MO prorrateada por tn de asfalto (caliente + frío) · ${mes} · Fuente: TANGO (Mauro)</div>
       <div style="display:grid;gap:8px;">
         <div style="background:#f8fafc;border-radius:8px;padding:12px;">
           <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">MO total obras del mes</div>
@@ -7852,7 +7847,7 @@ function openTotalACobrarPanel() {
     <div class="panel-title">Total Certificado</div>
     <div class="panel-sub">${mesLabel} · archivo "Obras a cobrar" (Agustín)</div>
     <div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:11.5px;line-height:1.55;color:var(--muted);margin-bottom:12px;">
-      ℹ️ <strong>Cómo se calcula:</strong> suma del <strong>Monto a certificar</strong> de las filas del archivo de Agustín cuyo <strong>Período de realización</strong> cae en ${mesLabel}. Como una obra no necesariamente certifica todo junto, la convención es <strong>una fila por mes de certificación</strong> (ej. "Bacheo SMT mes julio"): cada fila suma en su mes, y el total de la obra es la suma de sus filas. Lo que todavía no se sabe cómo se reparte va <strong>sin período</strong> (queda en su categoría aparte, sin asignar a ningún mes). Las <strong>provisiones</strong>: en el mes en curso suman con su certificación <strong>real</strong> (lo que Esteban cargó en su planilla del mes siguiente) o, si todavía no hay real, con la <strong>teórica</strong> (tn × precio de convenio, neta de excedentes); en <strong>meses cerrados solo cuenta lo efectivamente cobrado</strong> (con fecha real de cobro) — lo facturado o programado que no se cobró ya no va. El detalle fino está en "Otros Gastos o salidas".
+      ℹ️ <strong>Cómo se calcula:</strong> suma del <strong>Monto a certificar</strong> de las filas del archivo de Agustín cuyo <strong>Período de realización</strong> cae en ${mesLabel}. Como una obra no necesariamente certifica todo junto, la convención es <strong>una fila por mes de certificación</strong> (ej. "Bacheo SMT mes julio"): cada fila suma en su mes, y el total de la obra es la suma de sus filas. Lo que todavía no se sabe cómo se reparte va <strong>sin período</strong> (queda en su categoría aparte, sin asignar a ningún mes). Las <strong>provisiones suman siempre</strong>: con su certificación <strong>real</strong> (lo que Esteban cargó en su planilla del mes siguiente) o, si todavía no hay real, con la <strong>teórica</strong> (tn × precio de convenio, neta de excedentes y cortes) — el desglose aclara cuánto es teórico. El detalle fino está en "Otros Gastos o salidas".
     </div>
     <div class="panel-kpi">
       <div class="panel-kpi-item">
