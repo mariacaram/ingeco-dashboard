@@ -2835,9 +2835,10 @@ function _filaMargenHTML(r, moEsEstim, tnTotalGlobal) {
   if (r.tnObra > 0)     _tnPartes.push(fmtTn(r.tnObra) + ' tn');
   if (r.tnFrioObra > 0) _tnPartes.push(fmtTn(r.tnFrioObra) + ' frío');
   const tnLabel = _tnPartes.join(' + ');
-  const detLinea = _tnDetCompacto(r.tnDet, 2);
+  // Solo números en la celda — el desglose por destino vive en el tooltip y
+  // en el panel de detalle al hacer click (pedido de María, sep-2026)
   const tnCell = (r.tnObra > 0 || r.tnFrioObra > 0)
-    ? `<span style="font-size:12px;" title="${(r.tnDet || []).map(e => _tnDetLabel(e) + ': ' + fmtTn(e.t) + ' tn').join(' · ') || tnLabel}">${tnLabel}${r.costoAsfObra != null ? '<br><small class="neg-val" style="font-size:10px;">' + fmt(r.costoAsfObra) + '</small>' : ''}${detLinea ? '<br><small style="font-size:9.5px;color:var(--muted);">' + detLinea + '</small>' : ''}</span>`
+    ? `<span style="font-size:12px;" title="${(r.tnDet || []).map(e => _tnDetLabel(e) + ': ' + fmtTn(e.t) + ' tn').join(' · ') || tnLabel}">${tnLabel}${r.costoAsfObra != null ? '<br><small class="neg-val" style="font-size:10px;">' + fmt(r.costoAsfObra) + '</small>' : ''}</span>`
     : '<span class="nd">—</span>';
   const moCell = r.moObra != null
     ? `<span class="neg-val" title="${moEsEstim ? 'MO estimada' : 'MO real'} × ${fmtTn(r.tnObraTotal)}tn / ${fmtTn(tnTotalGlobal)}tn total">${moEsEstim ? '~' : ''}${fmt(r.moObra)}</span>`
