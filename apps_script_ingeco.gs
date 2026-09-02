@@ -426,6 +426,18 @@ function parsearArchivoTangoMO(file) {
 // Soporta dos formatos de TANGO:
 //   Formato A: columnas OBRA + TOTAL QUINCENA C/REDONDEO PARA PAGO EN EFECTIVO
 //   Formato B: columnas CTRO COSTO + NETO (resumen por centro de costo)
+// Col S "Clasificación" quedó DEPRECADA (sep-2026): cuando la quincena trae la
+// col R nueva (nombres del Maestro), la clasificación se deriva del nombre.
+// Estas categorías internas NO van a la parte de obras.
+function clasificarMOPorNombre(nombre) {
+  const n = String(nombre || '').toLowerCase();
+  if (n.includes('taller')) return 'Taller';
+  if (n.includes('planta de asfalto')) return 'Pta. Asfalto';
+  if (n.includes('planta de trituraci') || n.includes('predio warnes')
+      || n.includes('cantera') || n.includes('administraci')) return 'Interno';
+  return 'Obra';
+}
+
 function parsearGSheetTangoMO(file) {
   const ss     = SpreadsheetApp.openById(file.getId());
   const sheets = ss.getSheets();
@@ -494,13 +506,19 @@ function parsearGSheetTangoMO(file) {
       if (!monto || monto <= 0) continue;
 
       const key    = modo === 'ctro' ? mapearCentro(clave) : clave;
-      const clasif = iClasif >= 0 ? String(row[iClasif] || '').trim() || 'Obra' : 'Obra';
+      // Con la col R nueva (dos columnas OBRA) se ignora la col S "Clasificación"
+      // y se clasifica por el nombre del Maestro; en archivos viejos se sigue
+      // usando la col S como siempre.
+      const clasif = (modo === 'obra' && iClaveFallback >= 0)
+        ? clasificarMOPorNombre(clave)
+        : (iClasif >= 0 ? String(row[iClasif] || '').trim() || 'Obra' : 'Obra');
       const totKey = key + '||' + clasif;
       totales[totKey] = (totales[totKey] || 0) + monto;
 
       qTotal += monto;
       if (clasif === 'Taller') qTaller += monto;
       else if (clasif === 'Pta. Asfalto') qPlanta += monto;
+      else if (clasif === 'Interno') { /* Predio/Trituración/Cantera/Admin — no es MO de obras */ }
       else qObra += monto;
     }
 
