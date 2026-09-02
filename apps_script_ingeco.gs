@@ -1414,19 +1414,34 @@ function leerAlquilerEquipos() {
     Logger.log('Partes diarios — usando hoja: ' + sheetPD.getName());
     const rowsPD  = sheetPD.getDataRange().getValues();
 
-    const COL_FECHA_PD    = 0;  // A: Fecha
-    const COL_COD_EQ      = 2;  // C: Código de equipo
-    const COL_HORAS_PD    = 8;  // I: Total de horas
-    const COL_COD_OBRA_PD = 15; // P: Obra General (ÚNICA fuente para agrupar)
+    // Columnas por NOMBRE de encabezado (la planilla cambió de layout en sep-2026:
+    // horas pasó de I a J "TIEMPO TRABAJO (HR)" y Obra General de P a R).
+    // Las posiciones viejas quedan como fallback si no se reconoce el header.
+    let COL_FECHA_PD    = 0;  // A: Fecha
+    let COL_COD_EQ      = 2;  // C: Código de equipo
+    let COL_HORAS_PD    = 8;  // fallback layout viejo: I = Total de horas
+    let COL_COD_OBRA_PD = 15; // fallback layout viejo: P = Obra General
 
     let hdrPD = 0;
     for (let i = 0; i < Math.min(5, rowsPD.length); i++) {
       const rowStr = rowsPD[i].map(c => String(c).toLowerCase()).join('|');
       if (rowStr.includes('fecha') || rowStr.includes('equipo') || rowStr.includes('hora')) {
-        hdrPD = i; break;
+        hdrPD = i;
+        // Sin acentos ni variantes Unicode para comparar nombres
+        const cells = rowsPD[i].map(c => String(c).toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim());
+        const iFe = cells.findIndex(c => c === 'FECHA');
+        const iCo = cells.findIndex(c => c === 'CODIGO' || c === 'COD. EQUIPO' || c === 'CODIGO EQUIPO');
+        const iHs = cells.findIndex(c => /TIEMPO.*TRABAJO|HORAS TRABAJADAS|TOTAL.*HORAS?$/.test(c));
+        const iOg = cells.findIndex(c => c === 'OBRA GENERAL');
+        if (iFe >= 0) COL_FECHA_PD    = iFe;
+        if (iCo >= 0) COL_COD_EQ      = iCo;
+        if (iHs >= 0) COL_HORAS_PD    = iHs;
+        if (iOg >= 0) COL_COD_OBRA_PD = iOg;
+        break;
       }
     }
-    Logger.log('Partes diarios — hoja: ' + sheetPD.getName() + ' hdr=' + hdrPD + ' filas=' + rowsPD.length);
+    Logger.log('Partes diarios — hoja: ' + sheetPD.getName() + ' hdr=' + hdrPD + ' filas=' + rowsPD.length
+      + ' cols: fecha=' + COL_FECHA_PD + ' cod=' + COL_COD_EQ + ' horas=' + COL_HORAS_PD + ' obra=' + COL_COD_OBRA_PD);
 
     // acum[mes][cod] = { _total: horas, [obra]: horas }
     const acum = {};
