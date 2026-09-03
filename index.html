@@ -2852,7 +2852,7 @@ function _filaMargenHTML(r, moEsEstim, tnTotalGlobal) {
       <td class="num" style="${cellStyle}" ${hoverTip} onclick="openDetalleCelda('tn','${codEsc2}','${nomEsc}')">${tnCell}</td>
       <td class="num" style="${cellStyle}" ${hoverTip} onclick="openDetalleCelda('alquiler','${codEsc2}','${nomEsc}')">${r.alquiler > 0 ? `<span class="neg-val" style="text-decoration:underline dotted;">${fmt(r.alquiler)}</span>` : '<span class="nd">—</span>'}</td>
       <td class="num" style="background:${r.margen > 0 ? '#f0fdf4' : r.margen < 0 ? '#fef2f2' : 'transparent'};"><strong class="${mgColor}">${fmt(r.margen)}</strong></td>
-      <td class="num" style="${cellStyle}" title="Margen acumulado — solo meses cerrados. Click para el historial mes a mes" onclick="openHistorialObra('${codEsc2}','${nomEsc}')">${r.margenAcum != null ? `<strong class="${r.margenAcum > 0 ? 'pos-val' : r.margenAcum < 0 ? 'neg-val' : ''}" style="opacity:.8;text-decoration:underline dotted;">${fmt(r.margenAcum)}</strong>` : '<span class="nd">—</span>'}</td>
+      <td class="num" style="${cellStyle}background:${r.margenAcum > 0 ? '#f0fdf4' : r.margenAcum < 0 ? '#fef2f2' : 'transparent'};" title="Margen total — solo meses cerrados. Click para el historial mes a mes" onclick="openHistorialObra('${codEsc2}','${nomEsc}')">${r.margenAcum != null ? `<strong class="${r.margenAcum > 0 ? 'pos-val' : r.margenAcum < 0 ? 'neg-val' : ''}" style="text-decoration:underline dotted;">${fmt(r.margenAcum)}</strong>` : '<span class="nd">—</span>'}</td>
     </tr>`;
 }
 
@@ -3507,7 +3507,7 @@ function renderResumenObra() {
       <td class="num">${tnTotalCell}</td>
       <td class="num neg-val">${fmt(sumaAlquiler)}</td>
       <td class="num ${sumaColor}">${fmt(sumaMargen)}</td>
-      <td class="num ${sumaAcum > 0 ? 'pos-val' : sumaAcum < 0 ? 'neg-val' : ''}" title="Suma del margen acumulado (meses cerrados) de las obras mostradas">${hayAcum ? fmt(sumaAcum) : '<span class="nd">—</span>'}</td>
+      <td class="num ${sumaAcum > 0 ? 'pos-val' : sumaAcum < 0 ? 'neg-val' : ''}" style="background:${sumaAcum > 0 ? '#f0fdf4' : sumaAcum < 0 ? '#fef2f2' : 'transparent'};" title="Suma del margen total (meses cerrados) de las obras mostradas">${hayAcum ? fmt(sumaAcum) : '<span class="nd">—</span>'}</td>
     </tr>`);
 
     tbody.innerHTML = filas.join('');
