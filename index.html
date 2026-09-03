@@ -3711,6 +3711,12 @@ function openHistorialObra(codObra, nombreObra) {
   let algunaEstim = false;
   let hayDatosMesActual = false;
   let futuroGenerado = 0, enCursoGenerado = 0;
+  const codEscH = (codObra    || '').replace(/'/g, "\\'");
+  const nomEscH = (nombreObra || '').replace(/'/g, "\\'");
+  // Celda clickeable del historial: abre el desglose de ESE mes sin cambiar
+  // el mes seleccionado del tablero (pedido de María, sep-2026)
+  const tdClick = (m2, tipo2, contenido) =>
+    `<td style="padding:7px 10px;font-size:12px;text-align:right;cursor:pointer;" title="Click: desglose de ${(MES[m2] || m2).replace(' 2026', '')}" onclick="openDetalleCelda('${tipo2}','${codEscH}','${nomEscH}','${m2}')">${contenido}</td>`;
   const filasMes = [];
   // Solo los meses CERRADOS suman: el mes en curso se está generando (⏳) y
   // los futuros son el plan de certificación (📅) — ambos se muestran pero
@@ -3752,11 +3758,11 @@ function openHistorialObra(codObra, nombreObra) {
       : '';
     filasMes.push(`<tr style="border-top:1px solid var(--border);">
       <td style="padding:7px 10px;font-size:12px;font-weight:600;">${(MES[m] || m).replace(' 2026', '')}</td>
-      <td style="padding:7px 10px;font-size:12px;text-align:right;">${r.aCobrar > 0 ? `<span class="pos-val">${fmt(r.aCobrar)}</span>` : '—'}</td>
-      <td style="padding:7px 10px;font-size:12px;text-align:right;">${r.insumos > 0 ? `<span class="neg-val">${fmt(r.insumos)}</span>` : '—'}</td>
-      <td style="padding:7px 10px;font-size:12px;text-align:right;" data-restrict="sueldos">${((r.moObra || 0) + (r.moHormigon || 0)) > 0 ? `<span class="neg-val" title="Asfalto ${d.moEsEstim ? '~' : ''}${fmt(r.moObra || 0)} · Hormigón tercerizada ${fmt(r.moHormigon || 0)}">${d.moEsEstim && r.moObra != null ? '~' : ''}${fmt((r.moObra || 0) + (r.moHormigon || 0))}</span>` : '—'}</td>
-      <td style="padding:7px 10px;font-size:12px;text-align:right;">${r.costoAsfObra != null ? `<span class="neg-val" title="${tnStr}">${fmt(r.costoAsfObra)}</span>` : (tnStr || '—')}</td>
-      <td style="padding:7px 10px;font-size:12px;text-align:right;">${r.alquiler > 0 ? `<span class="neg-val">${fmt(r.alquiler)}</span>` : '—'}</td>
+      ${tdClick(m, 'acobrar', r.aCobrar > 0 ? `<span class="pos-val" style="text-decoration:underline dotted;">${fmt(r.aCobrar)}</span>` : '—')}
+      ${tdClick(m, 'insumos', r.insumos > 0 ? `<span class="neg-val" style="text-decoration:underline dotted;">${fmt(r.insumos)}</span>` : '—')}
+      ${tdClick(m, 'mo', ((r.moObra || 0) + (r.moHormigon || 0)) > 0 ? `<span class="neg-val" style="text-decoration:underline dotted;" title="Asfalto ${d.moEsEstim ? '~' : ''}${fmt(r.moObra || 0)} · Hormigón tercerizada ${fmt(r.moHormigon || 0)}">${d.moEsEstim && r.moObra != null ? '~' : ''}${fmt((r.moObra || 0) + (r.moHormigon || 0))}</span>` : '—').replace('text-align:right;cursor', 'text-align:right;cursor').replace('<td style', '<td data-restrict="sueldos" style')}
+      ${tdClick(m, 'tn', r.costoAsfObra != null ? `<span class="neg-val" style="text-decoration:underline dotted;" title="${tnStr}">${fmt(r.costoAsfObra)}</span>` : (tnStr || '—'))}
+      ${tdClick(m, 'alquiler', r.alquiler > 0 ? `<span class="neg-val" style="text-decoration:underline dotted;">${fmt(r.alquiler)}</span>` : '—')}
       <td style="padding:7px 10px;font-size:12px;text-align:right;background:${r.margen > 0 ? '#f0fdf4' : r.margen < 0 ? '#fef2f2' : 'transparent'};"><strong class="${mgColor}">${fmt(r.margen)}</strong></td>
     </tr>`);
   });
@@ -6909,13 +6915,16 @@ function closePanel() {
 }
 
 // ── Panel de detalle por celda de la tabla Margen por Obra ───────────────
-function openDetalleCelda(tipo, codObra, nombreObra) {
+function openDetalleCelda(tipo, codObra, nombreObra, mesOver) {
+  // mesOver: permite abrir el desglose de OTRO mes (ej. click en una fila
+  // del historial) sin cambiar el mes seleccionado del tablero
+  const mesP = mesOver || mesActual;
   const panel   = document.getElementById('sidePanel');
   const overlay = document.getElementById('overlay');
   const content = document.getElementById('panelContent');
   if (!panel) return;
 
-  const mes = MES[mesActual] || mesActual;
+  const mes = MES[mesP] || mesP;
   let titulo = '', html = '';
 
   if (tipo === 'acobrar') {
@@ -6943,7 +6952,7 @@ function openDetalleCelda(tipo, codObra, nombreObra) {
 
   } else if (tipo === 'insumos') {
     titulo = 'Insumos OC — ' + (nombreObra || codObra);
-    const ocMes = OC_INSUMOS[mesActual];
+    const ocMes = OC_INSUMOS[mesP];
     const nk = (nombreObra || '').toLowerCase().trim();
     const ck = (codObra || '').toLowerCase().trim();
     const item = ocMes ? ocMes.items.find(i => {
@@ -6972,7 +6981,7 @@ function openDetalleCelda(tipo, codObra, nombreObra) {
 
   } else if (tipo === 'moh') {
     titulo = 'MO Hormigón (tercerizada) — ' + (nombreObra || codObra);
-    const ocMesH = OC_INSUMOS[mesActual];
+    const ocMesH = OC_INSUMOS[mesP];
     const nkH = (nombreObra || '').toLowerCase().trim();
     const ckH = (codObra || '').toLowerCase().trim();
     const itemH = (ocMesH && ocMesH.moHormigon && ocMesH.moHormigon.items) ? ocMesH.moHormigon.items.find(i => {
@@ -7001,9 +7010,9 @@ function openDetalleCelda(tipo, codObra, nombreObra) {
 
   } else if (tipo === 'mo') {
     titulo = 'Mano de Obra — ' + (nombreObra || codObra);
-    const moArr = getMOObra(mesActual);
+    const moArr = getMOObra(mesP);
     const moTotal = moArr.reduce((s,r)=>s+r.monto,0);
-    const remitosMes = REMITOS_ASFALTO[mesActual];
+    const remitosMes = REMITOS_ASFALTO[mesP];
     const nk = (nombreObra||'').toLowerCase().trim();
     const ck = (codObra||'').toLowerCase().trim();
     let tnObra = 0, tnTotal = 0;
@@ -7014,7 +7023,7 @@ function openDetalleCelda(tipo, codObra, nombreObra) {
     }
     // Desde jul-2026 con TANGO cargado: la MO está imputada por obra (col. OBRA
     // R de las quincenas), no prorrateada — el panel muestra la imputación real.
-    const esImputadaP = moArr.length > 0 && MES_ORDER.indexOf(mesActual) >= MES_ORDER.indexOf('jul');
+    const esImputadaP = moArr.length > 0 && MES_ORDER.indexOf(mesP) >= MES_ORDER.indexOf('jul');
     if (esImputadaP) {
       const propias = moArr.filter(r => { const c = (r.centro || '').toLowerCase().trim(); return c === nk || c === ck; });
       const moObraI = propias.reduce((s, r) => s + r.monto, 0);
@@ -7052,7 +7061,7 @@ function openDetalleCelda(tipo, codObra, nombreObra) {
 
     // La columna MO de la tabla también incluye la de hormigón tercerizada:
     // se muestra acá su composición (pedido de María, sep-2026)
-    const ocMesMoh = OC_INSUMOS[mesActual];
+    const ocMesMoh = OC_INSUMOS[mesP];
     const itemMoh = (ocMesMoh && ocMesMoh.moHormigon && ocMesMoh.moHormigon.items) ? ocMesMoh.moHormigon.items.find(i => {
       const io = (i.obra || '').toLowerCase().trim();
       const ic = (i.codigo || '').toLowerCase().trim();
@@ -7068,7 +7077,7 @@ function openDetalleCelda(tipo, codObra, nombreObra) {
 
   } else if (tipo === 'tn') {
     titulo = 'Tn Asfalto — ' + (nombreObra || codObra);
-    const remitosMes = REMITOS_ASFALTO[mesActual];
+    const remitosMes = REMITOS_ASFALTO[mesP];
     const nk = (nombreObra||'').toLowerCase().trim();
     const ck = (codObra||'').toLowerCase().trim();
     let tnCal = 0, tnFrio = 0, tnDetPanel = [];
@@ -7076,7 +7085,7 @@ function openDetalleCelda(tipo, codObra, nombreObra) {
       const entry = Object.entries(remitosMes.porObra).find(([k]) => k.toLowerCase()===nk||k.toLowerCase()===ck);
       if (entry) { tnCal = entry[1].caliente||0; tnFrio = entry[1].frio||0; tnDetPanel = (entry[1].det||[]).slice().sort((a,b)=>b.t-a.t); }
     }
-    const precio = _precioAsfaltoObra(mesActual);
+    const precio = _precioAsfaltoObra(mesP);
     const costoTotal = precio ? Math.round(tnCal*(precio.caliente||0)+tnFrio*(precio.frio||0)) : null;
     const fuentePrecio = precio
       ? (precio.fuente === 'planilla'
@@ -7090,7 +7099,7 @@ function openDetalleCelda(tipo, codObra, nombreObra) {
         ${precio
           ? `<strong>Cálculo:</strong> tn despachadas a la obra × precio del mes.<br>Precio usado: caliente <strong>$${(precio.caliente || 0).toLocaleString('es-AR')}/tn</strong> · frío <strong>$${(precio.frio || 0).toLocaleString('es-AR')}/tn</strong> <span style="color:var(--muted);">(${fuentePrecio})</span>`
           : `⚠️ <strong>Este mes no tiene precio de asfalto</strong> — se muestran las toneladas pero el costo NO se descuenta del margen.`}
-        <br><span onclick="editarPrecioAsfaltoDesde('${mesActual}')" style="cursor:pointer;text-decoration:underline dotted;color:var(--primary);font-weight:600;">✎ ${precio ? 'Editar precio' : 'Poner precio'} (rige desde ${MES[mesActual] || mesActual} en adelante)</span>
+        <br><span onclick="editarPrecioAsfaltoDesde('${mesP}')" style="cursor:pointer;text-decoration:underline dotted;color:var(--primary);font-weight:600;">✎ ${precio ? 'Editar precio' : 'Poner precio'} (rige desde ${MES[mesP] || mesP} en adelante)</span>
         <span style="color:var(--muted);font-size:10.5px;"> · si la planilla de precios trae el mes, la planilla manda</span>
       </div>
       <div style="display:grid;gap:8px;">
@@ -7122,7 +7131,7 @@ function openDetalleCelda(tipo, codObra, nombreObra) {
 
   } else if (tipo === 'alquiler') {
     titulo = 'Alquiler Equipos — ' + (nombreObra || codObra);
-    const alqMes = ALQUILER_EQUIPOS[mesActual];
+    const alqMes = ALQUILER_EQUIPOS[mesP];
     const nk = (nombreObra||'').toLowerCase().trim();
     const ck = (codObra||'').toLowerCase().trim();
     const entry = alqMes ? alqMes.porObra.find(o => o.obra.toLowerCase()===nk||o.obra.toLowerCase()===ck) : null;
