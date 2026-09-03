@@ -3729,8 +3729,7 @@ function openHistorialObra(codObra, nombreObra) {
         <td style="padding:7px 10px;font-size:12px;font-weight:600;">${esEnCurso ? '⏳' : '📅'} ${(MES[m] || m).replace(' 2026', '')}</td>
         <td style="padding:7px 10px;font-size:12px;text-align:right;">${r.aCobrar > 0 ? fmt(r.aCobrar) : '—'}</td>
         <td style="padding:7px 10px;font-size:12px;text-align:right;">${r.insumos > 0 ? fmt(r.insumos) : '—'}</td>
-        <td style="padding:7px 10px;font-size:12px;text-align:right;" data-restrict="sueldos">${esEnCurso && r.moObra != null ? fmt(r.moObra) : '—'}</td>
-        <td style="padding:7px 10px;font-size:12px;text-align:right;">${esEnCurso && r.moHormigon > 0 ? fmt(r.moHormigon) : '—'}</td>
+        <td style="padding:7px 10px;font-size:12px;text-align:right;" data-restrict="sueldos">${esEnCurso && ((r.moObra || 0) + (r.moHormigon || 0)) > 0 ? fmt((r.moObra || 0) + (r.moHormigon || 0)) : '—'}</td>
         <td style="padding:7px 10px;font-size:12px;text-align:right;">${esEnCurso && r.costoAsfObra != null ? fmt(r.costoAsfObra) : '—'}</td>
         <td style="padding:7px 10px;font-size:12px;text-align:right;">${esEnCurso && r.alquiler > 0 ? fmt(r.alquiler) : '—'}</td>
         <td style="padding:7px 10px;font-size:11px;text-align:right;">${esEnCurso ? 'en curso — no suma' : 'programado — no suma'}</td>
@@ -3755,8 +3754,7 @@ function openHistorialObra(codObra, nombreObra) {
       <td style="padding:7px 10px;font-size:12px;font-weight:600;">${(MES[m] || m).replace(' 2026', '')}</td>
       <td style="padding:7px 10px;font-size:12px;text-align:right;">${r.aCobrar > 0 ? `<span class="pos-val">${fmt(r.aCobrar)}</span>` : '—'}</td>
       <td style="padding:7px 10px;font-size:12px;text-align:right;">${r.insumos > 0 ? `<span class="neg-val">${fmt(r.insumos)}</span>` : '—'}</td>
-      <td style="padding:7px 10px;font-size:12px;text-align:right;" data-restrict="sueldos">${r.moObra != null ? `<span class="neg-val">${d.moEsEstim ? '~' : ''}${fmt(r.moObra)}</span>` : '—'}</td>
-      <td style="padding:7px 10px;font-size:12px;text-align:right;">${r.moHormigon > 0 ? `<span class="neg-val">${fmt(r.moHormigon)}</span>` : '—'}</td>
+      <td style="padding:7px 10px;font-size:12px;text-align:right;" data-restrict="sueldos">${((r.moObra || 0) + (r.moHormigon || 0)) > 0 ? `<span class="neg-val" title="Asfalto ${d.moEsEstim ? '~' : ''}${fmt(r.moObra || 0)} · Hormigón tercerizada ${fmt(r.moHormigon || 0)}">${d.moEsEstim && r.moObra != null ? '~' : ''}${fmt((r.moObra || 0) + (r.moHormigon || 0))}</span>` : '—'}</td>
       <td style="padding:7px 10px;font-size:12px;text-align:right;">${r.costoAsfObra != null ? `<span class="neg-val" title="${tnStr}">${fmt(r.costoAsfObra)}</span>` : (tnStr || '—')}</td>
       <td style="padding:7px 10px;font-size:12px;text-align:right;">${r.alquiler > 0 ? `<span class="neg-val">${fmt(r.alquiler)}</span>` : '—'}</td>
       <td style="padding:7px 10px;font-size:12px;text-align:right;background:${r.margen > 0 ? '#f0fdf4' : r.margen < 0 ? '#fef2f2' : 'transparent'};"><strong class="${mgColor}">${fmt(r.margen)}</strong></td>
@@ -3795,8 +3793,7 @@ function openHistorialObra(codObra, nombreObra) {
           <th style="text-align:left;padding:7px 10px;font-size:11px;">Mes</th>
           <th style="text-align:right;padding:7px 10px;font-size:11px;">Generado</th>
           <th style="text-align:right;padding:7px 10px;font-size:11px;">Insumos</th>
-          <th style="text-align:right;padding:7px 10px;font-size:11px;" data-restrict="sueldos">MO Asf.</th>
-          <th style="text-align:right;padding:7px 10px;font-size:11px;">MO Horm.</th>
+          <th style="text-align:right;padding:7px 10px;font-size:11px;" data-restrict="sueldos" title="Mano de obra total: asfalto + hormigón tercerizada — pasá el mouse por el valor para ver la composición">MO</th>
           <th style="text-align:right;padding:7px 10px;font-size:11px;">Asfalto</th>
           <th style="text-align:right;padding:7px 10px;font-size:11px;">Alquiler</th>
           <th style="text-align:right;padding:7px 10px;font-size:11px;">Margen</th>
@@ -3806,8 +3803,7 @@ function openHistorialObra(codObra, nombreObra) {
             <td style="padding:8px 10px;font-size:12px;">TOTAL realizado${(futuroGenerado > 0 || enCursoGenerado > 0) ? ' <span style="font-weight:400;font-size:10px;color:var(--muted);">(meses cerrados)</span>' : ''}</td>
             <td style="padding:8px 10px;font-size:12px;text-align:right;" class="pos-val">${fmt(tot.aCobrar)}</td>
             <td style="padding:8px 10px;font-size:12px;text-align:right;" class="neg-val">${fmt(tot.insumos)}</td>
-            <td style="padding:8px 10px;font-size:12px;text-align:right;" class="neg-val" data-restrict="sueldos">${tot.mo > 0 ? (algunaEstim ? '~' : '') + fmt(tot.mo) : '—'}</td>
-            <td style="padding:8px 10px;font-size:12px;text-align:right;" class="neg-val">${tot.moh > 0 ? fmt(tot.moh) : '—'}</td>
+            <td style="padding:8px 10px;font-size:12px;text-align:right;" class="neg-val" data-restrict="sueldos" title="Asfalto ${algunaEstim ? '~' : ''}${fmt(tot.mo)} · Hormigón tercerizada ${fmt(tot.moh)}">${(tot.mo + tot.moh) > 0 ? (algunaEstim ? '~' : '') + fmt(tot.mo + tot.moh) : '—'}</td>
             <td style="padding:8px 10px;font-size:12px;text-align:right;" class="neg-val">${tot.asf > 0 ? fmt(tot.asf) : '—'}</td>
             <td style="padding:8px 10px;font-size:12px;text-align:right;" class="neg-val">${tot.alquiler > 0 ? fmt(tot.alquiler) : '—'}</td>
             <td style="padding:8px 10px;font-size:12px;text-align:right;background:${tot.margen > 0 ? '#f0fdf4' : tot.margen < 0 ? '#fef2f2' : 'transparent'};" class="${mgColorT}">${fmt(tot.margen)}</td>
