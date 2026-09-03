@@ -1973,17 +1973,45 @@ let PRECIO_ASFALTO_AJUSTES = (function() {
 })();
 // Precio efectivo de un mes: ajuste manual vigente > base de referencia.
 // El precio se define acá en el tablero (base + ajustes), no en una planilla externa.
-function _precioAsfaltoMes(mes) {
+// Ajuste manual de precio vigente para un mes (el más reciente cuyo "desde"
+// sea <= al mes pedido), o null si no hay ninguno.
+function _ajustePrecioVigente(mes) {
   const idx = MES_ORDER.indexOf(mes);
-  if (idx >= 0 && PRECIO_ASFALTO_AJUSTES.length) {
-    let best = null, bi = -1;
-    PRECIO_ASFALTO_AJUSTES.forEach(a => {
-      const ai = MES_ORDER.indexOf(a.desde);
-      if (ai >= 0 && ai <= idx && ai > bi) { best = a; bi = ai; }
-    });
-    if (best) return { caliente: +best.caliente || 0, frio: +best.frio || 0 };
-  }
+  if (idx < 0 || !PRECIO_ASFALTO_AJUSTES.length) return null;
+  let best = null, bi = -1;
+  PRECIO_ASFALTO_AJUSTES.forEach(a => {
+    const ai = MES_ORDER.indexOf(a.desde);
+    if (ai >= 0 && ai <= idx && ai > bi) { best = a; bi = ai; }
+  });
+  return best ? { caliente: +best.caliente || 0, frio: +best.frio || 0, desde: best.desde } : null;
+}
+function _precioAsfaltoMes(mes) {
+  const aj = _ajustePrecioVigente(mes);
+  if (aj) return { caliente: aj.caliente, frio: aj.frio };
   return { caliente: PRECIO_ASFALTO_BASE.caliente, frio: PRECIO_ASFALTO_BASE.frio };
+}
+// Precio para valuar el asfalto de las OBRAS (costo por tn en el margen):
+// planilla "Precio de mercado asfalto" del mes > ajuste manual (✎) > sin precio.
+function _precioAsfaltoObra(mes) {
+  const planilla = PRECIO_ASFALTO[mes];
+  if (planilla && (planilla.caliente || planilla.frio)) return Object.assign({ fuente: 'planilla' }, planilla);
+  const aj = _ajustePrecioVigente(mes);
+  if (aj) return { caliente: aj.caliente, frio: aj.frio, fuente: 'ajuste', desde: aj.desde };
+  return null;
+}
+// Editor: guarda un ajuste manual que rige desde el mes indicado en adelante
+// (persiste en este navegador). Si la planilla luego trae el precio del mes,
+// la planilla manda.
+function editarPrecioAsfaltoDesde(mes) {
+  const act = _precioAsfaltoObra(mes) || { caliente: '', frio: '' };
+  const c = prompt('Precio del asfalto CALIENTE ($/tn) — rige desde ' + (MES[mes] || mes) + ' en adelante:', act.caliente || '');
+  if (c === null) return;
+  const f = prompt('Precio del asfalto FRÍO ($/tn) — rige desde ' + (MES[mes] || mes) + ' en adelante:', act.frio || '');
+  if (f === null) return;
+  const pc = parseFloat(String(c).replace(/\$/g, '').replace(/\./g, '').replace(',', '.').trim()) || 0;
+  const pf = parseFloat(String(f).replace(/\$/g, '').replace(/\./g, '').replace(',', '.').trim()) || 0;
+  guardarAjustePrecio(mes, pc, pf);
+  renderAll();
 }
 function guardarAjustePrecio(desde, caliente, frio) {
   if (!desde) return;
@@ -2652,7 +2680,7 @@ function computeMargenObrasMes(mes) {
       tnTotalGlobal += (v.caliente || 0) + (v.frio || 0);
     });
   }
-  const precioMesResumen = PRECIO_ASFALTO[mes] || null;
+  const precioMesResumen = _precioAsfaltoObra(mes); // planilla > ajuste ✎ > null
 
   // Helper: computa los montos cruzados de una obra (sin HTML ni acumuladores)
   const buildDatosObra = (o, extra) => {
@@ -2829,7 +2857,7 @@ function _filaMargenHTML(r, moEsEstim, tnTotalGlobal) {
   // Solo números en la celda — el desglose por destino vive en el tooltip y
   // en el panel de detalle al hacer click (pedido de María, sep-2026)
   const tnCell = (r.tnObra > 0 || r.tnFrioObra > 0)
-    ? `<span style="font-size:12px;" title="${(r.tnDet || []).map(e => _tnDetLabel(e) + ': ' + fmtTn(e.t) + ' tn').join(' · ') || tnLabel}">${tnLabel}${r.costoAsfObra != null ? '<br><small class="neg-val" style="font-size:10px;">' + fmt(r.costoAsfObra) + '</small>' : ''}</span>`
+    ? `<span style="font-size:12px;" title="${(r.tnDet || []).map(e => _tnDetLabel(e) + ': ' + fmtTn(e.t) + ' tn').join(' · ') || tnLabel}">${tnLabel}${r.costoAsfObra != null ? '<br><small class="neg-val" style="font-size:10px;">' + fmt(r.costoAsfObra) + '</small>' : '<br><small style="color:#b45309;font-size:9.5px;">sin precio — click</small>'}</span>`
     : '<span class="nd">—</span>';
   // MO única: asfalto + hormigón tercerizada — la composición vive en el
   // tooltip y en el panel al click (pedido de María, sep-2026)
@@ -7025,9 +7053,21 @@ function openDetalleCelda(tipo, codObra, nombreObra) {
       const entry = Object.entries(remitosMes.porObra).find(([k]) => k.toLowerCase()===nk||k.toLowerCase()===ck);
       if (entry) { tnCal = entry[1].caliente||0; tnFrio = entry[1].frio||0; tnDetPanel = (entry[1].det||[]).slice().sort((a,b)=>b.t-a.t); }
     }
-    const precio = _precioAsfaltoMes(mesActual);
+    const precio = _precioAsfaltoObra(mesActual);
     const costoTotal = precio ? Math.round(tnCal*(precio.caliente||0)+tnFrio*(precio.frio||0)) : null;
+    const fuentePrecio = precio
+      ? (precio.fuente === 'planilla'
+          ? 'planilla "Precio de mercado asfalto" del mes'
+          : 'ajuste manual ✎ (rige desde ' + (MES[precio.desde] || precio.desde) + ')')
+      : null;
     html = `<div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Remitos de producción · ${mes} · Fuente: Roberto</div>
+      <div style="background:${precio ? '#f0f9ff' : '#fffbeb'};border:1px solid ${precio ? '#bae6fd' : '#fde68a'};border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;">
+        ${precio
+          ? `<strong>Cálculo:</strong> tn despachadas a la obra × precio del mes.<br>Precio usado: caliente <strong>$${(precio.caliente || 0).toLocaleString('es-AR')}/tn</strong> · frío <strong>$${(precio.frio || 0).toLocaleString('es-AR')}/tn</strong> <span style="color:var(--muted);">(${fuentePrecio})</span>`
+          : `⚠️ <strong>Este mes no tiene precio de asfalto</strong> — se muestran las toneladas pero el costo NO se descuenta del margen.`}
+        <br><span onclick="editarPrecioAsfaltoDesde('${mesActual}')" style="cursor:pointer;text-decoration:underline dotted;color:var(--primary);font-weight:600;">✎ ${precio ? 'Editar precio' : 'Poner precio'} (rige desde ${MES[mesActual] || mesActual} en adelante)</span>
+        <span style="color:var(--muted);font-size:10.5px;"> · si la planilla de precios trae el mes, la planilla manda</span>
+      </div>
       <div style="display:grid;gap:8px;">
         <div style="background:#f8fafc;border-radius:8px;padding:12px;">
           <div style="font-size:11px;color:var(--muted);">Asfalto caliente</div>
