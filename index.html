@@ -3274,6 +3274,45 @@ function _filasOtroGastoTR(r) {
 
 // Construye el bloque completo de "Otros Gastos o salidas" — un card con fondo
 // distinto (no una tabla), compartido entre "por obra" y "por tipo de contratación".
+// Vista compacta de "Otros Gastos o salidas": una fila-resumen por ítem,
+// click en ▸ despliega el detalle por categoría (pedido de María, sep-2026)
+const _OG_ABIERTOS = {};
+function toggleOtroGasto(i) {
+  _OG_ABIERTOS[i] = !_OG_ABIERTOS[i];
+  document.querySelectorAll('.og-det-' + i).forEach(tr => { tr.style.display = _OG_ABIERTOS[i] ? '' : 'none'; });
+  const fl = document.getElementById('og-flecha-' + i);
+  if (fl) fl.textContent = _OG_ABIERTOS[i] ? '▾' : '▸';
+}
+function _grupoOtroGastoTR(r, i) {
+  const o = r.o;
+  const combos = (r.tnCat && r.tnCat.length) ? r.tnCat.length : (r.tnDet || []).length;
+  // Cert. teórica ajustada y real firme — mismos criterios que el detalle
+  let teo = r.certTeorica || 0;
+  if (mesActual !== 'total' && teo > 0) {
+    const aj = _certExcedentePrev(mesActual, o.cod_obra || o.nombre);
+    if (aj) teo = Math.max(0, teo - Math.min(aj.excedente, teo));
+  }
+  const real = mesActual !== 'total' ? _certRealProvision(mesActual, o.cod_obra || o.nombre) : null;
+  const realFirme = real ? real.totalFirme : 0;
+  const abierto = !!_OG_ABIERTOS[i];
+  const tdR = h => `<td style="padding:9px 10px;font-size:12px;text-align:right;white-space:nowrap;">${h}</td>`;
+  const vac = tdR('<span style="color:#fca5a5;">—</span>');
+  const resumen = `<tr style="border-top:2px solid #fca5a5;cursor:pointer;background:#fffbf5;" onclick="toggleOtroGasto(${i})" title="Click para ver/plegar el detalle por categoría">
+    <td style="padding:9px 4px;font-size:12.5px;"><span id="og-flecha-${i}" style="display:inline-block;width:14px;color:#9a3412;font-weight:700;">${abierto ? '▾' : '▸'}</span><strong style="color:#92400e;">${o.cod_obra}</strong> <span style="font-size:11px;color:var(--muted);">· ${combos > 0 ? combos + ' ítem' + (combos !== 1 ? 's' : '') : 'sin remitos'}${r.tnObraTotal > 0 ? ' · ' + fmtTn(r.tnObraTotal) + ' tn' : ''}</span></td>
+    ${r.insumos  > 0 ? tdR(`<strong>${fmt(r.insumos)}</strong>`)  : vac}
+    ${r.alquiler > 0 ? tdR(`<strong>${fmt(r.alquiler)}</strong>`) : vac}
+    ${vac}${vac}
+    ${teo > 0 ? tdR(`<strong class="pos-val">${fmt(teo)}</strong>`) : vac}
+    ${realFirme > 0 ? tdR(`<strong class="pos-val">${fmt(realFirme)}</strong>`) : (real && real.total > 0 ? tdR(`<span style="color:#b45309;font-size:11px;" title="Cargado por Esteban pero sin facturar ni cobrar — no suma">prog.</span>`) : vac)}
+  </tr>`;
+  // Detalle existente, oculto/visible según el estado del grupo
+  let det = _filasOtroGastoTR(r);
+  const disp = abierto ? '' : 'display:none;';
+  det = det.replace(/<tr style="/g, `<tr class="og-det-${i}" style="${disp}`);
+  det = det.replace(/<tr>/g, `<tr class="og-det-${i}" style="${disp}">`);
+  return resumen + det;
+}
+
 function _renderOtrosGastosBlock(otrosGastos) {
   if (!otrosGastos || otrosGastos.length === 0) return '';
   // Totales del bloque
@@ -3318,7 +3357,7 @@ function _renderOtrosGastosBlock(otrosGastos) {
         ${th('Insumos')}${th('Alquiler')}${th('TN')}${th('$/tn')}${th('Cert. teórica')}${th('Cert. real')}
       </tr></thead>
       <tbody>
-        ${otrosGastos.map(r => _filasOtroGastoTR(r)).join('')}
+        ${otrosGastos.map((r, i) => _grupoOtroGastoTR(r, i)).join('')}
         <tr style="border-top:2px solid #fca5a5;background:#fee2e2;">
           <td style="padding:9px 4px;font-size:12px;font-weight:700;color:#92400e;">TOTAL</td>
           ${tdT(totIns > 0 ? fmt(totIns) : '—')}
