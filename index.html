@@ -1999,6 +1999,13 @@ function _precioAsfaltoObra(mes) {
   // Un ajuste con ambos precios en 0 no es un precio: se ignora (puede haber
   // quedado guardado al aceptar el editor con el campo vacío)
   if (aj && (aj.caliente > 0 || aj.frio > 0)) return { caliente: aj.caliente, frio: aj.frio, fuente: 'ajuste', desde: aj.desde };
+  // Arrastre: último mes ANTERIOR con precio en la planilla — se usa como
+  // aproximación (~) hasta que carguen el mes en la planilla o pongan un ✎
+  const idx = MES_ORDER.indexOf(mes);
+  for (let i = idx - 1; i >= 0; i--) {
+    const prev = PRECIO_ASFALTO[MES_ORDER[i]];
+    if (prev && (prev.caliente || prev.frio)) return Object.assign({ fuente: 'planillaPrev', desde: MES_ORDER[i] }, prev);
+  }
   return null;
 }
 // Editor: guarda un ajuste manual que rige desde el mes indicado en adelante
@@ -2720,9 +2727,10 @@ function computeMargenObrasMes(mes) {
       const pTn = _precioProvision(e, mes);
       return s + (pTn ? Math.round(e.t * pTn) : 0);
     }, 0);
+    const precioAsf = precioMesResumen; // para mostrar fuente/arrastre en la celda
     const margen  = aCobrar - insumos - moHormigon - (moObra || 0) - (costoAsfObra || 0) - alquiler;
     const hasData = aCobrar > 0 || insumos > 0 || moHormigon > 0 || alquiler > 0 || tnObraTotal > 0 || moObra != null;
-    return { o, aCobrar, certTeorica, insumos, moHormigon, alquiler, tnObra, tnFrioObra, tnCarpeta, tnBacheo, tnDet, tnCat, tnObraTotal, moObra, moImputada, costoAsfObra, margen, hasData, extra: !!extra };
+    return { o, aCobrar, certTeorica, insumos, moHormigon, alquiler, tnObra, tnFrioObra, tnCarpeta, tnBacheo, tnDet, tnCat, tnObraTotal, moObra, moImputada, costoAsfObra, precioAsf, margen, hasData, extra: !!extra };
   };
 
   const rows = obras.map(o => buildDatosObra(o, false));
@@ -2855,6 +2863,16 @@ function computeMargenFilas() {
   return mesActual === 'total' ? computeMargenObrasTotal() : computeMargenObrasMes();
 }
 
+// Tooltip del costo de asfalto: precio usado ($/tn) y su fuente
+function _precioAsfTip(p) {
+  if (!p) return 'Sin precio de asfalto';
+  const val = 'Precio usado: caliente $' + (p.caliente || 0).toLocaleString('es-AR') + '/tn · frío $' + (p.frio || 0).toLocaleString('es-AR') + '/tn';
+  const fte = p.fuente === 'planilla' ? 'planilla del mes'
+    : p.fuente === 'ajuste' ? 'ajuste manual (desde ' + (MES[p.desde] || p.desde) + ')'
+    : '~ arrastrado de ' + (MES[p.desde] || p.desde) + ', último mes cargado — aproximación hasta que se actualice';
+  return val + ' (' + fte + ')';
+}
+
 // Renderiza la fila <tr> de una obra para las tablas de contribución marginal.
 function _filaMargenHTML(r, moEsEstim, tnTotalGlobal) {
   const o = r.o;
@@ -2866,7 +2884,7 @@ function _filaMargenHTML(r, moEsEstim, tnTotalGlobal) {
   // Solo números en la celda — el desglose por destino vive en el tooltip y
   // en el panel de detalle al hacer click (pedido de María, sep-2026)
   const tnCell = (r.tnObra > 0 || r.tnFrioObra > 0)
-    ? `<span style="font-size:12px;" title="${(r.tnDet || []).map(e => _tnDetLabel(e) + ': ' + fmtTn(e.t) + ' tn').join(' · ') || tnLabel}">${tnLabel}${r.costoAsfObra != null ? '<br><small class="neg-val" style="font-size:10px;">' + fmt(r.costoAsfObra) + '</small>' : '<br><small style="color:#b45309;font-size:9.5px;">sin precio — click</small>'}</span>`
+    ? `<span style="font-size:12px;" title="${(r.tnDet || []).map(e => _tnDetLabel(e) + ': ' + fmtTn(e.t) + ' tn').join(' · ') || tnLabel}">${tnLabel}${r.costoAsfObra != null ? '<br><small class="neg-val" style="font-size:10px;" title="' + _precioAsfTip(r.precioAsf) + ' — click para ver o actualizar" >' + (r.precioAsf && r.precioAsf.fuente === 'planillaPrev' ? '~' : '') + fmt(r.costoAsfObra) + '</small>' : '<br><small style="color:#b45309;font-size:9.5px;">sin precio — click</small>'}</span>`
     : '<span class="nd">—</span>';
   // MO única: asfalto + hormigón tercerizada — la composición vive en el
   // tooltip y en el panel al click (pedido de María, sep-2026)
@@ -7067,7 +7085,9 @@ function openDetalleCelda(tipo, codObra, nombreObra) {
     const fuentePrecio = precio
       ? (precio.fuente === 'planilla'
           ? 'planilla "Precio de mercado asfalto" del mes'
-          : 'ajuste manual ✎ (rige desde ' + (MES[precio.desde] || precio.desde) + ')')
+          : precio.fuente === 'ajuste'
+            ? 'ajuste manual ✎ (rige desde ' + (MES[precio.desde] || precio.desde) + ')'
+            : '⚠ arrastrado de ' + (MES[precio.desde] || precio.desde) + ' — último mes con precio cargado en la planilla; es una aproximación hasta que se actualice')
       : null;
     html = `<div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Remitos de producción · ${mes} · Fuente: Roberto</div>
       <div style="background:${precio ? '#f0f9ff' : '#fffbeb'};border:1px solid ${precio ? '#bae6fd' : '#fde68a'};border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;">
