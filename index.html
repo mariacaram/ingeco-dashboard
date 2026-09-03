@@ -3694,6 +3694,7 @@ function renderResumenTipoContrato() {
 // ── Historial por obra: desglose mes a mes de ingresos/gastos y margen ──
 // Muestra cómo se llega al margen total global de la obra sumando sus meses.
 function openHistorialObra(codObra, nombreObra) {
+  _panelBack = null;
   const panel   = document.getElementById('sidePanel');
   const overlay = document.getElementById('overlay');
   const content = document.getElementById('panelContent');
@@ -6909,7 +6910,16 @@ function openObra(nombre) {
   overlay.classList.add('open');
 }
 
+// Si el panel actual se abrió desde otro panel (ej. desglose de un mes desde
+// el historial), la ✕ vuelve al panel anterior en vez de cerrar todo.
+let _panelBack = null;
 function closePanel() {
+  if (typeof _panelBack === 'function') {
+    const volver = _panelBack;
+    _panelBack = null;
+    volver();
+    return;
+  }
   document.getElementById('sidePanel').classList.remove('open');
   document.getElementById('overlay').classList.remove('open');
 }
@@ -6917,7 +6927,9 @@ function closePanel() {
 // ── Panel de detalle por celda de la tabla Margen por Obra ───────────────
 function openDetalleCelda(tipo, codObra, nombreObra, mesOver) {
   // mesOver: permite abrir el desglose de OTRO mes (ej. click en una fila
-  // del historial) sin cambiar el mes seleccionado del tablero
+  // del historial) sin cambiar el mes seleccionado del tablero. En ese caso
+  // la ✕ vuelve al historial en vez de cerrar el lateral.
+  _panelBack = mesOver ? (() => openHistorialObra(codObra, nombreObra)) : null;
   const mesP = mesOver || mesActual;
   const panel   = document.getElementById('sidePanel');
   const overlay = document.getElementById('overlay');
