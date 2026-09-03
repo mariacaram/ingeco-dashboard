@@ -830,11 +830,11 @@
             <th>Cód. Obra</th>
             <th class="num">Generado</th>
             <th class="num">Insumos</th>
-            <th class="num" title="MO de asfalto — desde jul-2026 imputada por obra (col. OBRA de TANGO); antes, o sin TANGO cargado, prorrateada por tn despachadas">MO Asfalto</th>
-            <th class="num" title="MO de hormigón tercerizada — OC de Guillermo con 'Mano de obra' en Descripción">MO Hormigón</th>
+            <th class="num" title="Mano de obra total de la obra: asfalto (TANGO — imputada desde jul-2026, antes prorrateada) + hormigón tercerizada (OC de Guillermo). Click en la celda para ver la composición">MO</th>
             <th class="num">Asfalto (tn)</th>
             <th class="num">Alquiler</th>
             <th class="num">Margen</th>
+            <th class="num" title="Margen acumulado de la obra — solo meses cerrados, mismo criterio que el historial. Click para ver el detalle mes a mes">Margen acum.</th>
           </tr>
         </thead>
         <tbody id="tbody-resumen-obra">
@@ -2831,12 +2831,15 @@ function _filaMargenHTML(r, moEsEstim, tnTotalGlobal) {
   const tnCell = (r.tnObra > 0 || r.tnFrioObra > 0)
     ? `<span style="font-size:12px;" title="${(r.tnDet || []).map(e => _tnDetLabel(e) + ': ' + fmtTn(e.t) + ' tn').join(' · ') || tnLabel}">${tnLabel}${r.costoAsfObra != null ? '<br><small class="neg-val" style="font-size:10px;">' + fmt(r.costoAsfObra) + '</small>' : ''}</span>`
     : '<span class="nd">—</span>';
-  const moTitle = r.moImputada
-    ? 'MO imputada por obra — col. OBRA (R) de TANGO, ambas quincenas'
-    : (moEsEstim ? 'MO estimada' : 'MO real') + ' × ' + fmtTn(r.tnObraTotal) + 'tn / ' + fmtTn(tnTotalGlobal) + 'tn total';
-  const moCell = r.moObra != null
-    ? `<span class="neg-val" title="${moTitle}">${moEsEstim ? '~' : ''}${fmt(r.moObra)}</span>`
-    : `<span class="nd" title="${r.moImputada ? 'Sin MO imputada a esta obra en TANGO' : 'Sin dato MO o sin tn'}">—</span>`;
+  // MO única: asfalto + hormigón tercerizada — la composición vive en el
+  // tooltip y en el panel al click (pedido de María, sep-2026)
+  const moTot = (r.moObra || 0) + (r.moHormigon || 0);
+  const moPartes = [];
+  if (r.moObra != null) moPartes.push('Asfalto ' + (moEsEstim ? '~' : '') + fmt(r.moObra) + (r.moImputada ? ' (imputada TANGO)' : moEsEstim ? ' (estimada)' : ' (prorrateada)'));
+  if (r.moHormigon > 0) moPartes.push('Hormigón tercerizada ' + fmt(r.moHormigon));
+  const moCell = moTot > 0
+    ? `<span class="neg-val" style="text-decoration:underline dotted;" title="${moPartes.join(' · ')}">${moEsEstim && r.moObra != null ? '~' : ''}${fmt(moTot)}</span>`
+    : `<span class="nd" title="Sin mano de obra del mes">—</span>`;
   const codEsc2 = (o.cod_obra || '').replace(/'/g, "\\'");
   const nomEsc  = (o.nombre  || '').replace(/'/g, "\\'");
   const cellStyle = 'cursor:pointer;transition:background 0.15s;';
@@ -2846,11 +2849,31 @@ function _filaMargenHTML(r, moEsEstim, tnTotalGlobal) {
       <td class="num" style="${cellStyle}" ${hoverTip} onclick="openDetalleCelda('acobrar','${codEsc2}','${nomEsc}')">${r.aCobrar > 0 ? `<strong class="pos-val" style="text-decoration:underline dotted;">${fmt(r.aCobrar)}</strong>` : '<span class="nd">—</span>'}</td>
       <td class="num" style="${cellStyle}" ${hoverTip} onclick="openDetalleCelda('insumos','${codEsc2}','${nomEsc}')">${r.insumos  > 0 ? `<span class="neg-val" style="text-decoration:underline dotted;">${fmt(r.insumos)}</span>`  : '<span class="nd">—</span>'}</td>
       <td class="num" style="${cellStyle}" ${hoverTip} onclick="openDetalleCelda('mo','${codEsc2}','${nomEsc}')">${moCell}</td>
-      <td class="num" style="${cellStyle}" ${hoverTip} onclick="openDetalleCelda('moh','${codEsc2}','${nomEsc}')">${r.moHormigon > 0 ? `<span class="neg-val" style="text-decoration:underline dotted;" title="MO hormigón tercerizada (OC Guillermo)">${fmt(r.moHormigon)}</span>` : '<span class="nd">—</span>'}</td>
       <td class="num" style="${cellStyle}" ${hoverTip} onclick="openDetalleCelda('tn','${codEsc2}','${nomEsc}')">${tnCell}</td>
       <td class="num" style="${cellStyle}" ${hoverTip} onclick="openDetalleCelda('alquiler','${codEsc2}','${nomEsc}')">${r.alquiler > 0 ? `<span class="neg-val" style="text-decoration:underline dotted;">${fmt(r.alquiler)}</span>` : '<span class="nd">—</span>'}</td>
       <td class="num" style="background:${r.margen > 0 ? '#f0fdf4' : r.margen < 0 ? '#fef2f2' : 'transparent'};"><strong class="${mgColor}">${fmt(r.margen)}</strong></td>
+      <td class="num" style="${cellStyle}" title="Margen acumulado — solo meses cerrados. Click para el historial mes a mes" onclick="openHistorialObra('${codEsc2}','${nomEsc}')">${r.margenAcum != null ? `<strong class="${r.margenAcum > 0 ? 'pos-val' : r.margenAcum < 0 ? 'neg-val' : ''}" style="opacity:.8;text-decoration:underline dotted;">${fmt(r.margenAcum)}</strong>` : '<span class="nd">—</span>'}</td>
     </tr>`;
+}
+
+// Margen acumulado por obra — SOLO meses cerrados (mismo criterio que el
+// historial y el estado de resultados: el mes en curso y lo programado a
+// futuro no cuentan). Devuelve { claveObra: margen }.
+function _margenAcumPorObra() {
+  const idxHoy = new Date().getMonth();
+  const acum = {};
+  MES_ORDER.forEach((m, i) => {
+    if (i >= idxHoy) return;
+    const d = computeMargenObrasMes(m);
+    if (!d || !d.rows) return;
+    d.rows.forEach(r => {
+      if (!r.hasData || r.otroGasto) return;
+      const k = ((r.o.cod_obra || r.o.nombre) || '').toLowerCase().trim();
+      if (!k) return;
+      acum[k] = (acum[k] || 0) + r.margen;
+    });
+  });
+  return acum;
 }
 
 // "Otros Gastos o salidas" (placeholders sin clasificar: Obra no disponible,
@@ -3420,7 +3443,14 @@ function renderResumenObra() {
     const rows = busq ? datos.rows.filter(r => _obraMatchBusqueda(r.o, busq)) : datos.rows;
     const { moEsEstim, tnTotalGlobal } = datos;
 
-    let sumaCobrar = 0, sumaInsumos = 0, sumaAlquiler = 0, sumaTn = 0, sumaMO = 0, sumaMOH = 0;
+    // Columna "Margen acum.": margen histórico de meses cerrados por obra
+    const _acumMap = _margenAcumPorObra();
+    rows.forEach(r => {
+      const k = ((r.o.cod_obra || r.o.nombre) || '').toLowerCase().trim();
+      r.margenAcum = (k && k in _acumMap) ? _acumMap[k] : null;
+    });
+
+    let sumaCobrar = 0, sumaInsumos = 0, sumaAlquiler = 0, sumaTn = 0, sumaMO = 0, sumaMOH = 0, sumaAcum = 0, hayAcum = false;
     const chartData = { insumos: [], mo: [], alquiler: [], tn: [] };
     rows.forEach(r => {
       sumaCobrar   += r.aCobrar;
@@ -3429,6 +3459,7 @@ function renderResumenObra() {
       sumaTn       += r.tnObra + r.tnFrioObra;
       sumaMO       += r.moObra || 0;
       sumaMOH      += r.moHormigon || 0;
+      if (r.margenAcum != null && !r.otroGasto) { sumaAcum += r.margenAcum; hayAcum = true; }
       const label = (r.o.cod_obra || r.o.nombre || '').trim();
       if (r.insumos  > 0) chartData.insumos.push({ label, valor: r.insumos });
       if (r.moObra   > 0) chartData.mo.push({ label, valor: r.moObra, estim: moEsEstim });
@@ -3458,8 +3489,8 @@ function renderResumenObra() {
     // Fila total — MO es la suma de la MO prorateada de las obras mostradas (no el
     // total de la empresa vía TANGO), para que coincida exactamente con la suma de
     // cada fila y con el total de "Contribución marginal por tipo de contratación"
-    const moCellTotal = sumaMO > 0
-      ? `<span class="neg-val" title="${moEsEstim ? 'Estimado — MO real no cargada aún' : 'MO real del mes'} · suma de MO prorateada por obra">${moEsEstim ? '~' : ''}${fmt(sumaMO)}</span>`
+    const moCellTotal = (sumaMO + sumaMOH) > 0
+      ? `<span class="neg-val" title="Asfalto ${moEsEstim ? '~' : ''}${fmt(sumaMO)} · Hormigón tercerizada ${fmt(sumaMOH)}">${moEsEstim && sumaMO > 0 ? '~' : ''}${fmt(sumaMO + sumaMOH)}</span>`
       : '<span class="nd">sin dato</span>';
     const tnTotalCell = sumaTn > 0
       ? `<span style="font-size:12px;color:var(--muted);">${fmtTn(sumaTn)} tn</span>`
@@ -3473,10 +3504,10 @@ function renderResumenObra() {
       <td class="num pos-val">${fmt(sumaCobrar)}</td>
       <td class="num neg-val">${fmt(sumaInsumos)}</td>
       <td class="num">${moCellTotal}</td>
-      <td class="num">${sumaMOH > 0 ? `<span class="neg-val">${fmt(sumaMOH)}</span>` : '<span class="nd">—</span>'}</td>
       <td class="num">${tnTotalCell}</td>
       <td class="num neg-val">${fmt(sumaAlquiler)}</td>
       <td class="num ${sumaColor}">${fmt(sumaMargen)}</td>
+      <td class="num ${sumaAcum > 0 ? 'pos-val' : sumaAcum < 0 ? 'neg-val' : ''}" title="Suma del margen acumulado (meses cerrados) de las obras mostradas">${hayAcum ? fmt(sumaAcum) : '<span class="nd">—</span>'}</td>
     </tr>`);
 
     tbody.innerHTML = filas.join('');
@@ -6965,6 +6996,22 @@ function openDetalleCelda(tipo, codObra, nombreObra) {
           <div style="font-size:20px;font-weight:700;" class="neg-val">${moObra!=null?fmt(moObra):'—'}</div>
           <div style="font-size:10px;color:var(--muted);margin-top:4px;">${fmt(moTotal)} × ${fmtTn(tnObra)}tn / ${fmtTn(tnTotal)}tn total</div>
         </div>
+      </div>`;
+    }
+
+    // La columna MO de la tabla también incluye la de hormigón tercerizada:
+    // se muestra acá su composición (pedido de María, sep-2026)
+    const ocMesMoh = OC_INSUMOS[mesActual];
+    const itemMoh = (ocMesMoh && ocMesMoh.moHormigon && ocMesMoh.moHormigon.items) ? ocMesMoh.moHormigon.items.find(i => {
+      const io = (i.obra || '').toLowerCase().trim();
+      const ic = (i.codigo || '').toLowerCase().trim();
+      return (ic && (ic === ck || ic === nk)) || io === nk || io === ck;
+    }) : null;
+    if (itemMoh) {
+      html += `<div style="margin-top:10px;background:#faf5ff;border:1px solid #e9d5ff;border-radius:8px;padding:12px;">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">+ MO Hormigón tercerizada — OC Guillermo (contratistas, no es personal propio)</div>
+        <div style="font-size:18px;font-weight:700;" class="neg-val">${fmt(itemMoh.monto)}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;">${(itemMoh.proveedores || []).map(p => p.proveedor + ' ' + fmt(p.monto)).join(' · ')}</div>
       </div>`;
     }
 
