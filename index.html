@@ -1996,7 +1996,9 @@ function _precioAsfaltoObra(mes) {
   const planilla = PRECIO_ASFALTO[mes];
   if (planilla && (planilla.caliente || planilla.frio)) return Object.assign({ fuente: 'planilla' }, planilla);
   const aj = _ajustePrecioVigente(mes);
-  if (aj) return { caliente: aj.caliente, frio: aj.frio, fuente: 'ajuste', desde: aj.desde };
+  // Un ajuste con ambos precios en 0 no es un precio: se ignora (puede haber
+  // quedado guardado al aceptar el editor con el campo vacío)
+  if (aj && (aj.caliente > 0 || aj.frio > 0)) return { caliente: aj.caliente, frio: aj.frio, fuente: 'ajuste', desde: aj.desde };
   return null;
 }
 // Editor: guarda un ajuste manual que rige desde el mes indicado en adelante
@@ -2010,6 +2012,13 @@ function editarPrecioAsfaltoDesde(mes) {
   if (f === null) return;
   const pc = parseFloat(String(c).replace(/\$/g, '').replace(/\./g, '').replace(',', '.').trim()) || 0;
   const pf = parseFloat(String(f).replace(/\$/g, '').replace(/\./g, '').replace(',', '.').trim()) || 0;
+  if (pc <= 0 && pf <= 0) {
+    // Nada válido: si había un ajuste desde este mes, se elimina; no se guarda $0
+    borrarAjustePrecio(mes);
+    alert('No se guardó ningún precio (los dos valores quedaron vacíos o en 0). El mes vuelve a quedar "sin precio".');
+    renderAll();
+    return;
+  }
   guardarAjustePrecio(mes, pc, pf);
   renderAll();
 }
