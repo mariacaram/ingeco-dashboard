@@ -1155,8 +1155,14 @@ function leerAgustinIntermedio() {
 
       // Monto del ítem: lo que falta certificar. Si está Cobrada y no queda
       // saldo, lo cobrado (anticipo o total) para el desglose de Cobradas.
+      // EXCEPCIÓN — fila MADRE (sep-2026): sin Monto a certificar y SIN
+      // Período es la fila-resumen del contrato (solo documenta el Monto
+      // Total); no suma nunca, diga lo que diga el Estado. Así Agustín puede
+      // marcarla "Cobrada" cuando la etapa cerró sin duplicar los montos.
+      const perVacio = row[iPer] == null || String(row[iPer]).trim() === '' || String(row[iPer]).trim() === '-';
+      const esMadre = aCert <= 0 && perVacio;
       let monto = aCert > 0 ? aCert : 0;
-      if (esCobrada && monto <= 0) monto = anticipo > 0 ? anticipo : (montoTotal > 0 ? montoTotal : 0);
+      if (esCobrada && monto <= 0 && !esMadre) monto = anticipo > 0 ? anticipo : (montoTotal > 0 ? montoTotal : 0);
       // Estado normalizado: Cobrada / A Cobrar (cualquier otro texto con saldo
       // pendiente cuenta como A Cobrar, ej. "Total")
       const estado = esCobrada ? 'Cobrada' : (monto > 0 ? 'A Cobrar' : (estadoRaw || ''));
