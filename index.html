@@ -6219,6 +6219,7 @@ const MAPA_OBRAS_AUDIT = {
 const SHEET_URLS_AUDIT = {
   julia:   'https://docs.google.com/spreadsheets/d/1YldZRtbLh17Xqczl-omI0zjHcgvrhvp3QOsjWffEm_s/edit'  /* archivo de Agustín (la clave interna conserva el nombre viejo) */,
   esteban: 'https://docs.google.com/spreadsheets/d/1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY/edit',
+  remitos: 'https://docs.google.com/spreadsheets/d/1_c6El5XDWoy84J7UAe8xlA1WC03IdklQyraMZEbQiEs/edit',
 };
 function _sheetUrlAudit(it) {
   const base = SHEET_URLS_AUDIT[it && it.src];
@@ -7137,6 +7138,7 @@ function openSalidasAsfalto(codObra, nombreObra, mesP, sFiltro, dFiltro) {
   const ck = (codObra || '').toLowerCase().trim();
   const remitosMes = REMITOS_ASFALTO[mesP];
   let dias = [], hayCampoDias = false;
+  const gidRem = remitosMes ? remitosMes.gid : null;
   if (remitosMes && remitosMes.porObra) {
     const entry = Object.entries(remitosMes.porObra).find(([k]) => k.toLowerCase() === nk || k.toLowerCase() === ck);
     if (entry) { hayCampoDias = !!entry[1].dias; dias = (entry[1].dias || []).slice(); }
@@ -7159,21 +7161,30 @@ function openSalidasAsfalto(codObra, nombreObra, mesP, sFiltro, dFiltro) {
           <th style="text-align:left;padding:7px 10px;font-size:11px;">Tipo</th>
           <th style="text-align:left;padding:7px 10px;font-size:11px;">Destino</th>
           <th style="text-align:right;padding:7px 10px;font-size:11px;">TN</th>
+          <th style="text-align:right;padding:7px 10px;font-size:11px;">Remito</th>
         </tr></thead>
         <tbody>
-          ${dias.map(x => `<tr style="border-top:1px solid var(--border);">
+          ${dias.map(x => {
+            const filas = x.fs || [];
+            const url = filas.length ? `${SHEET_URLS_AUDIT.remitos}#gid=${gidRem != null ? gidRem : 0}&range=A${filas[0]}` : SHEET_URLS_AUDIT.remitos;
+            const tipLink = filas.length
+              ? 'Abrir la fila ' + filas[0] + (filas.length > 1 ? ' (esta salida ocupa ' + filas.length + ' filas: ' + filas.join(', ') + ')' : '') + ' en REMITOS OFICIALES'
+              : 'Abrir REMITOS OFICIALES';
+            return `<tr style="border-top:1px solid var(--border);cursor:pointer;" title="${tipLink}" onclick="window.open('${url}','_blank')">
             <td style="padding:6px 10px;font-size:12px;font-weight:600;white-space:nowrap;">${x.f}</td>
             <td style="padding:6px 10px;font-size:12px;">${lblS[x.s] || x.s}</td>
             <td style="padding:6px 10px;font-size:12px;">${x.d || '—'}</td>
             <td style="padding:6px 10px;font-size:12px;text-align:right;font-weight:700;white-space:nowrap;">${fmtTn(x.t)} tn</td>
-          </tr>`).join('')}
+            <td style="padding:6px 8px;text-align:right;white-space:nowrap;"><span style="font-size:10px;font-weight:700;color:#2563eb;">${filas.length ? 'fila ' + filas[0] + (filas.length > 1 ? '+' + (filas.length - 1) : '') + ' ↗' : 'sheet ↗'}</span></td>
+          </tr>`;}).join('')}
           <tr style="background:#f8fafc;border-top:2px solid var(--border);font-weight:700;">
             <td colspan="3" style="padding:8px 10px;font-size:12px;">TOTAL</td>
             <td style="padding:8px 10px;font-size:12px;text-align:right;">${fmtTn(tot)} tn</td>
+            <td></td>
           </tr>
         </tbody>
       </table>
-      <div style="font-size:10.5px;color:var(--muted);margin-top:8px;">Agrupado por fecha + tipo + destino. La ✕ vuelve al detalle de toneladas.</div>`
+      <div style="font-size:10.5px;color:var(--muted);margin-top:8px;">Agrupado por fecha + tipo + destino — click en una fila abre el remito en la planilla de Roberto. La ✕ vuelve al detalle de toneladas.</div>`
       : `<p class="nd" style="padding:16px;">${hayCampoDias ? 'Sin salidas para este filtro en ' + (MES[mesP] || mesP) + '.' : 'El detalle por fecha va a estar disponible con la próxima actualización del backend (falta implementar la nueva versión del Apps Script).'}</p>`}`;
   panel.classList.add('open');
   if (overlay) overlay.classList.add('open');

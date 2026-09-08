@@ -1972,7 +1972,7 @@ function leerRemitosAsfalto() {
         const mesKey = MES_MAP[mesNum];
         if (!mesKey) continue;
 
-        if (!resultado[mesKey]) resultado[mesKey] = { caliente: 0, frio: 0, total: 0, porObra: {}, obrasSalida: {} };
+        if (!resultado[mesKey]) resultado[mesKey] = { caliente: 0, frio: 0, total: 0, porObra: {}, obrasSalida: {}, gid: sheet.getSheetId() };
         if (!resultado[mesKey].obrasSalida) resultado[mesKey].obrasSalida = {};
 
         // ── Registrar la obra de CUALQUIER salida (piedra, escombro, base, asfalto, etc.) ──
@@ -2057,8 +2057,10 @@ function leerRemitosAsfalto() {
             for (var qd = 0; qd < po.dias.length; qd++) {
               if (po.dias[qd].f === fStr && po.dias[qd].s === s && po.dias[qd].d === d) { ed = po.dias[qd]; break; }
             }
-            if (!ed) { ed = { f: fStr, s: s, d: d, t: 0 }; po.dias.push(ed); }
+            // fs = filas del remito que componen la entrada (para linkear al sheet)
+            if (!ed) { ed = { f: fStr, s: s, d: d, t: 0, fs: [] }; po.dias.push(ed); }
             ed.t = Math.round((ed.t + t) * 10) / 10;
+            if (ed.fs.indexOf(i + 1) < 0) ed.fs.push(i + 1);
           }
           if (!po.det) po.det = [];
           let e = null;
