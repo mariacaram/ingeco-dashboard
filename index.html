@@ -7124,6 +7124,61 @@ function closePanel() {
   document.getElementById('overlay').classList.remove('open');
 }
 
+// Subdetalle: salidas de asfalto por FECHA de una obra (con filtro opcional
+// por tipo/destino al clickear una fila del desglose). La ✕ vuelve al panel
+// de Tn Asfalto. Datos: porObra[obra].dias del backend (María, sep-2026).
+function openSalidasAsfalto(codObra, nombreObra, mesP, sFiltro, dFiltro) {
+  const panel   = document.getElementById('sidePanel');
+  const overlay = document.getElementById('overlay');
+  const content = document.getElementById('panelContent');
+  if (!panel || !content) return;
+  _panelBack = () => openDetalleCelda('tn', codObra, nombreObra, mesP);
+  const nk = (nombreObra || '').toLowerCase().trim();
+  const ck = (codObra || '').toLowerCase().trim();
+  const remitosMes = REMITOS_ASFALTO[mesP];
+  let dias = [], hayCampoDias = false;
+  if (remitosMes && remitosMes.porObra) {
+    const entry = Object.entries(remitosMes.porObra).find(([k]) => k.toLowerCase() === nk || k.toLowerCase() === ck);
+    if (entry) { hayCampoDias = !!entry[1].dias; dias = (entry[1].dias || []).slice(); }
+  }
+  if (sFiltro) dias = dias.filter(x => x.s === sFiltro && (!dFiltro || x.d === dFiltro));
+  dias.sort((a, b) => { const pa = a.f.split('/'), pb = b.f.split('/'); return (+pa[1] - +pb[1]) || (+pa[0] - +pb[0]); });
+  const tot = Math.round(dias.reduce((s2, x) => s2 + x.t, 0) * 10) / 10;
+  const lblS = { caliente: 'Caliente', carpeta: 'Caliente p/carpeta', bacheo: 'Caliente p/bacheo', frio: 'Frío' };
+  content.innerHTML = `
+    <div class="panel-title">📅 Salidas de asfalto — ${nombreObra || codObra}</div>
+    <div class="panel-sub">${MES[mesP] || mesP}${sFiltro ? ' · ' + (lblS[sFiltro] || sFiltro) + (dFiltro ? ' → ' + dFiltro : '') : ' · todas las salidas'} · Remitos de producción (Roberto)</div>
+    ${dias.length ? `
+      <div class="panel-kpi" style="margin-top:8px;">
+        <div class="panel-kpi-item"><div class="panel-kpi-label">Salidas</div><div class="panel-kpi-val">${dias.length}</div></div>
+        <div class="panel-kpi-item"><div class="panel-kpi-label">Toneladas</div><div class="panel-kpi-val">${fmtTn(tot)} tn</div></div>
+      </div>
+      <table style="width:100%;border-collapse:collapse;margin-top:10px;">
+        <thead><tr style="background:#f1f5f9;">
+          <th style="text-align:left;padding:7px 10px;font-size:11px;">Fecha</th>
+          <th style="text-align:left;padding:7px 10px;font-size:11px;">Tipo</th>
+          <th style="text-align:left;padding:7px 10px;font-size:11px;">Destino</th>
+          <th style="text-align:right;padding:7px 10px;font-size:11px;">TN</th>
+        </tr></thead>
+        <tbody>
+          ${dias.map(x => `<tr style="border-top:1px solid var(--border);">
+            <td style="padding:6px 10px;font-size:12px;font-weight:600;white-space:nowrap;">${x.f}</td>
+            <td style="padding:6px 10px;font-size:12px;">${lblS[x.s] || x.s}</td>
+            <td style="padding:6px 10px;font-size:12px;">${x.d || '—'}</td>
+            <td style="padding:6px 10px;font-size:12px;text-align:right;font-weight:700;white-space:nowrap;">${fmtTn(x.t)} tn</td>
+          </tr>`).join('')}
+          <tr style="background:#f8fafc;border-top:2px solid var(--border);font-weight:700;">
+            <td colspan="3" style="padding:8px 10px;font-size:12px;">TOTAL</td>
+            <td style="padding:8px 10px;font-size:12px;text-align:right;">${fmtTn(tot)} tn</td>
+          </tr>
+        </tbody>
+      </table>
+      <div style="font-size:10.5px;color:var(--muted);margin-top:8px;">Agrupado por fecha + tipo + destino. La ✕ vuelve al detalle de toneladas.</div>`
+      : `<p class="nd" style="padding:16px;">${hayCampoDias ? 'Sin salidas para este filtro en ' + (MES[mesP] || mesP) + '.' : 'El detalle por fecha va a estar disponible con la próxima actualización del backend (falta implementar la nueva versión del Apps Script).'}</p>`}`;
+  panel.classList.add('open');
+  if (overlay) overlay.classList.add('open');
+}
+
 // ── Panel de detalle por celda de la tabla Margen por Obra ───────────────
 function openDetalleCelda(tipo, codObra, nombreObra, mesOver) {
   // mesOver: permite abrir el desglose de OTRO mes (ej. click en una fila
@@ -7326,10 +7381,10 @@ function openDetalleCelda(tipo, codObra, nombreObra, mesOver) {
           ${precio&&precio.frio?`<div style="font-size:11px;color:var(--muted);">${fmtTn(tnFrio)} tn × ${fmt(precio.frio)}/tn</div>`:''}
         </div>`:''}
         ${tnDetPanel.length?`<div style="background:#f8fafc;border-radius:8px;padding:12px;">
-          <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">Desglose por destino <span style="font-weight:400;">(col E + col H del remito)</span></div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">Desglose por destino <span style="font-weight:400;">(col E + col H del remito) · click en una fila para ver las salidas por fecha</span></div>
           <table style="width:100%;font-size:12px;">
-            ${tnDetPanel.map(e=>`<tr style="border-top:1px solid var(--border);">
-              <td style="padding:6px 4px;">${_tnDetLabel(e)}</td>
+            ${tnDetPanel.map(e=>`<tr style="border-top:1px solid var(--border);cursor:pointer;" title="Ver salidas por fecha de ${_tnDetLabel(e)}" onclick="openSalidasAsfalto('${(codObra||'').replace(/'/g,"\\'")}','${(nombreObra||'').replace(/'/g,"\\'")}','${mesP}','${(e.s||'').replace(/'/g,"\\'")}','${(e.d||'').replace(/'/g,"\\'")}')">
+              <td style="padding:6px 4px;text-decoration:underline dotted;">${_tnDetLabel(e)}</td>
               <td style="padding:6px 4px;text-align:right;font-weight:700;white-space:nowrap;">${fmtTn(e.t)} tn</td>
             </tr>`).join('')}
           </table>
@@ -7338,6 +7393,7 @@ function openDetalleCelda(tipo, codObra, nombreObra, mesOver) {
           <div style="font-size:11px;color:var(--muted);">Costo total asfalto</div>
           <div style="font-size:20px;font-weight:700;" class="neg-val">${fmt(costoTotal)}</div>
         </div>`:''}
+        ${(tnCal>0||tnFrio>0)?`<button onclick="openSalidasAsfalto('${(codObra||'').replace(/'/g,"\\'")}','${(nombreObra||'').replace(/'/g,"\\'")}','${mesP}','','')" style="background:#fff;color:var(--primary);border:1.5px solid var(--primary);border-radius:8px;padding:9px 14px;font-size:12.5px;font-weight:600;cursor:pointer;">📅 Ver todas las salidas por fecha</button>`:''}
         ${tnCal===0&&tnFrio===0?'<p class="nd" style="padding:16px;">Sin remitos registrados para esta obra en '+mes+'</p>':''}
       </div>`;
 

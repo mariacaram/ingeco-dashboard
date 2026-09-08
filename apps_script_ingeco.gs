@@ -2045,8 +2045,21 @@ function leerRemitosAsfalto() {
 
         // Detalle legible por obra: tipo + sub-destino (carpeta/bacheo) + cliente (col H).
         // Se agrega en porObra[obra].det = [{s, d, t}] agrupado por (s|d).
+        // Además, salidas por FECHA en porObra[obra].dias = [{f, s, d, t}]
+        // (agrupado por fecha+tipo+destino) — alimenta el subdetalle del
+        // tablero "ver salidas por fecha" (María, sep-2026).
         const _addDet = function(obraKey, s, d, t) {
           const po = resultado[mesKey].porObra[obraKey];
+          if (fechaObj && !isNaN(fechaObj.getTime())) {
+            if (!po.dias) po.dias = [];
+            const fStr = Utilities.formatDate(fechaObj, TZ, 'dd/MM');
+            let ed = null;
+            for (var qd = 0; qd < po.dias.length; qd++) {
+              if (po.dias[qd].f === fStr && po.dias[qd].s === s && po.dias[qd].d === d) { ed = po.dias[qd]; break; }
+            }
+            if (!ed) { ed = { f: fStr, s: s, d: d, t: 0 }; po.dias.push(ed); }
+            ed.t = Math.round((ed.t + t) * 10) / 10;
+          }
           if (!po.det) po.det = [];
           let e = null;
           for (var q = 0; q < po.det.length; q++) { if (po.det[q].s === s && po.det[q].d === d) { e = po.det[q]; break; } }
