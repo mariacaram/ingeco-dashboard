@@ -1792,8 +1792,13 @@ function _renderMonthButtons() {
     if (MO_CTRO_COSTO[m] || OC_INSUMOS[m] || ALQUILER_EQUIPOS[m] || REMITOS_ASFALTO[m]) conDatos.add(m);
     if (GENERADO_POR_OBRA && GENERADO_POR_OBRA.obrasPorMes && GENERADO_POR_OBRA.obrasPorMes[m]) conDatos.add(m);
   });
-  // Unión: meses hasta hoy + meses con datos
-  const meses = MES_ORDER.filter((m, i) => i <= limiteIdx || conDatos.has(m));
+  // Unión: meses hasta hoy + meses con datos.
+  // Los datos están controlados desde JULIO (pedido de María, sep-2026): los
+  // meses anteriores no se ofrecen como filtro del tablero — su información
+  // sigue disponible en el historial de cada obra (click en el código),
+  // el Margen total y el estado de resultados.
+  const idxMin = MES_ORDER.indexOf(MES_MIN_FILTRO);
+  const meses = MES_ORDER.filter((m, i) => (i <= limiteIdx || conDatos.has(m)) && i >= idxMin);
   if (mesActual !== 'total' && !meses.includes(mesActual)) mesActual = meses[meses.length - 1];
   const container = document.getElementById('month-btns');
   if (!container) return;
@@ -1802,7 +1807,10 @@ function _renderMonthButtons() {
   ).join('') +
     `<button class="month-btn${mesActual === 'total' ? ' active' : ''}" data-mes="total" onclick="setMes('total')" title="Suma histórica de todos los meses con datos" style="font-weight:700;">TOTAL</button>`;
 }
-let mesActual = MES_ORDER[new Date().getMonth()];
+// Primer mes ofrecido en el selector de período — los datos anteriores no
+// están controlados; siguen visibles en el historial por obra.
+const MES_MIN_FILTRO = 'jul';
+let mesActual = MES_ORDER[Math.max(new Date().getMonth(), 6)];
 
 // Canal 82008 — dato real del archivo Cobros
 const CANAL_82008 = {
@@ -9746,6 +9754,10 @@ function openTab(id) {
 }
 
 function setMes(mes) {
+  // El filtro del tablero arranca en julio (datos controlados); un pedido de
+  // un mes anterior se redirige al primer mes visible. El detalle de meses
+  // viejos se ve en el historial de cada obra, no como filtro global.
+  if (mes !== 'total' && MES_ORDER.indexOf(mes) < MES_ORDER.indexOf(MES_MIN_FILTRO)) mes = MES_MIN_FILTRO;
   mesActual = mes;
   document.querySelectorAll('.month-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.mes === mes);
