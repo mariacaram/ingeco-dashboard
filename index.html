@@ -313,6 +313,8 @@
     overflow-y: auto;
     padding: 24px;
   }
+  .side-panel.wide { width: min(880px, 94vw); }
+  .side-panel.wide:not(.open) { right: -920px; }
   .side-panel.open { right: 0; }
   .panel-close { position: absolute; top: 16px; right: 16px; background: none; border: none; font-size: 20px; cursor: pointer; color: var(--muted); }
   .panel-title { font-size: 16px; font-weight: 700; color: var(--primary); margin-bottom: 4px; }
@@ -822,6 +824,7 @@
           style="display:none;position:absolute;right:10px;top:50%;transform:translateY(-50%);cursor:pointer;color:var(--muted);font-size:13px;">✕</span>
       </div>
       <div id="busqueda-obra-dropdown" style="display:none;position:absolute;z-index:80;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.14);max-height:260px;overflow-y:auto;"></div>
+      <div id="busqueda-obra-chips" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;"></div>
     </div>
     <div class="table-wrap">
       <table id="tabla-resumen-obra">
@@ -915,6 +918,7 @@
           style="display:none;position:absolute;right:10px;top:50%;transform:translateY(-50%);cursor:pointer;color:var(--muted);font-size:13px;">✕</span>
       </div>
       <div id="busqueda-tipo-dropdown" style="display:none;position:absolute;z-index:80;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.14);max-height:260px;overflow-y:auto;"></div>
+      <div id="busqueda-tipo-chips" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;"></div>
     </div>
     <div id="container-margen-tipo">
       <div class="nd" style="text-align:center;padding:20px;font-size:13px;">Presioná "Actualizar datos" para cargar desde Drive</div>
@@ -2272,15 +2276,13 @@ const FUENTES = [
 
 function fmt(n) {
   if (n == null || isNaN(n)) return '—';
-  // Formato unificado: todo abreviado por magnitud, siempre con sufijo.
-  //   ≥ 1 millón  → "$28,6M"   (1 decimal)
-  //   ≥ 1 mil     → "$350,9 mil" (hasta 1 decimal)
-  //   < 1 mil     → "$850"
-  // Los negativos usan el mismo formato con "-" adelante (antes se mostraban completos).
+  // Formato unificado: SIEMPRE en millones "M" (pedido de María, sep-2026 —
+  // no mezclar "M" con "mil"). Montos chicos usan 2 decimales para no
+  // quedar en $0,0M; menores a $1.000 se muestran completos.
   const sg = n < 0 ? '-' : '';
   const a  = Math.abs(n);
-  if (a >= 1e6) return sg + '$' + (a/1e6).toLocaleString('es-AR', {minimumFractionDigits: 1, maximumFractionDigits: 1}) + 'M';
-  if (a >= 1e3) return sg + '$' + (a/1e3).toLocaleString('es-AR', {minimumFractionDigits: 0, maximumFractionDigits: 1}) + ' mil';
+  if (a >= 1e5) return sg + '$' + (a/1e6).toLocaleString('es-AR', {minimumFractionDigits: 1, maximumFractionDigits: 1}) + 'M';
+  if (a >= 1e3) return sg + '$' + (a/1e6).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + 'M';
   return sg + '$' + Math.round(a).toLocaleString('es-AR');
 }
 
@@ -3387,6 +3389,39 @@ function _renderOtrosGastosBlock(otrosGastos) {
 // escribe. Cada pestaña tiene su propio estado de búsqueda independiente.
 // ================================================================
 const BUSQUEDA_OBRA = { obra: '', tipo: '' };
+// Multi-selección: claves (código/nombre en minúsculas) elegidas del dropdown;
+// la tabla muestra solo esas obras hasta apretar "Ver todas"
+const BUSQUEDA_OBRA_MULTI = { obra: [], tipo: [] };
+
+function _renderChipsBusqueda(tab) {
+  const cont = document.getElementById('busqueda-' + tab + '-chips');
+  if (!cont) return;
+  const sel = BUSQUEDA_OBRA_MULTI[tab];
+  cont.innerHTML = sel.length ? sel.map(k =>
+    `<span style="background:var(--accent);color:#fff;border-radius:14px;padding:4px 10px;font-size:11.5px;font-weight:600;display:inline-flex;align-items:center;gap:6px;">${k}
+      <span onclick="quitarObraSeleccionada('${tab}','${k.replace(/'/g, "\\'")}')" style="cursor:pointer;font-weight:700;" title="Quitar">✕</span></span>`).join('')
+    + `<span onclick="limpiarBusquedaObra('${tab}')" style="cursor:pointer;border:1.5px solid var(--border);border-radius:14px;padding:4px 10px;font-size:11.5px;color:var(--muted);background:#fff;" title="Quitar todos los filtros">Ver todas ✕</span>`
+    : '';
+}
+function quitarObraSeleccionada(tab, clave) {
+  BUSQUEDA_OBRA_MULTI[tab] = BUSQUEDA_OBRA_MULTI[tab].filter(k => k !== clave);
+  _renderChipsBusqueda(tab);
+  if (tab === 'obra') renderResumenObra(); else renderResumenTipoContrato();
+}
+// Filtro combinado: con obras seleccionadas muestra esas (más lo que matchee
+// el texto que se esté tipeando para agregar otra); sin selección, el texto
+// filtra por contiene como siempre.
+function _obraPasaFiltro(tab, o) {
+  const sel = BUSQUEDA_OBRA_MULTI[tab];
+  const texto = BUSQUEDA_OBRA[tab];
+  const cod = (o.cod_obra || '').toLowerCase().trim();
+  const nom = (o.nombre   || '').toLowerCase().trim();
+  const enSel = sel.length > 0 && (sel.includes(cod) || sel.includes(nom));
+  if (sel.length && enSel) return true;
+  if (texto) return cod.includes(texto) || nom.includes(texto);
+  return sel.length === 0;
+}
+function _hayFiltroObra(tab) { return !!BUSQUEDA_OBRA[tab] || BUSQUEDA_OBRA_MULTI[tab].length > 0; }
 
 // Lista única de obras conocidas (histórico completo, sin obras "Interno")
 // para armar las sugerencias del dropdown, sin importar el mes seleccionado.
@@ -3447,12 +3482,17 @@ function _actualizarDropdownBusqueda(tab, valor) {
 
 // onmousedown (no click) en las sugerencias para que dispare ANTES del blur del input
 function seleccionarObraBusqueda(tab, valor) {
+  // Multi-selección: cada click del dropdown AGREGA la obra a los chips;
+  // el input queda libre para buscar y sumar otra.
+  const clave = valor.trim().toLowerCase();
+  if (clave && !BUSQUEDA_OBRA_MULTI[tab].includes(clave)) BUSQUEDA_OBRA_MULTI[tab].push(clave);
   const input = document.getElementById('busqueda-' + tab + '-input');
-  if (input) input.value = valor;
-  BUSQUEDA_OBRA[tab] = valor.trim().toLowerCase();
+  if (input) input.value = '';
+  BUSQUEDA_OBRA[tab] = '';
   ocultarDropdownBusqueda(tab);
   const clearEl = document.getElementById('busqueda-' + tab + '-clear');
-  if (clearEl) clearEl.style.display = '';
+  if (clearEl) clearEl.style.display = 'none';
+  _renderChipsBusqueda(tab);
   if (tab === 'obra') renderResumenObra(); else renderResumenTipoContrato();
 }
 
@@ -3460,6 +3500,8 @@ function limpiarBusquedaObra(tab) {
   const input = document.getElementById('busqueda-' + tab + '-input');
   if (input) input.value = '';
   BUSQUEDA_OBRA[tab] = '';
+  BUSQUEDA_OBRA_MULTI[tab] = [];
+  _renderChipsBusqueda(tab);
   ocultarDropdownBusqueda(tab);
   const clearEl = document.getElementById('busqueda-' + tab + '-clear');
   if (clearEl) clearEl.style.display = 'none';
@@ -3530,19 +3572,19 @@ function renderResumenObra() {
   if (mesLabel) mesLabel.textContent = MES[mesActual] || mesActual;
 
   const datos = computeMargenFilas();
-  const busq = BUSQUEDA_OBRA.obra;
+  const busq = _hayFiltroObra('obra');
   const otrosGastosDivEl = document.getElementById('otros-gastos-obra');
   if (tbody && !datos) {
     tbody.innerHTML = '<tr><td colspan="8" class="nd" style="text-align:center;padding:20px;">Presioná "Actualizar datos" para cargar desde Drive</td></tr>';
     if (otrosGastosDivEl) otrosGastosDivEl.innerHTML = '';
     const _atd1 = document.getElementById('alquiler-terceros-obra'); if (_atd1) _atd1.innerHTML = '';
-  } else if (tbody && busq && !datos.rows.some(r => _obraMatchBusqueda(r.o, busq))) {
-    tbody.innerHTML = `<tr><td colspan="8" class="nd" style="text-align:center;padding:20px;">Sin obras que coincidan con "${busq}" en este período</td></tr>`;
+  } else if (tbody && busq && !datos.rows.some(r => _obraPasaFiltro('obra', r.o))) {
+    tbody.innerHTML = `<tr><td colspan="8" class="nd" style="text-align:center;padding:20px;">Sin obras que coincidan con el filtro en este período — probá "Ver todas" o cambiá de mes</td></tr>`;
     renderChartsObra({ insumos: [], mo: [], alquiler: [], tn: [] });
     if (otrosGastosDivEl) otrosGastosDivEl.innerHTML = '';
     const _atd2 = document.getElementById('alquiler-terceros-obra'); if (_atd2) _atd2.innerHTML = '';
   } else if (tbody) {
-    const rows = busq ? datos.rows.filter(r => _obraMatchBusqueda(r.o, busq)) : datos.rows;
+    const rows = busq ? datos.rows.filter(r => _obraPasaFiltro('obra', r.o)) : datos.rows;
     const { moEsEstim, tnTotalGlobal } = datos;
 
     // Columna "Margen acum.": margen histórico de meses cerrados por obra
@@ -3637,8 +3679,8 @@ function renderResumenTipoContrato() {
     return;
   }
   const { moEsEstim, tnTotalGlobal } = datos;
-  const busq = BUSQUEDA_OBRA.tipo;
-  const rowsConBusq = busq ? datos.rows.filter(r => _obraMatchBusqueda(r.o, busq)) : datos.rows;
+  const busq = _hayFiltroObra('tipo');
+  const rowsConBusq = busq ? datos.rows.filter(r => _obraPasaFiltro('tipo', r.o)) : datos.rows;
 
   // "Otros Gastos o salidas" (placeholders sin clasificar) no entran en ningún
   // tipo de contratación — van en su propio bloque, no como un tipo más.
@@ -3673,7 +3715,7 @@ function renderResumenTipoContrato() {
 
   if (lista.length === 0) {
     cont.innerHTML = busq
-      ? `<div class="nd" style="text-align:center;padding:20px;font-size:13px;">Sin obras que coincidan con "${busq}" en este período</div>`
+      ? `<div class="nd" style="text-align:center;padding:20px;font-size:13px;">Sin obras que coincidan con el filtro en este período — probá "Ver todas" o cambiá de mes</div>`
       : '<div class="nd" style="text-align:center;padding:20px;font-size:13px;">Sin obras con tipo de contratación para este período</div>';
     return;
   }
@@ -3743,6 +3785,7 @@ function renderResumenTipoContrato() {
 function openHistorialObra(codObra, nombreObra) {
   _panelBack = null;
   const panel   = document.getElementById('sidePanel');
+  if (panel) panel.classList.add('wide'); // la tabla del historial es ancha
   const overlay = document.getElementById('overlay');
   const content = document.getElementById('panelContent');
   if (!panel) return;
@@ -3787,11 +3830,13 @@ function openHistorialObra(codObra, nombreObra) {
         <td style="padding:7px 10px;font-size:12px;text-align:right;">${esEnCurso && r.costoAsfObra != null ? fmt(r.costoAsfObra) : '—'}</td>
         <td style="padding:7px 10px;font-size:12px;text-align:right;">${esEnCurso && r.alquiler > 0 ? fmt(r.alquiler) : '—'}</td>
         <td style="padding:7px 10px;font-size:11px;text-align:right;">${esEnCurso ? 'en curso — no suma' : 'programado — no suma'}</td>
+        <td style="padding:7px 10px;font-size:12px;text-align:right;">—</td>
       </tr>`);
       return;
     }
     if (d.moEsEstim && r.moObra != null) algunaEstim = true;
     tot.aCobrar  += r.aCobrar;
+    tot.margenRun = (tot.margenRun || 0) + r.margen;
     tot.insumos  += r.insumos;
     tot.mo       += r.moObra       || 0;
     tot.moh      += r.moHormigon   || 0;
@@ -3812,6 +3857,7 @@ function openHistorialObra(codObra, nombreObra) {
       ${tdClick(m, 'tn', r.costoAsfObra != null ? `<span class="neg-val" style="text-decoration:underline dotted;" title="${tnStr}">${fmt(r.costoAsfObra)}</span>` : (tnStr || '—'))}
       ${tdClick(m, 'alquiler', r.alquiler > 0 ? `<span class="neg-val" style="text-decoration:underline dotted;">${fmt(r.alquiler)}</span>` : '—')}
       <td style="padding:7px 10px;font-size:12px;text-align:right;background:${r.margen > 0 ? '#f0fdf4' : r.margen < 0 ? '#fef2f2' : 'transparent'};"><strong class="${mgColor}">${fmt(r.margen)}</strong></td>
+      <td style="padding:7px 10px;font-size:12px;text-align:right;" title="Margen acumulado hasta ${(MES[m] || m).replace(' 2026', '')} (meses cerrados)"><span class="${tot.margenRun > 0 ? 'pos-val' : tot.margenRun < 0 ? 'neg-val' : ''}" style="opacity:.85;">${fmt(tot.margenRun)}</span></td>
     </tr>`);
   });
 
@@ -3868,6 +3914,7 @@ function openHistorialObra(codObra, nombreObra) {
           <th style="text-align:right;padding:7px 10px;font-size:11px;">Asfalto</th>
           <th style="text-align:right;padding:7px 10px;font-size:11px;">Alquiler</th>
           <th style="text-align:right;padding:7px 10px;font-size:11px;">Margen</th>
+          <th style="text-align:right;padding:7px 10px;font-size:11px;" title="Margen acumulado hasta ese mes (solo meses cerrados)">Margen acum.</th>
         </tr></thead>
         <tbody>${filasMes.join('')}
           <tr style="background:#f8fafc;font-weight:700;border-top:2px solid var(--border);">
@@ -3878,6 +3925,7 @@ function openHistorialObra(codObra, nombreObra) {
             <td style="padding:8px 10px;font-size:12px;text-align:right;" class="neg-val">${tot.asf > 0 ? fmt(tot.asf) : '—'}</td>
             <td style="padding:8px 10px;font-size:12px;text-align:right;" class="neg-val">${tot.alquiler > 0 ? fmt(tot.alquiler) : '—'}</td>
             <td style="padding:8px 10px;font-size:12px;text-align:right;background:${tot.margen > 0 ? '#f0fdf4' : tot.margen < 0 ? '#fef2f2' : 'transparent'};" class="${mgColorT}">${fmt(tot.margen)}</td>
+            <td style="padding:8px 10px;font-size:12px;text-align:right;" class="${mgColorT}">${fmt(tot.margen)}</td>
           </tr>
         </tbody>
       </table>
@@ -7045,6 +7093,7 @@ function closePanel() {
     return;
   }
   document.getElementById('sidePanel').classList.remove('open');
+  document.getElementById('sidePanel').classList.remove('wide');
   document.getElementById('overlay').classList.remove('open');
 }
 
