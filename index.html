@@ -3466,18 +3466,39 @@ function _actualizarDropdownBusqueda(tab, valor) {
   if (coincidencias.length === 0) {
     dd.innerHTML = '<div style="padding:10px 14px;font-size:12px;color:var(--muted);">Sin coincidencias</div>';
   } else {
+    const sel = BUSQUEDA_OBRA_MULTI[tab];
     dd.innerHTML = coincidencias.map(o => {
+      const clave = (o.cod || o.nombre).toLowerCase().trim();
+      const marcada = sel.includes(clave);
       const valorSel = (o.cod || o.nombre).replace(/'/g, "\\'").replace(/"/g, '&quot;');
       const nombreCorto = o.nombre && o.nombre.length > 70 ? o.nombre.slice(0, 70) + '…' : o.nombre;
-      return `<div onmousedown="seleccionarObraBusqueda('${tab}','${valorSel}')"
-          style="padding:9px 14px;font-size:12.5px;cursor:pointer;border-bottom:1px solid var(--border);"
-          onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
-        <div style="font-weight:600;">${o.cod || o.nombre}</div>
-        ${nombreCorto && nombreCorto !== o.cod ? `<div style="font-size:11px;color:var(--muted);">${nombreCorto}</div>` : ''}
+      // preventDefault en mousedown: el input no pierde el foco y el
+      // desplegable queda abierto para seguir tildando (María, sep-2026)
+      return `<div onmousedown="event.preventDefault();toggleObraBusqueda('${tab}','${valorSel}')"
+          style="padding:9px 14px;font-size:12.5px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;${marcada ? 'background:#fffbeb;' : ''}"
+          onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='${marcada ? '#fffbeb' : ''}'">
+        <span style="font-size:15px;color:${marcada ? 'var(--accent)' : 'var(--border)'};">${marcada ? '☑' : '☐'}</span>
+        <div style="flex:1;">
+          <div style="font-weight:600;">${o.cod || o.nombre}</div>
+          ${nombreCorto && nombreCorto !== o.cod ? `<div style="font-size:11px;color:var(--muted);">${nombreCorto}</div>` : ''}
+        </div>
       </div>`;
-    }).join('');
+    }).join('') + (sel.length ? `<div onmousedown="event.preventDefault();ocultarDropdownBusqueda('${tab}')" style="padding:8px 14px;font-size:12px;font-weight:600;color:var(--primary);cursor:pointer;text-align:center;background:#f8fafc;">Listo ✓ (${sel.length} seleccionada${sel.length !== 1 ? 's' : ''})</div>` : '');
   }
   dd.style.display = '';
+}
+
+// Tilda/destilda una obra del desplegable SIN cerrarlo — se pueden ir
+// sumando varias; los chips y la tabla se actualizan en vivo.
+function toggleObraBusqueda(tab, valor) {
+  const clave = valor.trim().toLowerCase();
+  const sel = BUSQUEDA_OBRA_MULTI[tab];
+  const i = sel.indexOf(clave);
+  if (i >= 0) sel.splice(i, 1); else sel.push(clave);
+  _renderChipsBusqueda(tab);
+  const input = document.getElementById('busqueda-' + tab + '-input');
+  _actualizarDropdownBusqueda(tab, input ? input.value : '');
+  if (tab === 'obra') renderResumenObra(); else renderResumenTipoContrato();
 }
 
 // onmousedown (no click) en las sugerencias para que dispare ANTES del blur del input
