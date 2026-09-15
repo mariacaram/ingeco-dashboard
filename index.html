@@ -6844,7 +6844,10 @@ function renderSeguimientoCobros() {
     return;
   }
   const { meses, ult, obras } = data;
-  sub.innerHTML = `Acumulado desde <strong>${MES[meses[0]] || meses[0]}</strong> · pendiente según programación de <strong>${MES[ult] || ult}</strong> — fuente: planilla de Esteban, contrastada contra los certificados "A Cobrar" del archivo de Agustín. Independiente del selector de mes. El % de avance es sobre lo registrado en este archivo, no sobre el total de contrato.`;
+  sub.innerHTML = `<strong>Cobrado</strong>: suma de todos los cobros percibidos desde ${MES[meses[0]] || meses[0]}. ` +
+    `<strong>Pendiente</strong>: última programación de cobranza (${MES[ult] || ult}). ` +
+    `El <strong>%</strong> es cobrado sobre el total registrado en esta planilla — no sobre el monto de contrato. ` +
+    `<span style="color:var(--muted);">Fuente: planilla de Esteban, contrastada contra los certificados del archivo de Agustín. No depende del mes seleccionado arriba.</span>`;
 
   const nombres = Object.keys(obras).filter(n => obras[n].cob + obras[n].pend > 1e6);
   const activas = nombres.filter(n => obras[n].pend > 0).sort((a, b) => obras[b].pend - obras[a].pend);
@@ -6870,22 +6873,40 @@ function renderSeguimientoCobros() {
   // Solo si el archivo de Julia ya trae estados cargados.
   const jp = _juliaPendPorCanon(obras);
 
+  // Fila legible para directorio: los números en palabras, sin depender de
+  // los colores de la barra ni de íconos (María, sep-2026)
   const fila = n => {
     const o = obras[n];
     const total = o.cob + o.pend;
     const pct = total ? Math.round(o.cob / total * 100) : 0;
     const v = _segVeredictoJulia(n, o, jp);
-    const iconos =
-      (o.fondoPend > 0 ? `<span title="Fondo de reparo pendiente: ${fmt(o.fondoPend)} — reclamable (ver detalle)">🔒</span>` : '') +
-      ((o.cats['menosProbable'] || 0) > 0 ? `<span title="Tiene ${fmt(o.cats['menosProbable'])} mapeados sin horizonte de cobro cercano (cargados por Esteban después del TOTAL) — ver detalle">🗺️</span>` : '') +
-      (v ? `<span data-restrict="sueldos" title="${v.tip}">${v.icon}</span>` : '');
+    const c = o.cats || {};
+    const pctColor = pct >= 80 ? '#16a34a' : pct >= 40 ? '#b45309' : '#dc2626';
+    // Composición de lo pendiente, de más firme a menos firme
+    const partesPend = [];
+    if (c.facturados > 0)    partesPend.push(`<span title="Comprobante emitido, en espera de cobro"><strong>${fmt(c.facturados)}</strong> facturado</span>`);
+    if (c.noCobrados > 0)    partesPend.push(`<span title="Nota de crédito"><strong>${fmt(c.noCobrados)}</strong> nota de crédito</span>`);
+    if (c.sinFecha > 0)      partesPend.push(`<span title="Previsto por Esteban, todavía sin factura"><strong>${fmt(c.sinFecha)}</strong> previsto sin facturar</span>`);
+    if (c.menosProbable > 0) partesPend.push(`<span style="color:#64748b;" title="Esteban lo registra como de cobro poco probable"><strong>${fmt(c.menosProbable)}</strong> baja probabilidad</span>`);
+    // Alertas en texto
+    const alertas = [];
+    if (o.fondoPend > 0) alertas.push(`<span style="background:#fffbeb;border:1px solid #fcd34d;color:#92400e;border-radius:12px;padding:2px 8px;" title="Retención de garantía reclamable — ver detalle">🔒 Fondo de reparo ${fmt(o.fondoPend)}</span>`);
+    if (o.redetPend > 0) alertas.push(`<span style="background:#f5f3ff;border:1px solid #ddd6fe;color:#5b21b6;border-radius:12px;padding:2px 8px;" title="Redeterminaciones de precio pendientes (las sigue solo Esteban)">📈 Redeterminaciones ${fmt(o.redetPend)}</span>`);
+    if (v) alertas.push(v.tipo === 'ok'
+      ? `<span data-restrict="sueldos" style="color:#16a34a;" title="${v.tip}">✓ coincide con Agustín</span>`
+      : `<span data-restrict="sueldos" style="background:#fff7ed;border:1px solid #fdba74;color:#9a3412;border-radius:12px;padding:2px 8px;" title="${v.tip}">⚠ difiere de Agustín — ver Auditorías</span>`);
     return `
-    <div data-obra="${n.replace(/"/g, '&quot;')}" title="Click para ver el detalle certificado por certificado" style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:9px 14px;margin-bottom:7px;cursor:pointer;display:flex;align-items:center;gap:12px;flex-wrap:wrap;" onclick="openSeguimientoPanel('${n.replace(/'/g, "\\'")}')">
-      <strong style="font-size:12.5px;flex:0 1 auto;min-width:130px;">${n}</strong>
-      <div style="flex:1 1 140px;min-width:110px;">${_segBarra(o, total)}</div>
-      <span style="font-size:11px;color:var(--muted);white-space:nowrap;">falta <strong style="color:#0f172a;">${fmt(o.pend)}</strong></span>
-      <span style="font-weight:800;font-size:13px;width:40px;text-align:right;color:${pct >= 80 ? '#16a34a' : pct >= 40 ? '#b45309' : '#dc2626'};">${pct}%</span>
-      <span style="font-size:13px;width:44px;text-align:left;">${iconos}</span>
+    <div data-obra="${n.replace(/"/g, '&quot;')}" title="Click para ver el detalle certificado por certificado" style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:8px;cursor:pointer;" onclick="openSeguimientoPanel('${n.replace(/'/g, "\\'")}')">
+      <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:6px;">
+        <strong style="font-size:13px;flex:1 1 auto;">${n}</strong>
+        <span style="font-size:12px;white-space:nowrap;">Cobrado <strong style="color:${pctColor};font-size:14px;">${fmt(o.cob)}</strong> <span style="color:${pctColor};font-weight:700;">(${pct}%)</span> <span style="color:var(--muted);">de ${fmt(total)}</span></span>
+        <span style="font-size:12px;white-space:nowrap;">Pendiente <strong style="color:#0f172a;font-size:14px;">${fmt(o.pend)}</strong></span>
+      </div>
+      <div>${_segBarra(o, total)}</div>
+      <div style="display:flex;gap:6px 14px;flex-wrap:wrap;align-items:center;margin-top:6px;font-size:11px;color:var(--muted);">
+        ${partesPend.length ? `<span>Pendiente = ${partesPend.join(' <span style="color:#cbd5e1;">+</span> ')}</span>` : ''}
+        ${alertas.length ? `<span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;">${alertas.join('')}</span>` : ''}
+      </div>
     </div>`;
   };
 
