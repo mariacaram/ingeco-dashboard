@@ -4426,7 +4426,6 @@ function renderChartsObra(data) {
 
   container.innerHTML = [
     makeBarChart('OC Insumos', data.insumos, '#f59e0b', fmtM),
-    makeBarChart('MO Prorrateada', data.mo, '#ef4444', fmtM, data.mo.some(i => i.estim) ? '~ estimado' : ''),
     makeBarChart('Alquiler de Equipos', data.alquiler, '#3b82f6', fmtM),
     makeTnChart(data.tn),
   ].filter(Boolean).join('');
