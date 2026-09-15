@@ -6324,6 +6324,64 @@ function _auditMesEsteban() {
   return meses.length ? meses[meses.length - 1] : null;
 }
 
+// ── Matching item por item entre Agustín y Esteban ──────────────────────
+// En vez de mostrar dos listas sueltas y que el usuario haga el cruce a
+// mano, se intenta encontrar qué certificado/concepto de un lado no tiene
+// contraparte del otro — para poder decir directamente "falta el
+// Certificado 14" en vez de "hay $325,8M de diferencia" (María, sep-2026).
+function _normTxtAudit(s) {
+  return String(s || '').toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+// Clave "concepto + último número": "certificado 14", "redeterminado ... 8"…
+// Dos ítems con la misma clave se consideran el mismo concepto aunque el
+// texto completo difiera (ej. con o sin el nombre de la obra adelante).
+function _claveItemAudit(txt) {
+  const t = _normTxtAudit(txt);
+  const KW = ['redeterminado', 'redet', 'certificado', 'cert', 'fondo', 'medicion final', 'medicion',
+              'anticipo', 'saldo', 'helpa', 'etapa'];
+  const kw = KW.find(k => t.includes(k)) || null;
+  const nums = t.match(/\d+/g);
+  const num = nums ? nums[nums.length - 1] : null;
+  return { texto: t, clave: (kw && num) ? kw + '|' + num : null };
+}
+// Empareja itemsJ (Agustín) contra itemsE (Esteban): primero por clave
+// concepto+número, si no por contención de texto normalizado. Devuelve lo
+// que sobra de cada lado y los pares que matchean con monto distinto.
+function _reconciliarItemsAudit(itemsJ, itemsE) {
+  const usadosE = new Set();
+  const matches = [];
+  const faltanEnEsteban = [];
+  itemsJ.forEach(ij => {
+    const kJ = _claveItemAudit(ij.txt);
+    let idx = kJ.clave ? itemsE.findIndex((ie, i) => !usadosE.has(i) && _claveItemAudit(ie.txt).clave === kJ.clave) : -1;
+    if (idx < 0) {
+      idx = itemsE.findIndex((ie, i) => {
+        if (usadosE.has(i)) return false;
+        const tE = _normTxtAudit(ie.txt);
+        return tE && (kJ.texto.includes(tE) || tE.includes(kJ.texto));
+      });
+    }
+    // Último recurso: mismo monto exacto (tolerancia $1.000) — cubre casos
+    // donde el texto difiere demasiado para matchear (ej. Esteban usa
+    // números romanos "Etapa VI" y Agustín "Etapa 6").
+    if (idx < 0 && ij.monto > 0) {
+      idx = itemsE.findIndex((ie, i) => !usadosE.has(i) && Math.abs((ie.monto || 0) - ij.monto) < 1000);
+    }
+    if (idx >= 0) { usadosE.add(idx); matches.push({ j: ij, e: itemsE[idx], dif: (ij.monto || 0) - (itemsE[idx].monto || 0) }); }
+    else faltanEnEsteban.push(ij);
+  });
+  const sobranEnEsteban = itemsE.filter((_, i) => !usadosE.has(i));
+  const mismatches = matches.filter(m => Math.abs(m.dif) > AUDIT_TOLERANCIA);
+  return { faltanEnEsteban, sobranEnEsteban, mismatches };
+}
+// Nombre corto para mostrar: saca el prefijo "Nombre de obra - " si está
+function _labelCortoAudit(txt, nombreObra) {
+  const pref = (nombreObra || '') + ' - ';
+  return txt && txt.indexOf(pref) === 0 ? txt.slice(pref.length) : txt;
+}
+
 function runAuditorias() {
   AUDIT_RESULTADOS = [];
   const mesE = _auditMesEsteban();
@@ -6347,7 +6405,7 @@ function runAuditorias() {
       estPend[o].totalComp += it.importe || 0;
       if (cat !== 'menosProbable') estPend[o].compFirme += it.importe || 0;
     }
-    estPend[o].items.push({ txt: it.concepto || '(sin concepto)', monto: it.importe || 0, cat, fila: it.fila, gid: it.gid, src: 'esteban' });
+    estPend[o].items.push({ txt: it.concepto || '(sin concepto)', monto: it.importe || 0, cat, fila: it.fila, gid: it.gid, src: 'esteban', soloEsteban: esSoloEsteban });
   }));
   (cobros.cobrados || []).forEach(it => {
     const o = it.obra || '(sin obra)';
@@ -6386,6 +6444,27 @@ function runAuditorias() {
     if (dif === 0) return;
     const itemsJ = oj.items.filter(i => i.estado === 'A Cobrar').map(i => ({ txt: i.nombre, monto: i.monto || 0, cat: 'Agustín · A Cobrar', fila: i.fila, gid: i.gid, src: 'julia' }));
     const itemsE = nombres.flatMap(n => (estPend[n] ? estPend[n].items : []).map(i => ({ ...i, cat: 'Esteban · ' + i.cat })));
+    // Matching item por item — solo sobre lo comparable (excluye redet/fondo,
+    // igual que pendJ/pendE) para señalar directamente qué certificado falta
+    // o difiere, en vez de solo mostrar dos listas sueltas.
+    const itemsJcomp = oj.items
+      .filter(i => i.estado === 'A Cobrar' && !ES_REDET(i.nombre) && !ES_FONDO_REPARO(i.nombre) && !_estaConciliado(concAuto, oj.nombre, i))
+      .map(i => ({ txt: _labelCortoAudit(i.nombre, oj.nombre), monto: i.monto || 0, fila: i.fila, gid: i.gid, src: 'julia' }));
+    const itemsEcomp = nombres.flatMap(n => (estPend[n] ? estPend[n].items.filter(i => !i.soloEsteban) : []))
+      .map(i => ({ txt: i.txt, monto: i.monto, fila: i.fila, gid: i.gid, src: 'esteban' }));
+    const recon = _reconciliarItemsAudit(itemsJcomp, itemsEcomp);
+    const pistaItems = [];
+    if (recon.faltanEnEsteban.length) {
+      const top = recon.faltanEnEsteban.slice().sort((a, b) => b.monto - a.monto).slice(0, 3);
+      pistaItems.push(`Agustín tiene ${top.map(x => `"${x.txt}" (${fmt(x.monto)})`).join(', ')} y no aparece en la planilla de Esteban${recon.faltanEnEsteban.length > top.length ? ' (+' + (recon.faltanEnEsteban.length - top.length) + ' más)' : ''} — probablemente falte cargarlo ahí.`);
+    }
+    if (recon.sobranEnEsteban.length) {
+      const top = recon.sobranEnEsteban.slice().sort((a, b) => b.monto - a.monto).slice(0, 3);
+      pistaItems.push(`Esteban tiene ${top.map(x => `"${x.txt}" (${fmt(x.monto)})`).join(', ')} sin contraparte en el archivo de Agustín${recon.sobranEnEsteban.length > top.length ? ' (+' + (recon.sobranEnEsteban.length - top.length) + ' más)' : ''}.`);
+    }
+    if (recon.mismatches.length) {
+      pistaItems.push(recon.mismatches.map(m => `"${m.j.txt}" no coincide en monto: Agustín ${fmt(m.j.monto)} vs Esteban ${fmt(m.e.monto)} (dif. ${fmt(Math.abs(m.dif))})`).join(' · '));
+    }
     AUDIT_RESULTADOS.push({
       chequeo: 'Agustín vs Esteban',
       titulo: oj.nombre,
@@ -6393,16 +6472,17 @@ function runAuditorias() {
       grave: Math.abs(dif) >= AUDIT_GRAVE,
       resumen: (() => {
         if (dif > 0) {
-          // Pista: si Esteban registró cobros del mes en esta obra, lo más
-          // probable es que parte del pendiente de Agustín ya esté cobrado.
+          // Pista genérica: si Esteban registró cobros del mes en esta obra,
+          // lo más probable es que parte del pendiente de Agustín ya se cobró.
           const cobMes = nombres.reduce((s, n) => s + (estCob[n] ? estCob[n].total : 0), 0);
           const pista = cobMes > AUDIT_TOLERANCIA
             ? ` OJO: Esteban registró cobros por ${fmt(cobMes)} este mes en esta obra — probablemente parte de ese pendiente ya se cobró y falta marcarlo "Cobrada" en el archivo de Agustín.`
-            : ' ¿Esteban dejó de seguir algo o Agustín tiene ítems ya cobrados?';
+            : '';
           return `Agustín tiene ${fmt(dif)} más de pendiente que TODO lo que Esteban lista, incluso lo mapeado como menos probable (Agustín ${fmt(pendJ)} vs Esteban ${fmt(pendE)}).${pista}`;
         }
         return `A Agustín le faltan ${fmt(-dif)} del pendiente FIRME de Esteban — sin contar lo "menos probable" (Agustín ${fmt(pendJ)} vs Esteban firme ${fmt(pendE)}). Probable atraso de carga.`;
       })(),
+      pistaItems,
       responsable: dif > 0 ? 'Esteban / Agustín' : 'Agustín',
       items: itemsJ.concat(itemsE),
     });
@@ -6467,7 +6547,7 @@ function runAuditorias() {
   if (seg) {
     obrasJ.forEach(oj => {
       if (!oj.items) return;
-      const cobradasAg = oj.items.filter(i => /cobrad/i.test(i.estado || ''));
+      const cobradasAg = oj.items.filter(i => /cobrad/i.test(i.estado || '')).map(i => Object.assign({ periodo: i.periodo }, i));
       const agCob = cobradasAg.reduce((s, i) => s + (i.monto || 0), 0);
       if (agCob <= AUDIT_TOLERANCIA) return;
       const ens = MAPA_OBRAS_AUDIT[oj.nombre];
@@ -6477,12 +6557,23 @@ function runAuditorias() {
       const estCobTot = seg.obras[canon].cob || 0;
       const dif = agCob - estCobTot;
       if (dif <= AUDIT_TOLERANCIA) return;
+      // Matching item por item: qué fila "Cobrada" de Agustín no tiene un
+      // cobro real de Esteban detrás.
+      const itemsJcomp = cobradasAg.map(i => ({ txt: _labelCortoAudit(i.nombre, oj.nombre), monto: i.monto || 0, fila: i.fila, gid: i.gid, src: 'julia' }));
+      const itemsEcomp = (seg.obras[canon].itemsCob || []).map(i => ({ txt: i.txt, monto: i.monto, fila: i.fila, gid: i.gid, src: 'esteban' }));
+      const recon = _reconciliarItemsAudit(itemsJcomp, itemsEcomp);
+      const pistaItems = [];
+      if (recon.faltanEnEsteban.length) {
+        const top = recon.faltanEnEsteban.slice().sort((a, b) => b.monto - a.monto).slice(0, 4);
+        pistaItems.push(`Agustín marca cobrado y NO aparece en la planilla de Esteban: ${top.map(x => `"${x.txt}" (${fmt(x.monto)})`).join(', ')}${recon.faltanEnEsteban.length > top.length ? ' (+' + (recon.faltanEnEsteban.length - top.length) + ' más)' : ''}. Si son certificados de antes de ${MES[seg.meses[0]] || seg.meses[0]} (primer mes que registra Esteban), es esperable — su planilla no llega tan atrás.`);
+      }
       AUDIT_RESULTADOS.push({
         chequeo: 'Cobro sin registrar',
         titulo: oj.nombre,
         monto: dif,
         grave: dif >= AUDIT_GRAVE,
         resumen: `Agustín marca cobradas ${fmt(agCob)} pero Esteban registró cobros por ${fmt(estCobTot)}: hay ${fmt(dif)} marcados como cobrados sin cobro registrado en la planilla de Esteban. O Esteban está atrasado en registrarlo, o la fila de Agustín se marcó "Cobrada" antes de que entre la plata.`,
+        pistaItems,
         responsable: 'Esteban / Agustín',
         items: cobradasAg.map(i => ({ txt: i.nombre, monto: i.monto || 0, cat: 'Agustín · Cobrada', fila: i.fila, gid: i.gid, src: 'julia' })),
       });
@@ -6563,6 +6654,10 @@ function renderAuditorias() {
       </summary>
       <div style="padding:0 16px 14px;border-top:1px solid var(--border);">
         <div style="font-size:12.5px;padding:10px 0 6px;line-height:1.55;">${r.resumen}</div>
+        ${(r.pistaItems && r.pistaItems.length) ? `<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:9px 12px;margin-bottom:8px;">
+          <div style="font-size:11px;font-weight:700;color:#92400e;margin-bottom:4px;">🎯 Probablemente sea esto:</div>
+          ${r.pistaItems.map(p => `<div style="font-size:12px;color:#78350f;line-height:1.5;">${p}</div>`).join('')}
+        </div>` : ''}
         <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">Corrección corresponde a: <strong>${r.responsable}</strong>${!r.items.length && r.link ? ' · ' + _sheetLinkAudit({ src: r.link }) : ''}</div>
         ${r.items.length ? `<table style="width:100%;font-size:11.5px;">
           ${r.items.map(i => `<tr>
