@@ -2325,12 +2325,34 @@ function renderMargen() {
   const totalEgresos = (ocMes != null && moParaCalc != null) ? ocMes + moParaCalc : null;
 
   // Card OC Insumos
+  // Margen del mes: MISMO cálculo que el TOTAL de la tabla de contribución
+  // marginal, para que los dos números coincidan siempre (María, sep-2026).
+  // Antes usaba una fórmula propia que no descontaba el costo de asfalto ni la
+  // MO de hormigón, y sumaba insumos de ítems que no están en la tabla.
+  const _dMargen = mesActual !== 'total' ? computeMargenObrasMes(mesActual) : computeMargenObrasTotal();
+  const _filasMg = (_dMargen && _dMargen.rows) ? _dMargen.rows.filter(r => !r.otroGasto) : [];
+  const _sumMg = f => _filasMg.reduce((a, r) => a + (f(r) || 0), 0);
+  const totalACobrar = _filasMg.length > 0 ? _sumMg(r => r.aCobrar) : null;
+  const mgInsumos = _sumMg(r => r.insumos), mgMO = _sumMg(r => r.moObra), mgMOH = _sumMg(r => r.moHormigon),
+        mgAsf = _sumMg(r => r.costoAsfObra), mgAlq = _sumMg(r => r.alquiler);
+  const totalEgresosConAlq = _filasMg.length > 0 ? (mgInsumos + mgMO + mgMOH + mgAsf + mgAlq) : null;
+
   const kpiOC = document.getElementById('kpi-oc-insumos');
   if (kpiOC) {
     if (ocMes != null) {
       kpiOC.textContent = fmt(ocMes);
       kpiOC.className   = 'kpi-value neg-val';
-      document.getElementById('kpi-oc-insumos-sub').textContent = 'Real — ' + (ocPlantaObj ? ocPlantaObj.nOC + ' OC del mes' : 'del mes');
+      // El total de la tarjeta incluye OC que NO están imputadas a una obra
+      // (col OBRA GENERAL vacía, provisiones, alquiler) y por eso no aparecen
+      // en la tabla de contribución marginal. Se aclara el desglose para que
+      // se entienda la diferencia con el TOTAL de la tabla (María, sep-2026).
+      const _insObras = _filasMg.length ? mgInsumos : null;
+      const _sinImputar = (_insObras != null && ocMes != null) ? Math.max(0, ocMes - _insObras) : 0;
+      document.getElementById('kpi-oc-insumos-sub').innerHTML =
+        (ocPlantaObj ? ocPlantaObj.nOC + ' OC del mes' : 'Real — del mes')
+        + (_sinImputar > 1000 && _insObras != null
+            ? ` · <span title="Estas OC entran en el total pero no en la tabla de obras: o no tienen obra cargada, o son provisiones/alquiler">${fmt(_insObras)} en obras + <strong style="color:#b45309;">${fmt(_sinImputar)} sin imputar</strong></span>`
+            : '');
     } else {
       kpiOC.textContent = 'sin dato';
       kpiOC.className   = 'kpi-value nd';
@@ -2363,17 +2385,6 @@ function renderMargen() {
     }
   }
 
-  // Margen del mes: MISMO cálculo que el TOTAL de la tabla de contribución
-  // marginal, para que los dos números coincidan siempre (María, sep-2026).
-  // Antes usaba una fórmula propia que no descontaba el costo de asfalto ni la
-  // MO de hormigón, y sumaba insumos de ítems que no están en la tabla.
-  const _dMargen = mesActual !== 'total' ? computeMargenObrasMes(mesActual) : computeMargenObrasTotal();
-  const _filasMg = (_dMargen && _dMargen.rows) ? _dMargen.rows.filter(r => !r.otroGasto) : [];
-  const _sumMg = f => _filasMg.reduce((a, r) => a + (f(r) || 0), 0);
-  const totalACobrar = _filasMg.length > 0 ? _sumMg(r => r.aCobrar) : null;
-  const mgInsumos = _sumMg(r => r.insumos), mgMO = _sumMg(r => r.moObra), mgMOH = _sumMg(r => r.moHormigon),
-        mgAsf = _sumMg(r => r.costoAsfObra), mgAlq = _sumMg(r => r.alquiler);
-  const totalEgresosConAlq = _filasMg.length > 0 ? (mgInsumos + mgMO + mgMOH + mgAsf + mgAlq) : null;
 
   const kpiMg  = document.getElementById('kpi-margen-est');
   const kpiMgFormula = document.getElementById('kpi-margen-formula');
