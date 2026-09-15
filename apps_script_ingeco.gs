@@ -2136,6 +2136,50 @@ function leerRemitosAsfalto() {
 // Se leen filas hasta encontrar "TOTAL" en col C (CONCEPTO).
 // Las filas DESPUÉS del TOTAL van a "menosProbable" (tabla separada).
 // ============================================================
+// Mes de una fecha, sin exigir un año puntual: "11/05/2026", "dic-25",
+// "Mayo 2026"… Devuelve 'ene'…'dic' o null. Se usa para las pestañas
+// históricas, donde cada fila puede ser de un año distinto.
+function _mesKeyLibre(raw) {
+  const MAP = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  if (!raw && raw !== 0) return null;
+  if (raw instanceof Date && !isNaN(raw.getTime())) return MAP[raw.getMonth()];
+  const s = String(raw).trim().toLowerCase();
+  if (!s) return null;
+  const mDate = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+  if (mDate) { const m = parseInt(mDate[2]); return (m >= 1 && m <= 12) ? MAP[m - 1] : null; }
+  const NOMBRE = { enero:1, febrero:2, marzo:3, abril:4, mayo:5, junio:6, julio:7,
+                   agosto:8, septiembre:9, octubre:10, noviembre:11, diciembre:12,
+                   ene:1, feb:2, mar:3, abr:4, may:5, jun:6, jul:7, ago:8, sep:9, oct:10, nov:11, dic:12 };
+  for (const n of Object.keys(NOMBRE)) {
+    if (s === n || s.indexOf(n) === 0) return MAP[NOMBRE[n] - 1];
+  }
+  return null;
+}
+
+// Mete un ítem suelto en el mes que le corresponde dentro del resultado de
+// leerCobrosEsteban, creando el mes si no existía y actualizando totales.
+function _mergeCobroEnMes(resultado, mesKey, item) {
+  if (!resultado[mesKey]) {
+    resultado[mesKey] = {
+      totalCobrado: 0, totalFacturado: 0, totalNoCobrado: 0, totalSinFecha: 0, totalMenosProbable: 0,
+      nCobrado: 0, nFacturado: 0, nNoCobrado: 0, nSinFecha: 0, nMenosProbable: 0,
+      cobrados: [], facturados: [], noCobrados: [], sinFecha: [], menosProbable: [],
+    };
+  }
+  const R = resultado[mesKey];
+  const MAPA = {
+    cobrado:       ['cobrados',      'totalCobrado',       'nCobrado'],
+    facturado:     ['facturados',    'totalFacturado',     'nFacturado'],
+    noCobrado:     ['noCobrados',    'totalNoCobrado',     'nNoCobrado'],
+    sinFecha:      ['sinFecha',      'totalSinFecha',      'nSinFecha'],
+    menosProbable: ['menosProbable', 'totalMenosProbable', 'nMenosProbable'],
+  };
+  const dest = MAPA[item.categoria] || MAPA.cobrado;
+  R[dest[0]].push(item);
+  R[dest[1]] += item.importe || 0;
+  R[dest[2]] += 1;
+}
+
 function leerCobrosEsteban() {
   try {
     const ss = SpreadsheetApp.openById(FILE_IDS.estebanSheet);
@@ -2145,6 +2189,7 @@ function leerCobrosEsteban() {
       'septiembre':'sep','octubre':'oct','noviembre':'nov','diciembre':'dic'
     };
     const resultado = {};
+    const historicos = []; // filas de pestañas históricas, se reparten al final
 
     for (const sheet of ss.getSheets()) {
       const tabRaw = sheet.getName().trim().toLowerCase();
@@ -2154,7 +2199,12 @@ function leerCobrosEsteban() {
           mesKey = MES_TAB[nombre]; break;
         }
       }
-      if (!mesKey) continue;
+      // Pestaña histórica (ej. "Anterior a junio"): no representa un mes —
+      // cada fila se asigna al mes de SU propia fecha de cobro. Permite
+      // cargar de una vez los cobros previos a que Esteban empezara a
+      // registrar mes a mes (María, sep-2026).
+      const esHistorico = !mesKey && /anterior|histor|previo/i.test(tabRaw);
+      if (!mesKey && !esHistorico) continue;
 
       const rows = sheet.getDataRange().getValues();
       if (rows.length < 2) continue;
@@ -2260,6 +2310,16 @@ function leerCobrosEsteban() {
       sinFecha.sort(sortByImporte);
       menosProbable.sort(sortByImporte);
 
+      if (esHistorico) {
+        // Se guardan para repartirlos DESPUÉS de procesar todas las pestañas,
+        // así no se pisan con los meses que tienen su propia pestaña.
+        [cobrados, facturados, noCobrados, sinFecha, menosProbable].forEach(function(arr) {
+          arr.forEach(function(it) { historicos.push(it); });
+        });
+        Logger.log('CobrosEsteban [histórico "' + sheet.getName() + '"]: ' + historicos.length + ' filas para repartir por fecha');
+        continue;
+      }
+
       resultado[mesKey] = {
         totalCobrado:       Math.round(totalCobrado),
         totalFacturado:     Math.round(totalFacturado),
@@ -2282,6 +2342,24 @@ function leerCobrosEsteban() {
                  ' | noCobrado=' + noCobrados.length + ' $' + Math.round(totalNoCobrado) +
                  ' | sinFecha=' + sinFecha.length + ' $' + Math.round(totalSinFecha) +
                  ' | menosProbable=' + menosProbable.length);
+    }
+
+    // Repartir las filas de pestañas históricas en el mes de su propia fecha
+    // (fecha real de cobro > fecha probable > período). Las de años anteriores
+    // caen en el mes que indiquen igual: lo que importa es que el cobro exista
+    // para los acumulados y las auditorías.
+    if (historicos.length) {
+      historicos.forEach(function(it) {
+        const mk = _mesKeyLibre(it.fechaReal) || _mesKeyLibre(it.fechaProb) || _mesKeyLibre(it.periodo) || 'ene';
+        _mergeCobroEnMes(resultado, mk, it);
+      });
+      // Reordenar por importe los meses tocados
+      Object.keys(resultado).forEach(function(mk) {
+        ['cobrados', 'facturados', 'noCobrados', 'sinFecha', 'menosProbable'].forEach(function(c) {
+          resultado[mk][c].sort(function(a, b) { return b.importe - a.importe; });
+        });
+      });
+      Logger.log('CobrosEsteban — ' + historicos.length + ' filas históricas repartidas por fecha');
     }
 
     Logger.log('CobrosEsteban — meses: ' + Object.keys(resultado).join(', '));
