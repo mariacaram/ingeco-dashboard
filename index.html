@@ -2363,15 +2363,17 @@ function renderMargen() {
     }
   }
 
-  // Margen = Total A Cobrar − OC Insumos − MO TANGO − Alquiler Equipos
-  // Solo obras con período explícito en el mes seleccionado (sin período no entra en el KPI)
-  const obrasMes = _obrasActuales();
-  const totalACobrar = obrasMes.length > 0
-    ? obrasMes.reduce((s, o) => s + (o.aCobrar ?? o.generado ?? 0), 0)
-    : null;
-  const totalEgresosConAlq = totalEgresos != null
-    ? totalEgresos + (alqMes || 0)
-    : null;
+  // Margen del mes: MISMO cálculo que el TOTAL de la tabla de contribución
+  // marginal, para que los dos números coincidan siempre (María, sep-2026).
+  // Antes usaba una fórmula propia que no descontaba el costo de asfalto ni la
+  // MO de hormigón, y sumaba insumos de ítems que no están en la tabla.
+  const _dMargen = mesActual !== 'total' ? computeMargenObrasMes(mesActual) : computeMargenObrasTotal();
+  const _filasMg = (_dMargen && _dMargen.rows) ? _dMargen.rows.filter(r => !r.otroGasto) : [];
+  const _sumMg = f => _filasMg.reduce((a, r) => a + (f(r) || 0), 0);
+  const totalACobrar = _filasMg.length > 0 ? _sumMg(r => r.aCobrar) : null;
+  const mgInsumos = _sumMg(r => r.insumos), mgMO = _sumMg(r => r.moObra), mgMOH = _sumMg(r => r.moHormigon),
+        mgAsf = _sumMg(r => r.costoAsfObra), mgAlq = _sumMg(r => r.alquiler);
+  const totalEgresosConAlq = _filasMg.length > 0 ? (mgInsumos + mgMO + mgMOH + mgAsf + mgAlq) : null;
 
   const kpiMg  = document.getElementById('kpi-margen-est');
   const kpiMgFormula = document.getElementById('kpi-margen-formula');
@@ -2387,22 +2389,24 @@ function renderMargen() {
           subEl.textContent = '⚠️ Incluye MO estimada (' + MES[mesActual] + ' sin cargar)';
           subEl.style.color = '#b45309';
         } else {
-          subEl.textContent = 'Generado ' + MES[mesActual] + ' − Egresos + Alquiler';
+          subEl.textContent = 'Generado − Insumos − MO − Asfalto − Alquiler · ' + (MES[mesActual] || mesActual);
           subEl.style.color = '';
         }
       }
       if (kpiMgFormula) {
         const partes = [];
-        if (ocMes != null)      partes.push('OC ' + fmt(ocMes));
-        if (moParaCalc != null) partes.push((moEsEstimado ? 'MO~ ' : 'MO ') + fmt(moParaCalc));
-        if (alqMes != null)     partes.push('Alq. ' + fmt(alqMes));
-        kpiMgFormula.textContent = fmt(totalACobrar) + ' − (' + partes.join(' + ') + ')';
+        if (mgInsumos > 0) partes.push('Insumos ' + fmt(mgInsumos));
+        if (mgMO > 0)      partes.push((moEsEstimado ? 'MO~ ' : 'MO ') + fmt(mgMO));
+        if (mgMOH > 0)     partes.push('MO horm. ' + fmt(mgMOH));
+        if (mgAsf > 0)     partes.push('Asfalto ' + fmt(mgAsf));
+        if (mgAlq > 0)     partes.push('Alq. ' + fmt(mgAlq));
+        kpiMgFormula.textContent = fmt(totalACobrar) + ' − (' + partes.join(' + ') + ') · coincide con el TOTAL de la tabla';
       }
     } else {
       kpiMg.textContent = 'sin dato';
       kpiMg.className   = 'kpi-value nd';
       if (subEl) subEl.style.color = '';
-      if (kpiMgFormula) kpiMgFormula.textContent = 'Generado − (OC Insumos + MO TANGO + Alquiler)';
+      if (kpiMgFormula) kpiMgFormula.textContent = 'Generado − (Insumos + MO + Costo asfalto + Alquiler)';
     }
   }
 
@@ -3621,15 +3625,18 @@ function renderResumenObra() {
       r.margenAcum = (k && k in _acumMap) ? _acumMap[k] : null;
     });
 
-    let sumaCobrar = 0, sumaInsumos = 0, sumaAlquiler = 0, sumaTn = 0, sumaMO = 0, sumaMOH = 0, sumaAcum = 0, hayAcum = false;
+    let sumaCobrar = 0, sumaInsumos = 0, sumaAlquiler = 0, sumaTn = 0, sumaMO = 0, sumaMOH = 0, sumaAsf = 0, sumaAcum = 0, hayAcum = false;
     const chartData = { insumos: [], mo: [], alquiler: [], tn: [] };
-    rows.forEach(r => {
+    // El TOTAL suma SOLO las filas visibles de la tabla: los "Otros gastos o
+    // salidas" tienen su propio bloque y no deben entrar acá (María, sep-2026)
+    rows.filter(r => !r.otroGasto).forEach(r => {
       sumaCobrar   += r.aCobrar;
       sumaInsumos  += r.insumos;
       sumaAlquiler += r.alquiler;
       sumaTn       += r.tnObra + r.tnFrioObra;
       sumaMO       += r.moObra || 0;
       sumaMOH      += r.moHormigon || 0;
+      sumaAsf      += r.costoAsfObra || 0;
       if (r.margenAcum != null && !r.otroGasto) { sumaAcum += r.margenAcum; hayAcum = true; }
       const label = (r.o.cod_obra || r.o.nombre || '').trim();
       if (r.insumos  > 0) chartData.insumos.push({ label, valor: r.insumos });
@@ -3663,10 +3670,10 @@ function renderResumenObra() {
     const moCellTotal = (sumaMO + sumaMOH) > 0
       ? `<span class="neg-val" title="Asfalto ${moEsEstim ? '~' : ''}${fmt(sumaMO)} · Hormigón tercerizada ${fmt(sumaMOH)}">${moEsEstim && sumaMO > 0 ? '~' : ''}${fmt(sumaMO + sumaMOH)}</span>`
       : '<span class="nd">sin dato</span>';
-    const tnTotalCell = sumaTn > 0
-      ? `<span style="font-size:12px;color:var(--muted);">${fmtTn(sumaTn)} tn</span>`
+    const tnTotalCell = (sumaTn > 0 || sumaAsf > 0)
+      ? `<span style="font-size:12px;color:var(--muted);">${sumaTn > 0 ? fmtTn(sumaTn) + ' tn' : ''}${sumaAsf > 0 ? '<br><small class="neg-val" style="font-size:10px;">' + fmt(sumaAsf) + '</small>' : ''}</span>`
       : '<span class="nd">—</span>';
-    const sumaEgresos = sumaInsumos + sumaMO + sumaMOH + sumaAlquiler;
+    const sumaEgresos = sumaInsumos + sumaMO + sumaMOH + sumaAsf + sumaAlquiler;
     const sumaMargen  = sumaCobrar - sumaEgresos;
     const sumaColor   = sumaMargen > 0 ? 'pos-val' : sumaMargen < 0 ? 'neg-val' : '';
 
