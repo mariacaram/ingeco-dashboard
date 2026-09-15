@@ -495,10 +495,17 @@ function parsearGSheetTangoMO(file) {
     // Totales de ESTA pestaña (quincena), por clasificación — para el detalle del cálculo
     let qTotal = 0, qObra = 0, qTaller = 0, qPlanta = 0;
 
+    // Valores de error de fórmula (#N/A, #REF!, …): no son un centro de costo,
+    // se ignoran y se cae a la columna vieja (María, sep-2026)
+    const _esError = v => String(v || '').trim().charAt(0) === '#'; // #N/A, #REF!, #¡VALOR!, …
     for (let i = hdrIdx + 1; i < rows.length; i++) {
       const row   = rows[i];
       let clave = String(row[iClave] || '').trim();
-      if (!clave && iClaveFallback >= 0) clave = String(row[iClaveFallback] || '').trim();
+      if (_esError(clave)) clave = '';
+      if (!clave && iClaveFallback >= 0) {
+        const alt = String(row[iClaveFallback] || '').trim();
+        clave = _esError(alt) ? '' : alt;
+      }
       if (!clave || clave.toUpperCase().includes('TOTAL') || clave === '') continue;
 
       const raw   = row[iMonto];
