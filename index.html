@@ -940,16 +940,16 @@
   <!-- KPI Cards: 3 categorías -->
   <div class="kpi-grid">
     <div class="kpi-card pos" style="cursor:pointer;" onclick="openCobrosPanel('cobrado')" title="Ver detalle de cobros">
-      <div class="kpi-label">✅ Cobrado · <span class="cobros-mes-lbl">—</span></div>
+      <div class="kpi-label">✅ Ya entró · <span class="cobros-mes-lbl">—</span></div>
       <div class="kpi-value nd" id="kpi-cobrado-total">sin dato</div>
       <div class="kpi-sub" id="kpi-cobrado-sub">—</div>
       <div class="fuente"><a href="https://docs.google.com/spreadsheets/d/1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY/edit" target="_blank" onclick="event.stopPropagation()">Planilla Cobros (Esteban)</a> — col G con fecha</div>
     </div>
     <div class="kpi-card accent" style="cursor:pointer;" onclick="openCobrosPanel('facturado')" title="Ver detalle de facturado">
-      <div class="kpi-label">🧾 Facturado · <span class="cobros-mes-lbl">—</span></div>
+      <div class="kpi-label">🧾 Muy probable · <span class="cobros-mes-lbl">—</span></div>
       <div class="kpi-value nd" id="kpi-facturado-total">sin dato</div>
       <div class="kpi-sub" id="kpi-facturado-sub">—</div>
-      <div class="fuente"><a href="https://docs.google.com/spreadsheets/d/1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY/edit" target="_blank" onclick="event.stopPropagation()">Planilla Cobros (Esteban)</a> — col G con "F"</div>
+      <div class="fuente">Facturado con fecha probable de cobro dentro del mes — <a href="https://docs.google.com/spreadsheets/d/1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY/edit" target="_blank" onclick="event.stopPropagation()">Planilla Cobros (Esteban)</a></div>
     </div>
     <div class="kpi-card neg" id="kpi-card-nocobrado" style="cursor:pointer;" onclick="openCobrosPanel('noCobrado')" title="Ver detalle no cobrado">
       <div class="kpi-label">📝 Nota de crédito · <span class="cobros-mes-lbl">—</span></div>
@@ -958,18 +958,19 @@
       <div class="fuente"><a href="https://docs.google.com/spreadsheets/d/1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY/edit" target="_blank" onclick="event.stopPropagation()">Planilla Cobros (Esteban)</a> — col G con "N/C"</div>
     </div>
     <div class="kpi-card" style="cursor:pointer;border-color:#94a3b8;" onclick="openCobrosPanel('sinFecha')" title="Ver detalle sin fecha">
-      <div class="kpi-label">⏳ Programado — sin cobro registrado · <span class="cobros-mes-lbl">—</span></div>
+      <div class="kpi-label">⏳ Posible · <span class="cobros-mes-lbl">—</span></div>
       <div class="kpi-value nd" id="kpi-sinfecha-total">sin dato</div>
       <div class="kpi-sub" id="kpi-sinfecha-sub">—</div>
-      <div class="fuente"><a href="https://docs.google.com/spreadsheets/d/1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY/edit" target="_blank" onclick="event.stopPropagation()">Planilla Cobros (Esteban)</a> — col G vacía</div>
+      <div class="fuente">Programado para cobrarse dentro del mes, todavía sin factura — <a href="https://docs.google.com/spreadsheets/d/1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY/edit" target="_blank" onclick="event.stopPropagation()">Planilla Cobros (Esteban)</a></div>
     </div>
     <div class="kpi-card" style="border-left-color:var(--primary);">
-      <div class="kpi-label">Σ Total · <span class="cobros-mes-lbl">—</span></div>
+      <div class="kpi-label">💰 Podría entrar en <span class="cobros-mes-lbl">—</span></div>
       <div class="kpi-value nd" id="kpi-total-cobros">sin dato</div>
       <div class="kpi-sub" id="kpi-total-cobros-sub">—</div>
-      <div class="fuente">Suma de Cobrado + Facturado + Nota de crédito + Programado (col G vacía)</div>
+      <div class="fuente">Ya entró + Muy probable + Posible · solo lo que vence dentro del mes</div>
     </div>
   </div>
+  <div id="cobros-fuera-mes" style="margin:-6px 0 14px;font-size:11.5px;color:var(--muted);"></div>
 
   <!-- Gráficos distribución + timeline: lado a lado -->
   <div style="display:flex;gap:0;align-items:stretch;">
@@ -4486,9 +4487,42 @@ function renderCobrosReal() {
     if (se) se.textContent = sub;
   };
 
+  // ── Escalera de probabilidad: cuánta plata puede entrar ESTE mes ──
+  // El estado (facturado / programado) dice qué tan probable es; la FECHA
+  // probable de cobro dice si entra este mes o en otro. Antes se sumaba todo
+  // junto y el total incluía plata con vencimiento en meses siguientes.
+  const _mesIdxSel = MES_ORDER.indexOf(mesActual);
+  const _hoyD = new Date();
+  const _parseFechaProb = f => {
+    const p = String(f || '').trim().split('/');
+    if (p.length !== 3) return null;
+    const dd = +p[0], mm = +p[1], yy = +p[2] < 100 ? 2000 + +p[2] : +p[2];
+    const dt = new Date(yy, mm - 1, dd);
+    return isNaN(dt.getTime()) ? null : dt;
+  };
+  // Un ítem cuenta para el mes si su fecha probable cae en el mes seleccionado.
+  // Sin fecha probable: cuenta igual (no hay motivo para excluirlo del mes en
+  // el que Esteban lo programó).
+  const _enElMes = it => {
+    const dt = _parseFechaProb(it.fechaProb);
+    return dt ? (dt.getMonth() === _mesIdxSel && dt.getFullYear() === 2026) : true;
+  };
+  const _sumar = arr => (arr || []).reduce((a, i) => a + (i.importe || 0), 0);
+  const _partir = arr => {
+    const dentro = (arr || []).filter(_enElMes), fuera = (arr || []).filter(i => !_enElMes(i));
+    return { dentro, fuera, tDentro: _sumar(dentro), tFuera: _sumar(fuera) };
+  };
+  const _fact = d ? _partir(d.facturados) : null;
+  const _prog = d ? _partir(sinFechaCerrado ? [] : d.sinFecha) : null;
+  // Vencido: con fecha probable ya pasada y todavía sin cobrar
+  const _vencidos = d ? [...(d.facturados || []), ...(sinFechaCerrado ? [] : d.sinFecha || [])]
+    .filter(i => { const dt = _parseFechaProb(i.fechaProb); return dt && dt < _hoyD; }) : [];
+  const _tVencido = _sumar(_vencidos);
+  const _tMenosProb = d ? _sumar(d.menosProbable) : 0;
+
   if (d) {
     _kpi('kpi-cobrado-total',   d.totalCobrado,   'pos-val', d.nCobrado    + ' cobro'    + (d.nCobrado    !== 1 ? 's' : ''), 'kpi-cobrado-sub');
-    _kpi('kpi-facturado-total', d.totalFacturado, '',        d.nFacturado  + ' factura'  + (d.nFacturado  !== 1 ? 's' : ''), 'kpi-facturado-sub');
+    _kpi('kpi-facturado-total', _fact.tDentro, '', _fact.dentro.length + ' factura' + (_fact.dentro.length !== 1 ? 's' : '') + ' con vencimiento en el mes', 'kpi-facturado-sub');
     _kpi('kpi-nocobrado-total', d.totalNoCobrado || 0, 'neg-val', (d.nNoCobrado||0) + ' ítem' + ((d.nNoCobrado||0) !== 1 ? 's' : '') + ' N/C', 'kpi-nocobrado-sub');
     // La tarjeta de notas de crédito solo se muestra si hay alguna en el mes
     const _cardNC = document.getElementById('kpi-card-nocobrado');
@@ -4500,11 +4534,28 @@ function renderCobrosReal() {
         (sinFechaCerrado.noPasaron > 0 ? ` · ${fmt(sinFechaCerrado.noPasaron)} no reaparecen` : ''),
         'kpi-sinfecha-sub');
     } else {
-      _kpi('kpi-sinfecha-total',  d.totalSinFecha,  '',        d.nSinFecha   + ' ítem'     + (d.nSinFecha   !== 1 ? 's' : '') + ' programados, aún sin cobro registrado', 'kpi-sinfecha-sub');
+      _kpi('kpi-sinfecha-total', _prog.tDentro, '', _prog.dentro.length + ' ítem' + (_prog.dentro.length !== 1 ? 's' : '') + ' programados para el mes, sin factura', 'kpi-sinfecha-sub');
     }
-    const totalSum   = (d.totalCobrado || 0) + (d.totalFacturado || 0) + (d.totalNoCobrado || 0) + (d.totalSinFecha || 0);
-    const totalCount = (d.nCobrado || 0) + (d.nFacturado || 0) + (d.nNoCobrado || 0) + (d.nSinFecha || 0);
-    _kpi('kpi-total-cobros', totalSum, '', totalCount + ' ítem' + (totalCount !== 1 ? 's' : ''), 'kpi-total-cobros-sub');
+    // Total del mes = lo que ya entró + lo que vence dentro del mes
+    const totalSum   = (d.totalCobrado || 0) + _fact.tDentro + (sinFechaCerrado ? 0 : _prog.tDentro);
+    const totalCount = (d.nCobrado || 0) + _fact.dentro.length + (sinFechaCerrado ? 0 : _prog.dentro.length);
+    const _pctEntro  = totalSum > 0 ? Math.round((d.totalCobrado || 0) / totalSum * 100) : 0;
+    _kpi('kpi-total-cobros', totalSum, 'pos-val',
+      totalCount + ' ítem' + (totalCount !== 1 ? 's' : '') + ' · ya entró el ' + _pctEntro + '%', 'kpi-total-cobros-sub');
+    // Línea aparte: lo vencido (para reclamar) y lo que NO entra en el mes
+    const _fueraEl = document.getElementById('cobros-fuera-mes');
+    if (_fueraEl) {
+      const partes = [];
+      // El "vencido" solo tiene sentido en el mes en curso o futuros: en un mes
+      // cerrado todo lo no cobrado figura vencido, y puede haberse cobrado en
+      // el mes siguiente (la planilla de Esteban es una foto por mes).
+      if (_tVencido > 0 && _idxMes >= _idxHoy) partes.push(`<span onclick="openCobrosPanel('facturado')" style="cursor:pointer;color:#dc2626;font-weight:700;" title="Fecha probable de cobro ya pasada y sin cobro registrado — para reclamar">⚠️ Vencido sin cobrar: ${fmt(_tVencido)} (${_vencidos.length} ítem${_vencidos.length !== 1 ? 's' : ''})</span>`);
+      const tFuera = _fact.tFuera + (sinFechaCerrado ? 0 : _prog.tFuera);
+      const nFuera = _fact.fuera.length + (sinFechaCerrado ? 0 : _prog.fuera.length);
+      if (tFuera > 0) partes.push(`<span title="Programado o facturado con fecha de cobro posterior a ${mesLabel} — no suma al total del mes">📅 Con vencimiento posterior: <strong>${fmt(tFuera)}</strong> (${nFuera} ítem${nFuera !== 1 ? 's' : ''})</span>`);
+      if (_tMenosProb > 0) partes.push(`<span title="Arrastres que Esteban mapea como poco probables de cobrar — no suman">🔻 Menos probable: <strong>${fmt(_tMenosProb)}</strong></span>`);
+      _fueraEl.innerHTML = partes.join(' &nbsp;·&nbsp; ');
+    }
   } else {
     ['kpi-cobrado-total','kpi-facturado-total','kpi-nocobrado-total','kpi-sinfecha-total','kpi-total-cobros'].forEach(id => {
       const el = document.getElementById(id); if (el) { el.textContent = 'sin dato'; el.className = 'kpi-value nd'; }
@@ -4524,10 +4575,10 @@ function renderCobrosReal() {
     if (chartEmpty) chartEmpty.style.display = 'none';
 
     const segmentos = [
-      { label: '✅ Cobrado',                              short: '✅ Cobrado',          valor: d.totalCobrado,        color: '#22c55e', n: d.nCobrado },
-      { label: '🧾 Facturado',                            short: '🧾 Facturado',        valor: d.totalFacturado,      color: '#f59e0b', n: d.nFacturado },
+      { label: '✅ Ya entró',                             short: '✅ Ya entró',         valor: d.totalCobrado,        color: '#22c55e', n: d.nCobrado },
+      { label: '🧾 Muy probable',                         short: '🧾 Muy probable',     valor: _fact.tDentro,         color: '#f59e0b', n: _fact.dentro.length },
       { label: '📝 Nota de crédito',                      short: '📝 Nota de crédito',  valor: d.totalNoCobrado || 0, color: '#ef4444', n: d.nNoCobrado || 0 },
-      { label: '⏳ Programado — sin cobro registrado',   short: '⏳ Programado s/cobrar', valor: d.totalSinFecha,       color: '#94a3b8', n: d.nSinFecha },
+      { label: '⏳ Posible',                              short: '⏳ Posible',          valor: sinFechaCerrado ? 0 : _prog.tDentro, color: '#94a3b8', n: sinFechaCerrado ? 0 : _prog.dentro.length },
     ].filter(s => s.valor > 0);
 
     const total = segmentos.reduce((s, x) => s + x.valor, 0);
