@@ -940,34 +940,34 @@
   <!-- KPI Cards: 3 categorías -->
   <div class="kpi-grid">
     <div class="kpi-card pos" style="cursor:pointer;" onclick="openCobrosPanel('cobrado')" title="Ver detalle de cobros">
-      <div class="kpi-label">✅ Ya entró · <span class="cobros-mes-lbl">—</span></div>
+      <div class="kpi-label">✅ Cobrado</div>
       <div class="kpi-value nd" id="kpi-cobrado-total">sin dato</div>
       <div class="kpi-sub" id="kpi-cobrado-sub">—</div>
       <div class="fuente"><a href="https://docs.google.com/spreadsheets/d/1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY/edit" target="_blank" onclick="event.stopPropagation()">Planilla Cobros (Esteban)</a> — col G con fecha</div>
     </div>
     <div class="kpi-card accent" style="cursor:pointer;" onclick="openCobrosPanel('facturado')" title="Ver detalle de facturado">
-      <div class="kpi-label">🧾 Muy probable · <span class="cobros-mes-lbl">—</span></div>
+      <div class="kpi-label">🧾 Facturado con vencimiento en el mes</div>
       <div class="kpi-value nd" id="kpi-facturado-total">sin dato</div>
       <div class="kpi-sub" id="kpi-facturado-sub">—</div>
-      <div class="fuente">Facturado con fecha probable de cobro dentro del mes — <a href="https://docs.google.com/spreadsheets/d/1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY/edit" target="_blank" onclick="event.stopPropagation()">Planilla Cobros (Esteban)</a></div>
+      <div class="fuente">Comprobantes emitidos cuya fecha probable de cobro cae dentro del mes — <a href="https://docs.google.com/spreadsheets/d/1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY/edit" target="_blank" onclick="event.stopPropagation()">Planilla Cobros (Esteban)</a></div>
     </div>
     <div class="kpi-card neg" id="kpi-card-nocobrado" style="cursor:pointer;" onclick="openCobrosPanel('noCobrado')" title="Ver detalle no cobrado">
-      <div class="kpi-label">📝 Nota de crédito · <span class="cobros-mes-lbl">—</span></div>
+      <div class="kpi-label">📝 Nota de crédito</div>
       <div class="kpi-value nd" id="kpi-nocobrado-total">sin dato</div>
       <div class="kpi-sub" id="kpi-nocobrado-sub">—</div>
       <div class="fuente"><a href="https://docs.google.com/spreadsheets/d/1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY/edit" target="_blank" onclick="event.stopPropagation()">Planilla Cobros (Esteban)</a> — col G con "N/C"</div>
     </div>
     <div class="kpi-card" style="cursor:pointer;border-color:#94a3b8;" onclick="openCobrosPanel('sinFecha')" title="Ver detalle sin fecha">
-      <div class="kpi-label">⏳ Posible · <span class="cobros-mes-lbl">—</span></div>
+      <div class="kpi-label">⏳ Previsto sin facturar</div>
       <div class="kpi-value nd" id="kpi-sinfecha-total">sin dato</div>
       <div class="kpi-sub" id="kpi-sinfecha-sub">—</div>
-      <div class="fuente">Programado para cobrarse dentro del mes, todavía sin factura — <a href="https://docs.google.com/spreadsheets/d/1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY/edit" target="_blank" onclick="event.stopPropagation()">Planilla Cobros (Esteban)</a></div>
+      <div class="fuente">Previsto para el mes, pendiente de facturación — <a href="https://docs.google.com/spreadsheets/d/1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY/edit" target="_blank" onclick="event.stopPropagation()">Planilla Cobros (Esteban)</a></div>
     </div>
     <div class="kpi-card" style="border-left-color:var(--primary);">
-      <div class="kpi-label">💰 Podría entrar en <span class="cobros-mes-lbl">—</span></div>
+      <div class="kpi-label">💰 Ingresos proyectados del mes</div>
       <div class="kpi-value nd" id="kpi-total-cobros">sin dato</div>
       <div class="kpi-sub" id="kpi-total-cobros-sub">—</div>
-      <div class="fuente">Ya entró + Muy probable + Posible · solo lo que vence dentro del mes</div>
+      <div class="fuente">Cobrado + Facturado + Previsto, considerando únicamente los vencimientos del mes</div>
     </div>
   </div>
   <div id="cobros-fuera-mes" style="margin:-6px 0 14px;font-size:11.5px;color:var(--muted);"></div>
@@ -4521,8 +4521,8 @@ function renderCobrosReal() {
   const _tMenosProb = d ? _sumar(d.menosProbable) : 0;
 
   if (d) {
-    _kpi('kpi-cobrado-total',   d.totalCobrado,   'pos-val', d.nCobrado    + ' cobro'    + (d.nCobrado    !== 1 ? 's' : ''), 'kpi-cobrado-sub');
-    _kpi('kpi-facturado-total', _fact.tDentro, '', _fact.dentro.length + ' factura' + (_fact.dentro.length !== 1 ? 's' : '') + ' con vencimiento en el mes', 'kpi-facturado-sub');
+    _kpi('kpi-cobrado-total',   d.totalCobrado,   'pos-val', d.nCobrado    + ' cobro'    + (d.nCobrado    !== 1 ? 's' : '') + ' percibido' + (d.nCobrado !== 1 ? 's' : ''), 'kpi-cobrado-sub');
+    _kpi('kpi-facturado-total', _fact.tDentro, '', _fact.dentro.length + ' comprobante' + (_fact.dentro.length !== 1 ? 's' : '') + ' emitido' + (_fact.dentro.length !== 1 ? 's' : ''), 'kpi-facturado-sub');
     _kpi('kpi-nocobrado-total', d.totalNoCobrado || 0, 'neg-val', (d.nNoCobrado||0) + ' ítem' + ((d.nNoCobrado||0) !== 1 ? 's' : '') + ' N/C', 'kpi-nocobrado-sub');
     // La tarjeta de notas de crédito solo se muestra si hay alguna en el mes
     const _cardNC = document.getElementById('kpi-card-nocobrado');
@@ -4534,14 +4534,14 @@ function renderCobrosReal() {
         (sinFechaCerrado.noPasaron > 0 ? ` · ${fmt(sinFechaCerrado.noPasaron)} no reaparecen` : ''),
         'kpi-sinfecha-sub');
     } else {
-      _kpi('kpi-sinfecha-total', _prog.tDentro, '', _prog.dentro.length + ' ítem' + (_prog.dentro.length !== 1 ? 's' : '') + ' programados para el mes, sin factura', 'kpi-sinfecha-sub');
+      _kpi('kpi-sinfecha-total', _prog.tDentro, '', _prog.dentro.length + ' concepto' + (_prog.dentro.length !== 1 ? 's' : '') + ' previsto' + (_prog.dentro.length !== 1 ? 's' : '') + ', pendiente' + (_prog.dentro.length !== 1 ? 's' : '') + ' de facturación', 'kpi-sinfecha-sub');
     }
     // Total del mes = lo que ya entró + lo que vence dentro del mes
     const totalSum   = (d.totalCobrado || 0) + _fact.tDentro + (sinFechaCerrado ? 0 : _prog.tDentro);
     const totalCount = (d.nCobrado || 0) + _fact.dentro.length + (sinFechaCerrado ? 0 : _prog.dentro.length);
     const _pctEntro  = totalSum > 0 ? Math.round((d.totalCobrado || 0) / totalSum * 100) : 0;
     _kpi('kpi-total-cobros', totalSum, 'pos-val',
-      totalCount + ' ítem' + (totalCount !== 1 ? 's' : '') + ' · ya entró el ' + _pctEntro + '%', 'kpi-total-cobros-sub');
+      totalCount + ' concepto' + (totalCount !== 1 ? 's' : '') + ' · ' + _pctEntro + '% percibido', 'kpi-total-cobros-sub');
     // Línea aparte: lo vencido (para reclamar) y lo que NO entra en el mes
     const _fueraEl = document.getElementById('cobros-fuera-mes');
     if (_fueraEl) {
@@ -4549,11 +4549,11 @@ function renderCobrosReal() {
       // El "vencido" solo tiene sentido en el mes en curso o futuros: en un mes
       // cerrado todo lo no cobrado figura vencido, y puede haberse cobrado en
       // el mes siguiente (la planilla de Esteban es una foto por mes).
-      if (_tVencido > 0 && _idxMes >= _idxHoy) partes.push(`<span onclick="openCobrosPanel('facturado')" style="cursor:pointer;color:#dc2626;font-weight:700;" title="Fecha probable de cobro ya pasada y sin cobro registrado — para reclamar">⚠️ Vencido sin cobrar: ${fmt(_tVencido)} (${_vencidos.length} ítem${_vencidos.length !== 1 ? 's' : ''})</span>`);
+      if (_tVencido > 0 && _idxMes >= _idxHoy) partes.push(`<span onclick="openCobrosPanel('facturado')" style="cursor:pointer;color:#dc2626;font-weight:700;" title="Fecha probable de cobro vencida, sin cobro registrado — gestionar reclamo">⚠️ Vencido impago: ${fmt(_tVencido)} (${_vencidos.length} concepto${_vencidos.length !== 1 ? 's' : ''})</span>`);
       const tFuera = _fact.tFuera + (sinFechaCerrado ? 0 : _prog.tFuera);
       const nFuera = _fact.fuera.length + (sinFechaCerrado ? 0 : _prog.fuera.length);
-      if (tFuera > 0) partes.push(`<span title="Programado o facturado con fecha de cobro posterior a ${mesLabel} — no suma al total del mes">📅 Con vencimiento posterior: <strong>${fmt(tFuera)}</strong> (${nFuera} ítem${nFuera !== 1 ? 's' : ''})</span>`);
-      if (_tMenosProb > 0) partes.push(`<span title="Arrastres que Esteban mapea como poco probables de cobrar — no suman">🔻 Menos probable: <strong>${fmt(_tMenosProb)}</strong></span>`);
+      if (tFuera > 0) partes.push(`<span title="Conceptos con vencimiento posterior a ${mesLabel} — no integran la proyección del mes">📅 Vencimiento posterior: <strong>${fmt(tFuera)}</strong> (${nFuera} concepto${nFuera !== 1 ? 's' : ''})</span>`);
+      if (_tMenosProb > 0) partes.push(`<span title="Conceptos que Esteban registra como de cobro poco probable — no integran la proyección">🔻 Baja probabilidad de cobro: <strong>${fmt(_tMenosProb)}</strong></span>`);
       _fueraEl.innerHTML = partes.join(' &nbsp;·&nbsp; ');
     }
   } else {
@@ -4575,10 +4575,10 @@ function renderCobrosReal() {
     if (chartEmpty) chartEmpty.style.display = 'none';
 
     const segmentos = [
-      { label: '✅ Ya entró',                             short: '✅ Ya entró',         valor: d.totalCobrado,        color: '#22c55e', n: d.nCobrado },
-      { label: '🧾 Muy probable',                         short: '🧾 Muy probable',     valor: _fact.tDentro,         color: '#f59e0b', n: _fact.dentro.length },
+      { label: '✅ Cobrado',                              short: '✅ Cobrado',          valor: d.totalCobrado,        color: '#22c55e', n: d.nCobrado },
+      { label: '🧾 Facturado',                            short: '🧾 Facturado',        valor: _fact.tDentro,         color: '#f59e0b', n: _fact.dentro.length },
       { label: '📝 Nota de crédito',                      short: '📝 Nota de crédito',  valor: d.totalNoCobrado || 0, color: '#ef4444', n: d.nNoCobrado || 0 },
-      { label: '⏳ Posible',                              short: '⏳ Posible',          valor: sinFechaCerrado ? 0 : _prog.tDentro, color: '#94a3b8', n: sinFechaCerrado ? 0 : _prog.dentro.length },
+      { label: '⏳ Previsto sin facturar',                short: '⏳ Previsto',         valor: sinFechaCerrado ? 0 : _prog.tDentro, color: '#94a3b8', n: sinFechaCerrado ? 0 : _prog.dentro.length },
     ].filter(s => s.valor > 0);
 
     const total = segmentos.reduce((s, x) => s + x.valor, 0);
