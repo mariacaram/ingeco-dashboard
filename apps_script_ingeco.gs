@@ -2277,7 +2277,14 @@ function leerCobrosEsteban() {
         const gStr = String(gRaw || '').trim();
 
         if (gStr === '' || gStr === '-') {
-          if (pastTotal) {
+          if (esHistorico) {
+            // La pestaña histórica existe justamente para registrar cobros ya
+            // realizados: una fila sin marca (o sin columna de fecha real) es
+            // un cobro hecho, no un pendiente.
+            item.categoria = 'cobrado';
+            cobrados.push(item);
+            totalCobrado += importe;
+          } else if (pastTotal) {
             item.categoria = 'menosProbable';
             menosProbable.push(item);
             totalMenosProbable += importe;
@@ -2349,8 +2356,18 @@ function leerCobrosEsteban() {
     // caen en el mes que indiquen igual: lo que importa es que el cobro exista
     // para los acumulados y las auditorías.
     if (historicos.length) {
+      const anioTablero = new Date().getFullYear();
       historicos.forEach(function(it) {
-        const mk = _mesKeyLibre(it.fechaReal) || _mesKeyLibre(it.fechaProb) || _mesKeyLibre(it.periodo) || 'ene';
+        const ref = it.fechaReal || it.fechaProb || it.periodo || '';
+        let mk = _mesKeyLibre(ref) || 'ene';
+        // Años anteriores ("dic-25", "jul-25"): se acumulan en el primer mes
+        // del año del tablero. Así suman en los acumulados y auditorías sin
+        // aparecer como actividad de un mes que todavía no ocurrió.
+        const my = String(ref).match(/(\d{2,4})\s*$/);
+        if (my) {
+          let y = parseInt(my[1]); if (y < 100) y += 2000;
+          if (y && y < anioTablero) mk = 'ene';
+        }
         _mergeCobroEnMes(resultado, mk, it);
       });
       // Reordenar por importe los meses tocados
