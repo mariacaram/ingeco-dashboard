@@ -951,7 +951,7 @@
       <div class="kpi-sub" id="kpi-facturado-sub">—</div>
       <div class="fuente"><a href="https://docs.google.com/spreadsheets/d/1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY/edit" target="_blank" onclick="event.stopPropagation()">Planilla Cobros (Esteban)</a> — col G con "F"</div>
     </div>
-    <div class="kpi-card neg" style="cursor:pointer;" onclick="openCobrosPanel('noCobrado')" title="Ver detalle no cobrado">
+    <div class="kpi-card neg" id="kpi-card-nocobrado" style="cursor:pointer;" onclick="openCobrosPanel('noCobrado')" title="Ver detalle no cobrado">
       <div class="kpi-label">📝 Nota de crédito · <span class="cobros-mes-lbl">—</span></div>
       <div class="kpi-value nd" id="kpi-nocobrado-total">sin dato</div>
       <div class="kpi-sub" id="kpi-nocobrado-sub">—</div>
@@ -4490,6 +4490,9 @@ function renderCobrosReal() {
     _kpi('kpi-cobrado-total',   d.totalCobrado,   'pos-val', d.nCobrado    + ' cobro'    + (d.nCobrado    !== 1 ? 's' : ''), 'kpi-cobrado-sub');
     _kpi('kpi-facturado-total', d.totalFacturado, '',        d.nFacturado  + ' factura'  + (d.nFacturado  !== 1 ? 's' : ''), 'kpi-facturado-sub');
     _kpi('kpi-nocobrado-total', d.totalNoCobrado || 0, 'neg-val', (d.nNoCobrado||0) + ' ítem' + ((d.nNoCobrado||0) !== 1 ? 's' : '') + ' N/C', 'kpi-nocobrado-sub');
+    // La tarjeta de notas de crédito solo se muestra si hay alguna en el mes
+    const _cardNC = document.getElementById('kpi-card-nocobrado');
+    if (_cardNC) _cardNC.style.display = ((d.totalNoCobrado || 0) > 0 || (d.nNoCobrado || 0) > 0) ? '' : 'none';
     if (sinFechaCerrado) {
       _kpi('kpi-sinfecha-total', 0, 'nd',
         `mes cerrado — ${sinFechaCerrado.n} ítem${sinFechaCerrado.n !== 1 ? 's' : ''} programados sin cobrar (${fmt(sinFechaCerrado.total)}) excluidos: ` +
