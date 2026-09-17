@@ -815,15 +815,23 @@ function _normObra(s) {
 function parsearMes(fechaRaw) {
   if (!fechaRaw) return null;
   let mes = null;
+  // El tablero es de UN año: una fecha de otro año no pertenece a ningún mes
+  // (antes se tomaba solo el mes y una fila de 2025 caía en el mes de 2026).
+  const anioTablero = new Date().getFullYear();
 
   if (fechaRaw instanceof Date) {
+    if (isNaN(fechaRaw.getTime())) return null;
     // Apps Script guarda fechas como medianoche UTC → usar getUTCMonth() para evitar desfase con UTC-3
+    if (fechaRaw.getUTCFullYear() !== anioTablero) return null;
     mes = fechaRaw.getUTCMonth() + 1;
   } else {
     const s = String(fechaRaw).trim();
     // Formato D/M/YYYY o DD/MM/YYYY (común en Argentina)
     const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-    if (m) mes = parseInt(m[2]);
+    if (m) {
+      if (parseInt(m[3]) !== anioTablero) return null;
+      mes = parseInt(m[2]);
+    }
   }
 
   const MAP = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
