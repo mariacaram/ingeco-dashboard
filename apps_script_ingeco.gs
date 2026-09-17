@@ -31,6 +31,7 @@ const FILE_IDS = {
   usageEquipos:     '1e_emRVEUxTaNtLxeC0wXIWKzcKuoulZkFSS9O1e0XHo',  // Partes diarios — hoja única (Nico)
   repuestosEquipos: '1JpXjGTJwlvMuEI-rFTd4KeKvzd708-yuSLAhIRuCFC0',  // Compra de repuestos — hoja ENTREGAS (Nico)
   remitosAsfalto:   '1_c6El5XDWoy84J7UAe8xlA1WC03IdklQyraMZEbQiEs',  // REMITOS OFICIALES (Roberto)
+  remitosAmaicha:   '1k5tUEAHh_ecCY81Y7oGAcxMz6hQ0A0Fna4ewLWPIuUg',  // Mezcla despachada desde Amaicha (Ruta 357) — Fecha | Obra | Cantidad | Unidad (María)
   ajusteStock:    '1yZArsIKYMfq9UPUXyiASXtDNXyubTjFx3PPW2VjG-uA',  // Formulario Ingreso Asfalto Agustín
   precioAsfalto:  '1lqKTXtDLT2FxyXurxjU1uE4epDOKs5SP8AXu5wAUsJ4',  // Precio de mercado asfalto $/tn por mes
   gastosEstructura: '1beFIrKD6ljPKjjssuWP-_TmTH8vr1TktBnVDuX9nxyM', // Libro mayor de gastos admin. (Gastos de Estructura)
@@ -1872,6 +1873,74 @@ function leerRepuestosEquipos() {
 // Columnas clave: CANT. (cantidad en TN), U.D. (debe ser "TN"),
 //   DESCRIPCION (ASFALTO CALIENTE / ASFALTO FRIO), Mes, Año
 // ============================================================
+// Planilla de Amaicha: Fecha | Obra | Cantidad | Unidad (una fila por día).
+// Agrega las tn a resultado[mes].porObra[obra] (caliente, det, dias) y marca
+// cada salida con src:'amaicha' para que el tablero linkee a esa planilla.
+function _mergeRemitosAmaicha(resultado, TZ) {
+  const ss = SpreadsheetApp.openById(FILE_IDS.remitosAmaicha);
+  const sheet = ss.getSheets()[0];
+  if (!sheet) return;
+  const rows = sheet.getDataRange().getValues();
+  if (rows.length < 2) return;
+  const MAP = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  const curYear = new Date().getFullYear();
+  let hdrIdx = 0;
+  for (let i = 0; i < Math.min(5, rows.length); i++) {
+    const h = rows[i].map(c => String(c).toUpperCase().trim()).join('|');
+    if (h.indexOf('FECHA') >= 0 && h.indexOf('CANTIDAD') >= 0) { hdrIdx = i; break; }
+  }
+  const headers = rows[hdrIdx].map(h => String(h).toUpperCase().trim());
+  const iF = headers.findIndex(h => h.indexOf('FECHA') >= 0);
+  const iO = headers.findIndex(h => h.indexOf('OBRA') >= 0);
+  const iC = headers.findIndex(h => h.indexOf('CANTIDAD') >= 0 || h === 'TN');
+  const iU = headers.findIndex(h => h.indexOf('UNIDAD') >= 0);
+  if (iF < 0 || iC < 0) { Logger.log('remitosAmaicha: sin columnas FECHA/CANTIDAD'); return; }
+  const gid = sheet.getSheetId();
+  let nFilas = 0, tnTotal = 0;
+  for (let i = hdrIdx + 1; i < rows.length; i++) {
+    const row = rows[i];
+    const cant = parsearMonto(row[iC]);
+    if (!(cant > 0)) continue;
+    if (iU >= 0) {
+      const ud = String(row[iU] || '').toUpperCase().trim();
+      if (ud && ud !== 'TN' && ud !== 'TON' && ud !== 'TONS' && ud !== 'TM' && ud !== 'TONELADAS') continue;
+    }
+    // Fecha: Date o dd/mm/yyyy. Solo el año del tablero.
+    let fechaObj = null;
+    const rawF = row[iF];
+    if (rawF instanceof Date) fechaObj = rawF;
+    else {
+      const m = String(rawF || '').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+      if (m) { let y = parseInt(m[3]); if (y < 100) y += 2000; fechaObj = new Date(y, parseInt(m[2]) - 1, parseInt(m[1])); }
+    }
+    if (!fechaObj || isNaN(fechaObj.getTime())) continue;
+    if (fechaObj.getFullYear() !== curYear) continue;
+    const mesKey = MAP[fechaObj.getMonth()];
+    const obra = String(iO >= 0 ? row[iO] || '' : '').trim() || 'Ruta 357 - Quilmes';
+    if (!resultado[mesKey]) resultado[mesKey] = { caliente: 0, frio: 0, total: 0, porObra: {}, obrasSalida: {}, gid: gid };
+    const R = resultado[mesKey];
+    if (!R.porObra[obra]) R.porObra[obra] = { caliente: 0, frio: 0 };
+    const po = R.porObra[obra];
+    po.caliente = Math.round((po.caliente + cant) * 10) / 10;
+    po.amaicha  = Math.round(((po.amaicha || 0) + cant) * 10) / 10;
+    const destino = 'Amaicha (planta en obra)';
+    if (!po.det) po.det = [];
+    let e = po.det.find(x => x.s === 'caliente' && x.d === destino);
+    if (!e) { e = { s: 'caliente', d: destino, t: 0 }; po.det.push(e); }
+    e.t = Math.round((e.t + cant) * 10) / 10;
+    if (!po.dias) po.dias = [];
+    const fStr = Utilities.formatDate(fechaObj, TZ, 'dd/MM');
+    let ed = po.dias.find(x => x.f === fStr && x.s === 'caliente' && x.d === destino);
+    if (!ed) { ed = { f: fStr, s: 'caliente', d: destino, t: 0, fs: [], src: 'amaicha', gid: gid }; po.dias.push(ed); }
+    ed.t = Math.round((ed.t + cant) * 10) / 10;
+    if (ed.fs.indexOf(i + 1) < 0) ed.fs.push(i + 1);
+    // Resumen por mes (para el tablero): cuánto vino de Amaicha
+    R.amaicha = Math.round(((R.amaicha || 0) + cant) * 10) / 10;
+    nFilas++; tnTotal += cant;
+  }
+  Logger.log('remitosAmaicha: ' + nFilas + ' filas, ' + tnTotal + ' tn sumadas a la obra (no a planta/stock)');
+}
+
 function leerRemitosAsfalto() {
   try {
     const ss     = SpreadsheetApp.openById(FILE_IDS.remitosAsfalto);
@@ -2112,6 +2181,13 @@ function leerRemitosAsfalto() {
       r.frio     = Math.round(r.frio     * 10) / 10;
       r.total    = Math.round(r.total    * 10) / 10;
     }
+
+    // Mezcla despachada desde Amaicha (Ruta 357): no pasa por los remitos de
+    // Tucumán. Se suma SOLO a la obra (tn, detalle y salidas por fecha) para
+    // el costo de asfalto del margen — no a la producción de la planta ni al
+    // stock, porque no se fabricó en Tucumán (María, sep-2026).
+    try { _mergeRemitosAmaicha(resultado, TZ); }
+    catch (eA) { Logger.log('remitosAmaicha error: ' + eA); }
 
     Logger.log('Remitos Asfalto 2026: ' + JSON.stringify(resultado));
     Logger.log('Remitos detalle: ' + detalle.length + ' filas con fecha exacta');

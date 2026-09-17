@@ -6408,6 +6408,7 @@ const SHEET_URLS_AUDIT = {
   julia:   'https://docs.google.com/spreadsheets/d/1YldZRtbLh17Xqczl-omI0zjHcgvrhvp3QOsjWffEm_s/edit'  /* archivo de Agustín (la clave interna conserva el nombre viejo) */,
   esteban: 'https://docs.google.com/spreadsheets/d/1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY/edit',
   remitos: 'https://docs.google.com/spreadsheets/d/1_c6El5XDWoy84J7UAe8xlA1WC03IdklQyraMZEbQiEs/edit',
+  remitosAmaicha: 'https://docs.google.com/spreadsheets/d/1k5tUEAHh_ecCY81Y7oGAcxMz6hQ0A0Fna4ewLWPIuUg/edit',
   ocInsumos: 'https://docs.google.com/spreadsheets/d/1UWUIW4sNtRBa90nYoGg88ghGK8SyyjKe9UdZLRcHMEE/edit',
   partes: 'https://docs.google.com/spreadsheets/d/1e_emRVEUxTaNtLxeC0wXIWKzcKuoulZkFSS9O1e0XHo/edit',
   tarifas: 'https://docs.google.com/spreadsheets/d/1PEcPzwrQ8kE2evmUlrFq9wPbgWOR92MPl3LEqcSYbIk/edit',
@@ -7543,7 +7544,10 @@ function openSalidasAsfalto(codObra, nombreObra, mesP, sFiltro, dFiltro) {
         <tbody>
           ${dias.map(x => {
             const filas = x.fs || [];
-            const url = filas.length ? `${SHEET_URLS_AUDIT.remitos}#gid=${gidRem != null ? gidRem : 0}&range=A${filas[0]}` : SHEET_URLS_AUDIT.remitos;
+            // Salidas de Amaicha: vienen de la planilla propia, no de los remitos de Roberto
+            const baseUrl = x.src === 'amaicha' ? SHEET_URLS_AUDIT.remitosAmaicha : SHEET_URLS_AUDIT.remitos;
+            const gidUrl  = x.src === 'amaicha' ? (x.gid != null ? x.gid : 0) : (gidRem != null ? gidRem : 0);
+            const url = filas.length ? `${baseUrl}#gid=${gidUrl}&range=A${filas[0]}` : baseUrl;
             const tipLink = filas.length
               ? 'Abrir la fila ' + filas[0] + (filas.length > 1 ? ' (esta salida ocupa ' + filas.length + ' filas: ' + filas.join(', ') + ')' : '') + ' en REMITOS OFICIALES'
               : 'Abrir REMITOS OFICIALES';
@@ -7766,7 +7770,8 @@ function openDetalleCelda(tipo, codObra, nombreObra, mesOver) {
             ? 'ajuste manual ✎ (rige desde ' + (MES[precio.desde] || precio.desde) + ')'
             : '⚠ arrastrado de ' + (MES[precio.desde] || precio.desde) + ' — último mes con precio cargado en la planilla; es una aproximación hasta que se actualice')
       : null;
-    html = `<div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Remitos de producción · ${mes} · Fuente: Roberto</div>
+    const _amaichaTn = (() => { if (!remitosMes || !remitosMes.porObra) return 0; const en = Object.entries(remitosMes.porObra).find(([k]) => k.toLowerCase()===nk||k.toLowerCase()===ck); return en && en[1].amaicha ? en[1].amaicha : 0; })();
+    html = `<div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Remitos de producción · ${mes} · Fuente: Roberto${_amaichaTn > 0 ? ` <span style="color:#0369a1;">+ ${fmtTn(_amaichaTn)} tn despachadas desde Amaicha</span> (<a href="${SHEET_URLS_AUDIT.remitosAmaicha}" target="_blank" style="color:#0369a1;">planilla Amaicha ↗</a>) — no pasan por la planta de Tucumán ni por el stock` : ''}</div>
       <div style="background:${precio ? '#f0f9ff' : '#fffbeb'};border:1px solid ${precio ? '#bae6fd' : '#fde68a'};border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;">
         ${precio && precio.fuente === 'usd'
           ? `<strong>Cálculo:</strong> tn despachadas a la obra × precio de referencia del mes.<br>
