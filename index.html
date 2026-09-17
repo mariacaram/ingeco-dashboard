@@ -846,7 +846,7 @@
       </table>
       <div class="nota-fuente" style="margin-top:6px;">⚖️ <strong>MO Asfalto:</strong> desde jul-2026, imputada por obra según la col. OBRA (R) de TANGO (ambas quincenas). Hasta junio, o si TANGO no está cargado, se prorratea: MO total Obras × (tn de asfalto de la obra / tn total del mes)</div>
     </div>
-    <div class="nota-fuente">Generado: certificados por período — archivo de Agustín (mirada económica: lo producido, se cobre cuando se cobre; el cobro se ve en Estado financiero) · Insumos: OC Guillermo Konicek · Alquiler: Partes diarios Adrián Caram · MO: TANGO (total mensual estimado, no atribuible por obra)</div>
+    <div class="nota-fuente">Generado: certificados por período — archivo de Agustín (mirada económica: lo producido, se cobre cuando se cobre; el cobro se ve en Estado financiero) · Insumos: OC Guillermo Konicek (incluye MO tercerizada) · MO (propia): TANGO, imputada por obra desde julio · Alquiler: Partes diarios Adrián Caram · <span id="nota-precio-asfalto">Costo asfalto: tn × precio de referencia USD 116 + IVA, convertido al dólar oficial promedio del mes</span></div>
 
     <!-- Otros Gastos o salidas: placeholders sin clasificar, NO son obras — se
          muestran aparte con un formato bien distinto a la tabla de arriba -->
@@ -2003,9 +2003,86 @@ function _precioAsfaltoMes(mes) {
   if (aj) return { caliente: aj.caliente, frio: aj.frio };
   return { caliente: PRECIO_ASFALTO_BASE.caliente, frio: PRECIO_ASFALTO_BASE.frio };
 }
+// ── Precio de referencia del asfalto en USD (María/Agustín, sep-2026) ──
+// Valor comercial que pasa Agustín: USD 116/tn neto, igual para caliente y
+// frío. Se le suma el IVA (21%) y se convierte a pesos con el dólar OFICIAL
+// PROMEDIO del mes. Ese es el precio que se usa para valuar el asfalto en el
+// margen por obra — el resto (planilla, ✎, arrastre) queda solo como
+// respaldo si no hay cotización del dólar para el mes.
+const PRECIO_ASFALTO_USD_NETO = 116;
+const IVA_ASFALTO = 1.21;
+// Override del USD neto (por si Agustín actualiza el valor comercial). Se
+// guarda en este navegador; vacío = usa PRECIO_ASFALTO_USD_NETO.
+let PRECIO_ASFALTO_USD_OVERRIDE = (function() {
+  try { const v = parseFloat(localStorage.getItem('ingeco_precio_asfalto_usd')); return v > 0 ? v : null; } catch(e) { return null; }
+})();
+function _usdAsfaltoNeto() { return PRECIO_ASFALTO_USD_OVERRIDE || PRECIO_ASFALTO_USD_NETO; }
+function _usdAsfaltoConIva() { return Math.round(_usdAsfaltoNeto() * IVA_ASFALTO * 100) / 100; }
+
+// Dólar oficial promedio por mes: { jul: { promedio: 1483.71, dias: 31, parcial: false }, ... }
+// Fuente: api.argentinadatos.com (serie diaria del dólar oficial, promedio
+// compra/venta). Se cachea en el navegador y se refresca una vez por día.
+let DOLAR_OFICIAL_MES = (function() {
+  try {
+    const c = JSON.parse(localStorage.getItem('ingeco_dolar_oficial') || 'null');
+    return (c && c.meses) ? c.meses : {};
+  } catch(e) { return {}; }
+})();
+const DOLAR_API_URL = 'https://api.argentinadatos.com/v1/cotizaciones/dolares/oficial';
+async function cargarDolarOficial(force) {
+  try {
+    const c = JSON.parse(localStorage.getItem('ingeco_dolar_oficial') || 'null');
+    const hoyStr = new Date().toISOString().slice(0, 10);
+    if (!force && c && c.fecha === hoyStr && c.meses) { DOLAR_OFICIAL_MES = c.meses; return DOLAR_OFICIAL_MES; }
+    const resp = await fetch(DOLAR_API_URL, { cache: 'no-store' });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const serie = await resp.json();
+    const anio = new Date().getFullYear();
+    const acc = {};
+    (serie || []).forEach(r => {
+      if (!r || !r.fecha || !String(r.fecha).startsWith(String(anio))) return;
+      const m = parseInt(r.fecha.slice(5, 7)); if (!(m >= 1 && m <= 12)) return;
+      const mk = MES_ORDER[m - 1];
+      const val = ((+r.compra || 0) + (+r.venta || 0)) / 2;
+      if (!(val > 0)) return;
+      (acc[mk] = acc[mk] || { suma: 0, dias: 0, ultimo: r.fecha });
+      acc[mk].suma += val; acc[mk].dias += 1;
+      if (r.fecha > acc[mk].ultimo) acc[mk].ultimo = r.fecha;
+    });
+    const mesActualIdx = new Date().getMonth();
+    const meses = {};
+    Object.keys(acc).forEach(mk => {
+      meses[mk] = { promedio: Math.round(acc[mk].suma / acc[mk].dias * 100) / 100, dias: acc[mk].dias,
+                    parcial: MES_ORDER.indexOf(mk) >= mesActualIdx, ultimo: acc[mk].ultimo };
+    });
+    DOLAR_OFICIAL_MES = meses;
+    try { localStorage.setItem('ingeco_dolar_oficial', JSON.stringify({ fecha: hoyStr, meses })); } catch(e) {}
+    return meses;
+  } catch(e) {
+    console.warn('No se pudo actualizar el dólar oficial:', e);
+    return DOLAR_OFICIAL_MES; // lo que haya en caché
+  }
+}
+function _dolarOficialMes(mes) { return DOLAR_OFICIAL_MES && DOLAR_OFICIAL_MES[mes] ? DOLAR_OFICIAL_MES[mes] : null; }
+function editarPrecioAsfaltoUSD() {
+  const v = prompt('Precio de referencia del asfalto en USD/tn NETO (sin IVA) — valor comercial que pasa Agustín. Vacío = volver al valor por defecto (USD ' + PRECIO_ASFALTO_USD_NETO + '):', _usdAsfaltoNeto());
+  if (v === null) return;
+  const n = parseFloat(String(v).replace(',', '.').trim());
+  if (!(n > 0)) { PRECIO_ASFALTO_USD_OVERRIDE = null; try { localStorage.removeItem('ingeco_precio_asfalto_usd'); } catch(e) {} }
+  else { PRECIO_ASFALTO_USD_OVERRIDE = n; try { localStorage.setItem('ingeco_precio_asfalto_usd', String(n)); } catch(e) {} }
+  renderAll();
+}
+
 // Precio para valuar el asfalto de las OBRAS (costo por tn en el margen):
-// planilla "Precio de mercado asfalto" del mes > ajuste manual (✎) > sin precio.
+// USD 116 + IVA × dólar oficial promedio del mes (regla vigente) > planilla
+// "Precio de mercado asfalto" > ajuste manual (✎) > arrastre > sin precio.
 function _precioAsfaltoObra(mes) {
+  const dol = _dolarOficialMes(mes);
+  if (dol && dol.promedio > 0) {
+    const usd = _usdAsfaltoConIva();
+    const pesos = Math.round(usd * dol.promedio);
+    return { caliente: pesos, frio: pesos, fuente: 'usd', usdNeto: _usdAsfaltoNeto(), usd, dolar: dol.promedio, dolarDias: dol.dias, dolarParcial: dol.parcial };
+  }
   const planilla = PRECIO_ASFALTO[mes];
   if (planilla && (planilla.caliente || planilla.frio)) return Object.assign({ fuente: 'planilla' }, planilla);
   const aj = _ajustePrecioVigente(mes);
@@ -2725,7 +2802,18 @@ function computeMargenObrasMes(mes) {
       tnTotalGlobal += (v.caliente || 0) + (v.frio || 0);
     });
   }
-  const precioMesResumen = _precioAsfaltoObra(mes); // planilla > ajuste ✎ > null
+  const precioMesResumen = _precioAsfaltoObra(mes); // USD ref × dólar > planilla > ajuste ✎ > null
+  // Aclaración al pie de la tabla: qué precio de referencia se tomó este mes
+  const _notaPrecio = document.getElementById('nota-precio-asfalto');
+  if (_notaPrecio) {
+    if (precioMesResumen && precioMesResumen.fuente === 'usd') {
+      _notaPrecio.innerHTML = `Costo asfalto: tn × <strong>USD ${precioMesResumen.usdNeto}/tn + IVA = USD ${precioMesResumen.usd.toLocaleString('es-AR', {minimumFractionDigits: 2})}</strong> (valor comercial de referencia, Agustín) × dólar oficial promedio de ${MES[mes] || mes} <strong>$${precioMesResumen.dolar.toLocaleString('es-AR')}</strong>${precioMesResumen.dolarParcial ? ' (promedio parcial, ' + precioMesResumen.dolarDias + ' días)' : ''} = <strong>$${precioMesResumen.caliente.toLocaleString('es-AR')}/tn</strong>, caliente y frío por igual`;
+    } else if (precioMesResumen) {
+      _notaPrecio.innerHTML = `Costo asfalto: tn × precio del mes (${_precioAsfTip(precioMesResumen)}) — <span style="color:#b45309;">sin cotización del dólar para aplicar la referencia USD ${_usdAsfaltoNeto()} + IVA</span>`;
+    } else {
+      _notaPrecio.innerHTML = `Costo asfalto: <span style="color:#b45309;">sin precio para este mes</span> — la referencia es USD ${_usdAsfaltoNeto()}/tn + IVA × dólar oficial promedio`;
+    }
+  }
 
   // Helper: computa los montos cruzados de una obra (sin HTML ni acumuladores)
   const buildDatosObra = (o, extra) => {
@@ -2898,6 +2986,10 @@ function computeMargenFilas() {
 // Tooltip del costo de asfalto: precio usado ($/tn) y su fuente
 function _precioAsfTip(p) {
   if (!p) return 'Sin precio de asfalto';
+  if (p.fuente === 'usd') {
+    return 'Precio de referencia: USD ' + p.usdNeto + '/tn + IVA = USD ' + p.usd.toLocaleString('es-AR', {minimumFractionDigits: 2}) + '/tn × dólar oficial promedio $' + p.dolar.toLocaleString('es-AR') +
+      (p.dolarParcial ? ' (parcial, ' + p.dolarDias + ' días)' : '') + ' = $' + (p.caliente || 0).toLocaleString('es-AR') + '/tn (caliente y frío). Valor comercial que informa Agustín.';
+  }
   const val = 'Precio usado: caliente $' + (p.caliente || 0).toLocaleString('es-AR') + '/tn · frío $' + (p.frio || 0).toLocaleString('es-AR') + '/tn';
   const fte = p.fuente === 'planilla' ? 'planilla del mes'
     : p.fuente === 'ajuste' ? 'ajuste manual (desde ' + (MES[p.desde] || p.desde) + ')'
@@ -2916,7 +3008,7 @@ function _filaMargenHTML(r, moEsEstim, tnTotalGlobal) {
   // Solo números en la celda — el desglose por destino vive en el tooltip y
   // en el panel de detalle al hacer click (pedido de María, sep-2026)
   const tnCell = (r.tnObra > 0 || r.tnFrioObra > 0)
-    ? `<span style="font-size:12px;" title="${(r.tnDet || []).map(e => _tnDetLabel(e) + ': ' + fmtTn(e.t) + ' tn').join(' · ') || tnLabel}">${tnLabel}${r.costoAsfObra != null ? '<br><small class="neg-val" style="font-size:10px;" title="' + _precioAsfTip(r.precioAsf) + ' — click para ver o actualizar" >' + (r.precioAsf && r.precioAsf.fuente === 'planillaPrev' ? '~' : '') + fmt(r.costoAsfObra) + '</small>' : '<br><small style="color:#b45309;font-size:9.5px;">sin precio — click</small>'}</span>`
+    ? `<span style="font-size:12px;" title="${(r.tnDet || []).map(e => _tnDetLabel(e) + ': ' + fmtTn(e.t) + ' tn').join(' · ') || tnLabel}">${tnLabel}${r.costoAsfObra != null ? '<br><small class="neg-val" style="font-size:10px;" title="' + _precioAsfTip(r.precioAsf) + ' — click para ver o actualizar" >' + (r.precioAsf && (r.precioAsf.fuente === 'planillaPrev' || (r.precioAsf.fuente === 'usd' && r.precioAsf.dolarParcial)) ? '~' : '') + fmt(r.costoAsfObra) + '</small>' : '<br><small style="color:#b45309;font-size:9.5px;">sin precio — click</small>'}</span>`
     : '<span class="nd">—</span>';
   // MO PROPIA solamente (TANGO). La tercerizada está dentro de Insumos.
   const moTot = r.moObra || 0;
@@ -7574,7 +7666,9 @@ function openDetalleCelda(tipo, codObra, nombreObra, mesOver) {
     const precio = _precioAsfaltoObra(mesP);
     const costoTotal = precio ? Math.round(tnCal*(precio.caliente||0)+tnFrio*(precio.frio||0)) : null;
     const fuentePrecio = precio
-      ? (precio.fuente === 'planilla'
+      ? (precio.fuente === 'usd'
+          ? 'referencia USD ' + precio.usdNeto + ' + IVA × dólar oficial promedio'
+        : precio.fuente === 'planilla'
           ? 'planilla "Precio de mercado asfalto" del mes'
           : precio.fuente === 'ajuste'
             ? 'ajuste manual ✎ (rige desde ' + (MES[precio.desde] || precio.desde) + ')'
@@ -7582,11 +7676,15 @@ function openDetalleCelda(tipo, codObra, nombreObra, mesOver) {
       : null;
     html = `<div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Remitos de producción · ${mes} · Fuente: Roberto</div>
       <div style="background:${precio ? '#f0f9ff' : '#fffbeb'};border:1px solid ${precio ? '#bae6fd' : '#fde68a'};border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;">
-        ${precio
-          ? `<strong>Cálculo:</strong> tn despachadas a la obra × precio del mes.<br>Precio usado: caliente <strong>$${(precio.caliente || 0).toLocaleString('es-AR')}/tn</strong> · frío <strong>$${(precio.frio || 0).toLocaleString('es-AR')}/tn</strong> <span style="color:var(--muted);">(${fuentePrecio})</span>`
+        ${precio && precio.fuente === 'usd'
+          ? `<strong>Cálculo:</strong> tn despachadas a la obra × precio de referencia del mes.<br>
+             <strong>USD ${precio.usdNeto}/tn</strong> (valor comercial, Agustín) + IVA 21% = <strong>USD ${precio.usd.toLocaleString('es-AR', {minimumFractionDigits: 2})}/tn</strong> × dólar oficial promedio de ${MES[mesP] || mesP} <strong>$${precio.dolar.toLocaleString('es-AR')}</strong>${precio.dolarParcial ? ` <span style="color:#b45309;">(promedio parcial: ${precio.dolarDias} días transcurridos)</span>` : ` <span style="color:var(--muted);">(${precio.dolarDias} días)</span>`} = <strong>$${(precio.caliente || 0).toLocaleString('es-AR')}/tn</strong>, mismo precio para caliente y frío.
+             <br><span style="color:var(--muted);font-size:10.5px;">Dólar oficial: promedio compra/venta diario — api.argentinadatos.com</span>`
+          : precio
+          ? `<strong>Cálculo:</strong> tn despachadas a la obra × precio del mes.<br>Precio usado: caliente <strong>$${(precio.caliente || 0).toLocaleString('es-AR')}/tn</strong> · frío <strong>$${(precio.frio || 0).toLocaleString('es-AR')}/tn</strong> <span style="color:var(--muted);">(${fuentePrecio})</span><br><span style="color:#b45309;font-size:10.5px;">⚠ Sin cotización del dólar para este mes: no se pudo aplicar la referencia USD ${_usdAsfaltoNeto()} + IVA.</span>`
           : `⚠️ <strong>Este mes no tiene precio de asfalto</strong> — se muestran las toneladas pero el costo NO se descuenta del margen.`}
-        <br><span onclick="editarPrecioAsfaltoDesde('${mesP}')" style="cursor:pointer;text-decoration:underline dotted;color:var(--primary);font-weight:600;">✎ ${precio ? 'Editar precio' : 'Poner precio'} (rige desde ${MES[mesP] || mesP} en adelante)</span>
-        <span style="color:var(--muted);font-size:10.5px;"> · si la planilla de precios trae el mes, la planilla manda</span>
+        <br><span onclick="editarPrecioAsfaltoUSD()" style="cursor:pointer;text-decoration:underline dotted;color:var(--primary);font-weight:600;">✎ Cambiar el USD/tn de referencia</span>
+        <span style="color:var(--muted);font-size:10.5px;"> · hoy USD ${_usdAsfaltoNeto()} neto — lo define Agustín (valor comercial)</span>
       </div>
       <div style="display:grid;gap:8px;">
         <div style="background:#f8fafc;border-radius:8px;padding:12px;">
@@ -9972,6 +10070,8 @@ async function refreshData() {
   }
 
   try {
+    // Al actualizar también se refresca el dólar oficial del día (precio de referencia del asfalto)
+    cargarDolarOficial(true).catch(() => {});
     // Sin cache=1 → el Apps Script lee los sheets en vivo (refleja cambios al instante).
     // El timestamp evita cualquier cacheo del navegador / edge.
     const res = await fetch('/api/datos?_=' + Date.now());
@@ -10205,6 +10305,10 @@ document.getElementById('login-pass').addEventListener('keydown', function(e) {
 document.getElementById('login-user').addEventListener('keydown', function(e) {
   if (e.key === 'Enter') document.getElementById('login-pass').focus();
 });
+
+// Dólar oficial promedio por mes (para el precio de referencia del asfalto):
+// se carga al arrancar y, si cambió algo, se vuelve a renderizar.
+cargarDolarOficial().then(() => { try { renderAll(); } catch(e) {} });
 
 // Si ya estaba autenticado en esta sesión, restaurar role y ocultar login
 if (sessionStorage.getItem('ingeco_auth') === '1') {
