@@ -2034,9 +2034,10 @@ function leerRemitosAsfalto() {
           const ud = String(row[iUDS] || '').toUpperCase().trim();
           if (ud !== 'TN' && ud !== 'TON' && ud !== 'TONS' && ud !== 'TM' && ud !== 'TONELADAS') continue;
         }
-        if (!desc.includes('ASFALTO')) continue;
+        // Pavimax es asfalto frío embolsado: en los remitos la descripción dice
+        // solo "Pavimax" (sin la palabra asfalto) — cuenta igual como frío
+        if (!desc.includes('ASFALTO') && !desc.includes('PAVIMAX')) continue;
         if (cant <= 0) continue;
-        // Pavimax es asfalto frío embolsado: cuenta como frío para tn/stock
         const tipo = desc.includes('CALIENTE') ? 'caliente'
                    : (desc.includes('FRI') || desc.includes('FRÍO') || desc.includes('PAVIMAX')) ? 'frio' : null;
         // Sub-destino del caliente: descripción vieja ("...para carpeta/bacheo")

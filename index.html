@@ -2832,13 +2832,25 @@ function computeMargenObrasMes(mes) {
     const tnBacheo   = tnBacheoPorObraKey[ck]  || tnBacheoPorObraKey[nk]  || 0;
     const tnDet      = tnDetPorObraKey[ck]     || tnDetPorObraKey[nk]     || [];
     const tnCat      = tnCatPorObraKey[ck]     || tnCatPorObraKey[nk]     || [];
-    const tnObraTotal = tnObra + tnFrioObra;
+    // Respaldo mientras el backend no cuente el Pavimax como frío: si no hay
+    // tn por sector pero sí categorías en toneladas (ds Pavimax), se toman
+    // de ahí para que el grupo sume su total.
+    let tnObraC = tnObra, tnFrioC = tnFrioObra;
+    if (tnObraC + tnFrioC === 0 && tnCat && tnCat.length) {
+      tnCat.forEach(e => {
+        if (e.u !== 'TN' || !(e.t > 0)) return;
+        if (e.ds === 'Asfalto en caliente') tnObraC += e.t;
+        else if (e.ds === 'Asfalto en frío' || e.ds === 'Pavimax') tnFrioC += e.t; // áridos en TN no son asfalto
+      });
+      tnObraC = Math.round(tnObraC * 10) / 10; tnFrioC = Math.round(tnFrioC * 10) / 10;
+    }
+    const tnObraTotal = tnObraC + tnFrioC;
     const moObra = moImputada
       ? (((moPorObraKey[ck] || 0) + (nk !== ck ? (moPorObraKey[nk] || 0) : 0)) || null)
       : (moTotal != null && tnTotalGlobal > 0 && tnObraTotal > 0)
         ? Math.round(moTotal * (tnObraTotal / tnTotalGlobal)) : null;
-    const costoAsfObra = (precioMesResumen != null && (tnObra > 0 || tnFrioObra > 0))
-      ? Math.round((tnObra * (precioMesResumen.caliente || 0)) + (tnFrioObra * (precioMesResumen.frio || 0)))
+    const costoAsfObra = (precioMesResumen != null && (tnObraC > 0 || tnFrioC > 0))
+      ? Math.round((tnObraC * (precioMesResumen.caliente || 0)) + (tnFrioC * (precioMesResumen.frio || 0)))
       : null;
     // Certificación teórica de provisiones (tn × precio de convenio — hoy solo
     // asfalto caliente a Muni SMT). Informativa: NO suma al margen real.
@@ -2850,7 +2862,7 @@ function computeMargenObrasMes(mes) {
     const precioAsf = precioMesResumen; // para mostrar fuente/arrastre en la celda
     const margen  = aCobrar - insumos - (moObra || 0) - (costoAsfObra || 0) - alquiler;
     const hasData = aCobrar > 0 || insumos > 0 || moHormigon > 0 || alquiler > 0 || tnObraTotal > 0 || moObra != null;
-    return { o, aCobrar, certTeorica, insumos, insumosOC, moHormigon, alquiler, tnObra, tnFrioObra, tnCarpeta, tnBacheo, tnDet, tnCat, tnObraTotal, moObra, moImputada, costoAsfObra, precioAsf, margen, hasData, extra: !!extra };
+    return { o, aCobrar, certTeorica, insumos, insumosOC, moHormigon, alquiler, tnObra: tnObraC, tnFrioObra: tnFrioC, tnCarpeta, tnBacheo, tnDet, tnCat, tnObraTotal, moObra, moImputada, costoAsfObra, precioAsf, margen, hasData, extra: !!extra };
   };
 
   const rows = obras.map(o => buildDatosObra(o, false));
