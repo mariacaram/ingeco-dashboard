@@ -796,7 +796,7 @@
       <div class="kpi-label">Margen estimado</div>
       <div class="kpi-value nd" id="kpi-margen-est">sin dato</div>
       <div class="kpi-sub" id="kpi-margen-sub">Pendiente de archivos de costo</div>
-      <div class="fuente" id="kpi-margen-formula">Generado − (OC Insumos + MO TANGO + Alquiler Equipos)</div>
+      <div class="fuente" id="kpi-margen-formula">Generado − (Insumos + MO propia + Costo asfalto + Alquiler)</div>
     </div>
   </div>
 
@@ -833,7 +833,7 @@
             <th>Cód. Obra</th>
             <th class="num">Generado</th>
             <th class="num">Insumos</th>
-            <th class="num" title="Mano de obra total de la obra: asfalto (TANGO — imputada desde jul-2026, antes prorrateada) + hormigón tercerizada (OC de Guillermo). Click en la celda para ver la composición">MO</th>
+            <th class="num" title="Mano de obra PROPIA de la obra (TANGO): imputada por obra desde jul-2026, antes prorrateada. La mano de obra tercerizada (OC de Guillermo) va dentro de Insumos.">MO (propia)</th>
             <th class="num">Asfalto (tn)</th>
             <th class="num">Alquiler</th>
             <th class="num" id="th-margen-mensual">Margen mensual</th>
@@ -2313,7 +2313,11 @@ function renderMargen() {
   // Calcular totales de egresos para el mes seleccionado
   // OC: solo obras no-INT (getOCPlanta filtra usando esInt del maestro)
   const ocPlantaObj = getOCPlanta(mesActual);
-  const ocMes       = ocPlantaObj ? ocPlantaObj.total : null;
+  // La MO tercerizada (OC de Guillermo) es parte de Insumos: se suma acá para
+  // que la tarjeta coincida con la columna Insumos de la tabla.
+  const _mohMes = (OC_INSUMOS[mesActual] && OC_INSUMOS[mesActual].moHormigon)
+    ? (OC_INSUMOS[mesActual].moHormigon.total || 0) : 0;
+  const ocMes       = ocPlantaObj ? ocPlantaObj.total + _mohMes : null;
   const moArr     = getMOObra(mesActual);
   const moMensual = moArr.length > 0 ? moArr.reduce((s, r) => s + r.monto, 0) : null;
   // MO efectiva para el cálculo: real si existe, si no la estimada
@@ -2336,7 +2340,7 @@ function renderMargen() {
   const totalACobrar = _filasMg.length > 0 ? _sumMg(r => r.aCobrar) : null;
   const mgInsumos = _sumMg(r => r.insumos), mgMO = _sumMg(r => r.moObra), mgMOH = _sumMg(r => r.moHormigon),
         mgAsf = _sumMg(r => r.costoAsfObra), mgAlq = _sumMg(r => r.alquiler);
-  const totalEgresosConAlq = _filasMg.length > 0 ? (mgInsumos + mgMO + mgMOH + mgAsf + mgAlq) : null;
+  const totalEgresosConAlq = _filasMg.length > 0 ? (mgInsumos + mgMO + mgAsf + mgAlq) : null;
 
   const kpiOC = document.getElementById('kpi-oc-insumos');
   if (kpiOC) {
@@ -2408,8 +2412,7 @@ function renderMargen() {
       if (kpiMgFormula) {
         const partes = [];
         if (mgInsumos > 0) partes.push('Insumos ' + fmt(mgInsumos));
-        if (mgMO > 0)      partes.push((moEsEstimado ? 'MO~ ' : 'MO ') + fmt(mgMO));
-        if (mgMOH > 0)     partes.push('MO horm. ' + fmt(mgMOH));
+        if (mgMO > 0)      partes.push((moEsEstimado ? 'MO propia~ ' : 'MO propia ') + fmt(mgMO));
         if (mgAsf > 0)     partes.push('Asfalto ' + fmt(mgAsf));
         if (mgAlq > 0)     partes.push('Alq. ' + fmt(mgAlq));
         kpiMgFormula.textContent = fmt(totalACobrar) + ' − (' + partes.join(' + ') + ') · coincide con el TOTAL de la tabla';
@@ -2418,7 +2421,7 @@ function renderMargen() {
       kpiMg.textContent = 'sin dato';
       kpiMg.className   = 'kpi-value nd';
       if (subEl) subEl.style.color = '';
-      if (kpiMgFormula) kpiMgFormula.textContent = 'Generado − (Insumos + MO + Costo asfalto + Alquiler)';
+      if (kpiMgFormula) kpiMgFormula.textContent = 'Generado − (Insumos + MO propia + Costo asfalto + Alquiler)';
     }
   }
 
@@ -2729,8 +2732,11 @@ function computeMargenObrasMes(mes) {
     const aCobrar = o.aCobrar ?? o.generado ?? 0;
     const nk = (o.nombre || '').toLowerCase().trim();
     const ck = (o.cod_obra || '').toLowerCase().trim();
-    const insumos  = ocPorNombre[nk]  || ocPorNombre[ck]  || 0;
+    const insumosOC  = ocPorNombre[nk]  || ocPorNombre[ck]  || 0;
+    // MO tercerizada (OC de Guillermo): es un servicio contratado, va dentro
+    // de Insumos. La columna MO queda solo con la MO PROPIA (María, sep-2026).
     const moHormigon = mohPorNombre[ck] || mohPorNombre[nk] || 0;
+    const insumos    = insumosOC + moHormigon;
     const alquiler = alqPorNombre[ck] || alqPorNombre[nk] || 0;
     const tnObra     = tnPorObraKey[ck]     || tnPorObraKey[nk]     || 0;
     const tnFrioObra = tnFrioPorObraKey[ck] || tnFrioPorObraKey[nk] || 0;
@@ -2754,9 +2760,9 @@ function computeMargenObrasMes(mes) {
       return s + (pTn ? Math.round(e.t * pTn) : 0);
     }, 0);
     const precioAsf = precioMesResumen; // para mostrar fuente/arrastre en la celda
-    const margen  = aCobrar - insumos - moHormigon - (moObra || 0) - (costoAsfObra || 0) - alquiler;
+    const margen  = aCobrar - insumos - (moObra || 0) - (costoAsfObra || 0) - alquiler;
     const hasData = aCobrar > 0 || insumos > 0 || moHormigon > 0 || alquiler > 0 || tnObraTotal > 0 || moObra != null;
-    return { o, aCobrar, certTeorica, insumos, moHormigon, alquiler, tnObra, tnFrioObra, tnCarpeta, tnBacheo, tnDet, tnCat, tnObraTotal, moObra, moImputada, costoAsfObra, precioAsf, margen, hasData, extra: !!extra };
+    return { o, aCobrar, certTeorica, insumos, insumosOC, moHormigon, alquiler, tnObra, tnFrioObra, tnCarpeta, tnBacheo, tnDet, tnCat, tnObraTotal, moObra, moImputada, costoAsfObra, precioAsf, margen, hasData, extra: !!extra };
   };
 
   const rows = obras.map(o => buildDatosObra(o, false));
@@ -2912,15 +2918,14 @@ function _filaMargenHTML(r, moEsEstim, tnTotalGlobal) {
   const tnCell = (r.tnObra > 0 || r.tnFrioObra > 0)
     ? `<span style="font-size:12px;" title="${(r.tnDet || []).map(e => _tnDetLabel(e) + ': ' + fmtTn(e.t) + ' tn').join(' · ') || tnLabel}">${tnLabel}${r.costoAsfObra != null ? '<br><small class="neg-val" style="font-size:10px;" title="' + _precioAsfTip(r.precioAsf) + ' — click para ver o actualizar" >' + (r.precioAsf && r.precioAsf.fuente === 'planillaPrev' ? '~' : '') + fmt(r.costoAsfObra) + '</small>' : '<br><small style="color:#b45309;font-size:9.5px;">sin precio — click</small>'}</span>`
     : '<span class="nd">—</span>';
-  // MO única: asfalto + hormigón tercerizada — la composición vive en el
-  // tooltip y en el panel al click (pedido de María, sep-2026)
-  const moTot = (r.moObra || 0) + (r.moHormigon || 0);
-  const moPartes = [];
-  if (r.moObra != null) moPartes.push('Asfalto ' + (moEsEstim ? '~' : '') + fmt(r.moObra) + (r.moImputada ? ' (imputada TANGO)' : moEsEstim ? ' (estimada)' : ' (prorrateada)'));
-  if (r.moHormigon > 0) moPartes.push('Hormigón tercerizada ' + fmt(r.moHormigon));
+  // MO PROPIA solamente (TANGO). La tercerizada está dentro de Insumos.
+  const moTot = r.moObra || 0;
+  const moTitle2 = r.moObra != null
+    ? 'MO propia ' + (moEsEstim ? '~' : '') + fmt(r.moObra) + (r.moImputada ? ' (imputada por obra — TANGO)' : moEsEstim ? ' (estimada)' : ' (prorrateada por tn)')
+    : 'Sin mano de obra propia del mes';
   const moCell = moTot > 0
-    ? `<span class="neg-val" style="text-decoration:underline dotted;" title="${moPartes.join(' · ')}">${moEsEstim && r.moObra != null ? '~' : ''}${fmt(moTot)}</span>`
-    : `<span class="nd" title="Sin mano de obra del mes">—</span>`;
+    ? `<span class="neg-val" style="text-decoration:underline dotted;" title="${moTitle2}">${moEsEstim ? '~' : ''}${fmt(moTot)}</span>`
+    : `<span class="nd" title="${moTitle2}">—</span>`;
   const codEsc2 = (o.cod_obra || '').replace(/'/g, "\\'");
   const nomEsc  = (o.nombre  || '').replace(/'/g, "\\'");
   const cellStyle = 'cursor:pointer;transition:background 0.15s;';
@@ -2928,7 +2933,7 @@ function _filaMargenHTML(r, moEsEstim, tnTotalGlobal) {
   return `<tr>
       <td style="${cellStyle}" title="Ver historial de todos los meses" onclick="openHistorialObra('${codEsc2}','${nomEsc}')"><code style="font-size:11px;background:#f1f5f9;padding:2px 5px;border-radius:3px;text-decoration:underline dotted;">${o.cod_obra}</code><br><small style="color:var(--muted);font-size:10px;">${o.nombre}</small></td>
       <td class="num" style="${cellStyle}" ${hoverTip} onclick="openDetalleCelda('acobrar','${codEsc2}','${nomEsc}')">${r.aCobrar > 0 ? `<strong class="pos-val" style="text-decoration:underline dotted;">${fmt(r.aCobrar)}</strong>` : '<span class="nd">—</span>'}</td>
-      <td class="num" style="${cellStyle}" ${hoverTip} onclick="openDetalleCelda('insumos','${codEsc2}','${nomEsc}')">${r.insumos  > 0 ? `<span class="neg-val" style="text-decoration:underline dotted;">${fmt(r.insumos)}</span>`  : '<span class="nd">—</span>'}</td>
+      <td class="num" style="${cellStyle}" title="${r.moHormigon > 0 ? 'OC de materiales ' + fmt(r.insumosOC) + ' + MO tercerizada ' + fmt(r.moHormigon) : 'Click para ver detalle'}" onclick="openDetalleCelda('insumos','${codEsc2}','${nomEsc}')">${r.insumos  > 0 ? `<span class="neg-val" style="text-decoration:underline dotted;">${fmt(r.insumos)}</span>${r.moHormigon > 0 ? '<br><small style="font-size:9.5px;color:var(--muted);">incl. MO terc.</small>' : ''}`  : '<span class="nd">—</span>'}</td>
       <td class="num" style="${cellStyle}" ${hoverTip} onclick="openDetalleCelda('mo','${codEsc2}','${nomEsc}')">${moCell}</td>
       <td class="num" style="${cellStyle}" ${hoverTip} onclick="openDetalleCelda('tn','${codEsc2}','${nomEsc}')">${tnCell}</td>
       <td class="num" style="${cellStyle}" ${hoverTip} onclick="openDetalleCelda('alquiler','${codEsc2}','${nomEsc}')">${r.alquiler > 0 ? `<span class="neg-val" style="text-decoration:underline dotted;">${fmt(r.alquiler)}</span>` : '<span class="nd">—</span>'}</td>
@@ -3679,13 +3684,13 @@ function renderResumenObra() {
     // Fila total — MO es la suma de la MO prorateada de las obras mostradas (no el
     // total de la empresa vía TANGO), para que coincida exactamente con la suma de
     // cada fila y con el total de "Contribución marginal por tipo de contratación"
-    const moCellTotal = (sumaMO + sumaMOH) > 0
-      ? `<span class="neg-val" title="Asfalto ${moEsEstim ? '~' : ''}${fmt(sumaMO)} · Hormigón tercerizada ${fmt(sumaMOH)}">${moEsEstim && sumaMO > 0 ? '~' : ''}${fmt(sumaMO + sumaMOH)}</span>`
+    const moCellTotal = sumaMO > 0
+      ? `<span class="neg-val" title="MO propia del mes (TANGO)">${moEsEstim ? '~' : ''}${fmt(sumaMO)}</span>`
       : '<span class="nd">sin dato</span>';
     const tnTotalCell = (sumaTn > 0 || sumaAsf > 0)
       ? `<span style="font-size:12px;color:var(--muted);">${sumaTn > 0 ? fmtTn(sumaTn) + ' tn' : ''}${sumaAsf > 0 ? '<br><small class="neg-val" style="font-size:10px;">' + fmt(sumaAsf) + '</small>' : ''}</span>`
       : '<span class="nd">—</span>';
-    const sumaEgresos = sumaInsumos + sumaMO + sumaMOH + sumaAsf + sumaAlquiler;
+    const sumaEgresos = sumaInsumos + sumaMO + sumaAsf + sumaAlquiler;
     const sumaMargen  = sumaCobrar - sumaEgresos;
     const sumaColor   = sumaMargen > 0 ? 'pos-val' : sumaMargen < 0 ? 'neg-val' : '';
 
@@ -3770,8 +3775,7 @@ function renderResumenTipoContrato() {
     <th>Cód. Obra</th>
     <th class="num">Generado</th>
     <th class="num">Insumos</th>
-    <th class="num">MO Asfalto</th>
-    <th class="num">MO Hormigón</th>
+    <th class="num">MO (propia)</th>
     <th class="num">Asfalto (tn)</th>
     <th class="num">Alquiler</th>
     <th class="num">Margen</th>
@@ -3787,7 +3791,6 @@ function renderResumenTipoContrato() {
       <td class="num pos-val">${fmt(g.tot.aCobrar)}</td>
       <td class="num neg-val">${fmt(g.tot.insumos)}</td>
       <td class="num">${g.tot.mo > 0 ? `<span class="neg-val">${moEsEstim ? '~' : ''}${fmt(g.tot.mo)}</span>` : '<span class="nd">—</span>'}</td>
-      <td class="num">${g.tot.moh > 0 ? `<span class="neg-val">${fmt(g.tot.moh)}</span>` : '<span class="nd">—</span>'}</td>
       <td class="num">${g.tot.tn > 0 ? `<span style="font-size:12px;color:var(--muted);">${fmtTn(g.tot.tn)} tn</span>` : '<span class="nd">—</span>'}</td>
       <td class="num neg-val">${fmt(g.tot.alquiler)}</td>
       <td class="num ${mgColor}" style="background:${g.tot.margen > 0 ? '#f0fdf4' : g.tot.margen < 0 ? '#fef2f2' : 'transparent'};">${fmt(g.tot.margen)}</td>
@@ -3818,7 +3821,7 @@ function renderResumenTipoContrato() {
     <span>Generado: <strong class="pos-val">${fmt(totG.aCobrar)}</strong></span>
     <span>Insumos: <strong class="neg-val">${fmt(totG.insumos)}</strong></span>
     <span data-restrict="sueldos">MO Asfalto: <strong class="neg-val">${moEsEstim ? '~' : ''}${fmt(totG.mo)}</strong></span>
-    <span>MO Hormigón: <strong class="neg-val">${fmt(totG.moh)}</strong></span>
+    
     <span>Alquiler: <strong class="neg-val">${fmt(totG.alquiler)}</strong></span>
     <span>Margen: <strong class="${mgG}">${fmt(totG.margen)}</strong></span>
   </div>`;
@@ -3872,7 +3875,7 @@ function openHistorialObra(codObra, nombreObra) {
         <td style="padding:7px 10px;font-size:12px;font-weight:600;">${esEnCurso ? '⏳' : '📅'} ${(MES[m] || m).replace(' 2026', '')}</td>
         <td style="padding:7px 10px;font-size:12px;text-align:right;">${r.aCobrar > 0 ? fmt(r.aCobrar) : '—'}</td>
         <td style="padding:7px 10px;font-size:12px;text-align:right;">${r.insumos > 0 ? fmt(r.insumos) : '—'}</td>
-        <td style="padding:7px 10px;font-size:12px;text-align:right;" data-restrict="sueldos">${esEnCurso && ((r.moObra || 0) + (r.moHormigon || 0)) > 0 ? fmt((r.moObra || 0) + (r.moHormigon || 0)) : '—'}</td>
+        <td style="padding:7px 10px;font-size:12px;text-align:right;" data-restrict="sueldos">${esEnCurso && (r.moObra || 0) > 0 ? fmt(r.moObra) : '—'}</td>
         <td style="padding:7px 10px;font-size:12px;text-align:right;">${esEnCurso && r.costoAsfObra != null ? fmt(r.costoAsfObra) : '—'}</td>
         <td style="padding:7px 10px;font-size:12px;text-align:right;">${esEnCurso && r.alquiler > 0 ? fmt(r.alquiler) : '—'}</td>
         <td style="padding:7px 10px;font-size:11px;text-align:right;">${esEnCurso ? 'en curso — no suma' : 'programado — no suma'}</td>
@@ -3899,7 +3902,7 @@ function openHistorialObra(codObra, nombreObra) {
       <td style="padding:7px 10px;font-size:12px;font-weight:600;">${(MES[m] || m).replace(' 2026', '')}</td>
       ${tdClick(m, 'acobrar', r.aCobrar > 0 ? `<span class="pos-val" style="text-decoration:underline dotted;">${fmt(r.aCobrar)}</span>` : '—')}
       ${tdClick(m, 'insumos', r.insumos > 0 ? `<span class="neg-val" style="text-decoration:underline dotted;">${fmt(r.insumos)}</span>` : '—')}
-      ${tdClick(m, 'mo', ((r.moObra || 0) + (r.moHormigon || 0)) > 0 ? `<span class="neg-val" style="text-decoration:underline dotted;" title="Asfalto ${d.moEsEstim ? '~' : ''}${fmt(r.moObra || 0)} · Hormigón tercerizada ${fmt(r.moHormigon || 0)}">${d.moEsEstim && r.moObra != null ? '~' : ''}${fmt((r.moObra || 0) + (r.moHormigon || 0))}</span>` : '—').replace('text-align:right;cursor', 'text-align:right;cursor').replace('<td style', '<td data-restrict="sueldos" style')}
+      ${tdClick(m, 'mo', (r.moObra || 0) > 0 ? `<span class="neg-val" style="text-decoration:underline dotted;" title="MO propia (TANGO)">${d.moEsEstim ? '~' : ''}${fmt(r.moObra || 0)}</span>` : '—').replace('<td style', '<td data-restrict="sueldos" style')}
       ${tdClick(m, 'tn', r.costoAsfObra != null ? `<span class="neg-val" style="text-decoration:underline dotted;" title="${tnStr}">${fmt(r.costoAsfObra)}</span>` : (tnStr || '—'))}
       ${tdClick(m, 'alquiler', r.alquiler > 0 ? `<span class="neg-val" style="text-decoration:underline dotted;">${fmt(r.alquiler)}</span>` : '—')}
       <td style="padding:7px 10px;font-size:12px;text-align:right;background:${r.margen > 0 ? '#f0fdf4' : r.margen < 0 ? '#fef2f2' : 'transparent'};"><strong class="${mgColor}">${fmt(r.margen)}</strong></td>
@@ -3956,7 +3959,7 @@ function openHistorialObra(codObra, nombreObra) {
           <th style="text-align:left;padding:7px 10px;font-size:11px;">Mes</th>
           <th style="text-align:right;padding:7px 10px;font-size:11px;">Generado</th>
           <th style="text-align:right;padding:7px 10px;font-size:11px;">Insumos</th>
-          <th style="text-align:right;padding:7px 10px;font-size:11px;" data-restrict="sueldos" title="Mano de obra total: asfalto + hormigón tercerizada — pasá el mouse por el valor para ver la composición">MO</th>
+          <th style="text-align:right;padding:7px 10px;font-size:11px;" data-restrict="sueldos" title="Mano de obra propia (TANGO). La tercerizada va dentro de Insumos.">MO (propia)</th>
           <th style="text-align:right;padding:7px 10px;font-size:11px;">Asfalto</th>
           <th style="text-align:right;padding:7px 10px;font-size:11px;">Alquiler</th>
           <th style="text-align:right;padding:7px 10px;font-size:11px;">Margen</th>
@@ -3967,7 +3970,7 @@ function openHistorialObra(codObra, nombreObra) {
             <td style="padding:8px 10px;font-size:12px;">TOTAL realizado${(futuroGenerado > 0 || enCursoGenerado > 0) ? ' <span style="font-weight:400;font-size:10px;color:var(--muted);">(meses cerrados)</span>' : ''}</td>
             <td style="padding:8px 10px;font-size:12px;text-align:right;" class="pos-val">${fmt(tot.aCobrar)}</td>
             <td style="padding:8px 10px;font-size:12px;text-align:right;" class="neg-val">${fmt(tot.insumos)}</td>
-            <td style="padding:8px 10px;font-size:12px;text-align:right;" class="neg-val" data-restrict="sueldos" title="Asfalto ${algunaEstim ? '~' : ''}${fmt(tot.mo)} · Hormigón tercerizada ${fmt(tot.moh)}">${(tot.mo + tot.moh) > 0 ? (algunaEstim ? '~' : '') + fmt(tot.mo + tot.moh) : '—'}</td>
+            <td style="padding:8px 10px;font-size:12px;text-align:right;" class="neg-val" data-restrict="sueldos" title="MO propia (TANGO)">${tot.mo > 0 ? (algunaEstim ? '~' : '') + fmt(tot.mo) : '—'}</td>
             <td style="padding:8px 10px;font-size:12px;text-align:right;" class="neg-val">${tot.asf > 0 ? fmt(tot.asf) : '—'}</td>
             <td style="padding:8px 10px;font-size:12px;text-align:right;" class="neg-val">${tot.alquiler > 0 ? fmt(tot.alquiler) : '—'}</td>
             <td style="padding:8px 10px;font-size:12px;text-align:right;background:${tot.margen > 0 ? '#f0fdf4' : tot.margen < 0 ? '#fef2f2' : 'transparent'};" class="${mgColorT}">${fmt(tot.margen)}</td>
@@ -3977,7 +3980,7 @@ function openHistorialObra(codObra, nombreObra) {
       </table>
       ${tnTotStr}
       ${frBloque}
-      <div style="font-size:11px;color:var(--muted);margin-top:10px;">Margen mensual = Generado − Insumos − MO Asfalto − MO Hormigón tercerizada − Costo asfalto − Alquiler. El mes ⏳ está en curso (se está generando) y los 📅 son el plan de certificación: se muestran pero no suman. ${algunaEstim ? '~ incluye MO estimada en meses sin TANGO cargado.' : ''}</div>`;
+      <div style="font-size:11px;color:var(--muted);margin-top:10px;">Margen mensual = Generado − Insumos (incluye MO tercerizada) − MO propia − Costo asfalto − Alquiler. El mes ⏳ está en curso (se está generando) y los 📅 son el plan de certificación: se muestran pero no suman. ${algunaEstim ? '~ incluye MO estimada en meses sin TANGO cargado.' : ''}</div>`;
   }
 
   const codEsc3 = (codObra    || '').replace(/'/g, "\\'");
@@ -7432,12 +7435,23 @@ function openDetalleCelda(tipo, codObra, nombreObra, mesOver) {
         <strong>De dónde sale:</strong> suma de las <strong>órdenes de compra del mes</strong> cuya columna <strong>OBRA GENERAL</strong> es "${nombreObra || codObra}", en la planilla de OC de Guillermo Konicek. Cada OC entra por su monto total, agrupado acá por proveedor.
         <br><a href="${SHEET_URLS_AUDIT.ocInsumos}" target="_blank" style="color:var(--primary);font-weight:600;">📄 Abrir OC INSUMOS (Guillermo Konicek) ↗</a>
       </div>`;
+    // MO tercerizada de la obra (va dentro de Insumos desde sep-2026)
+    const _ocH = OC_INSUMOS[mesP];
+    const _itH = (_ocH && _ocH.moHormigon && _ocH.moHormigon.items) ? _ocH.moHormigon.items.find(i => {
+      const io = (i.obra || '').toLowerCase().trim(), ic = (i.codigo || '').toLowerCase().trim();
+      return (ic && (ic === ck || ic === nk)) || io === nk || io === ck;
+    }) : null;
+    const _bloqueMOTercerizada = _itH ? `<div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:8px;padding:10px 12px;margin-bottom:10px;">
+        <div style="font-size:11px;font-weight:700;color:#5b21b6;margin-bottom:3px;">👷 Incluye MO tercerizada: ${fmt(_itH.monto)}</div>
+        <div style="font-size:11.5px;color:var(--muted);">${(_itH.proveedores || []).map(p => p.proveedor + ' ' + fmt(p.monto)).join(' · ')}</div>
+        <div style="font-size:10.5px;color:var(--muted);margin-top:3px;">Servicio contratado a terceros — no es personal propio de INGECO, por eso cuenta como insumo y no en la columna MO.</div>
+      </div>` : '';
     if (!item) {
-      html = _origenOC + '<p class="nd" style="padding:16px;">Sin órdenes de compra registradas para esta obra en ' + mes + '</p>';
+      html = _origenOC + _bloqueMOTercerizada + (_itH ? '' : '<p class="nd" style="padding:16px;">Sin órdenes de compra registradas para esta obra en ' + mes + '</p>');
     } else {
       const provs = item.proveedores || [];
       const acep = item.aceptadas || 0, pend = item.pendientes || 0;
-      html = _origenOC +
+      html = _origenOC + _bloqueMOTercerizada +
         `<div style="font-size:12px;color:var(--muted);margin-bottom:10px;">${item.nOC} OC · ${mes}${(acep + pend) > 0 ? ` · <span style="color:#16a34a;">${acep} aceptada${acep !== 1 ? 's' : ''}</span> · <span style="color:#b45309;">${pend} pendiente${pend !== 1 ? 's' : ''}</span>` : ''}</div>
         <table style="width:100%;border-collapse:collapse;">
           <thead><tr style="background:#f1f5f9;"><th style="text-align:left;padding:7px 10px;font-size:11px;">Proveedor</th><th style="text-align:right;padding:7px 10px;font-size:11px;">N° OC</th><th style="text-align:right;padding:7px 10px;font-size:11px;">Monto</th></tr></thead>
@@ -7534,8 +7548,7 @@ function openDetalleCelda(tipo, codObra, nombreObra, mesOver) {
       </div>`;
     }
 
-    // La columna MO de la tabla también incluye la de hormigón tercerizada:
-    // se muestra acá su composición (pedido de María, sep-2026)
+    // Aviso: la MO tercerizada NO está acá, va dentro de Insumos
     const ocMesMoh = OC_INSUMOS[mesP];
     const itemMoh = (ocMesMoh && ocMesMoh.moHormigon && ocMesMoh.moHormigon.items) ? ocMesMoh.moHormigon.items.find(i => {
       const io = (i.obra || '').toLowerCase().trim();
@@ -7543,10 +7556,8 @@ function openDetalleCelda(tipo, codObra, nombreObra, mesOver) {
       return (ic && (ic === ck || ic === nk)) || io === nk || io === ck;
     }) : null;
     if (itemMoh) {
-      html += `<div style="margin-top:10px;background:#faf5ff;border:1px solid #e9d5ff;border-radius:8px;padding:12px;">
-        <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">+ MO Hormigón tercerizada — OC Guillermo (contratistas, no es personal propio)</div>
-        <div style="font-size:18px;font-weight:700;" class="neg-val">${fmt(itemMoh.monto)}</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:4px;">${(itemMoh.proveedores || []).map(p => p.proveedor + ' ' + fmt(p.monto)).join(' · ')}</div>
+      html += `<div style="margin-top:10px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:11.5px;color:var(--muted);">
+        ℹ️ Esta obra además tiene <strong>${fmt(itemMoh.monto)}</strong> de <strong>mano de obra tercerizada</strong> (${(itemMoh.proveedores || []).map(p => p.proveedor).join(', ')}), que por ser un servicio contratado va dentro de <strong>Insumos</strong>, no en esta columna.
       </div>`;
     }
 
