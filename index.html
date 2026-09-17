@@ -2004,14 +2004,14 @@ function _precioAsfaltoMes(mes) {
   return { caliente: PRECIO_ASFALTO_BASE.caliente, frio: PRECIO_ASFALTO_BASE.frio };
 }
 // ── Precio de referencia del asfalto en USD (María/Agustín, sep-2026) ──
-// Valor comercial que pasa Agustín: USD 116/tn neto, igual para caliente y
+// Valor comercial según empresa Cartellone: USD 116/tn neto, igual para caliente y
 // frío. Se le suma el IVA (21%) y se convierte a pesos con el dólar OFICIAL
 // PROMEDIO del mes. Ese es el precio que se usa para valuar el asfalto en el
 // margen por obra — el resto (planilla, ✎, arrastre) queda solo como
 // respaldo si no hay cotización del dólar para el mes.
 const PRECIO_ASFALTO_USD_NETO = 116;
 const IVA_ASFALTO = 1.21;
-// Override del USD neto (por si Agustín actualiza el valor comercial). Se
+// Override del USD neto (por si se actualiza el valor comercial de referencia). Se
 // guarda en este navegador; vacío = usa PRECIO_ASFALTO_USD_NETO.
 let PRECIO_ASFALTO_USD_OVERRIDE = (function() {
   try { const v = parseFloat(localStorage.getItem('ingeco_precio_asfalto_usd')); return v > 0 ? v : null; } catch(e) { return null; }
@@ -2065,7 +2065,7 @@ async function cargarDolarOficial(force) {
 }
 function _dolarOficialMes(mes) { return DOLAR_OFICIAL_MES && DOLAR_OFICIAL_MES[mes] ? DOLAR_OFICIAL_MES[mes] : null; }
 function editarPrecioAsfaltoUSD() {
-  const v = prompt('Precio de referencia del asfalto en USD/tn NETO (sin IVA) — valor comercial que pasa Agustín. Vacío = volver al valor por defecto (USD ' + PRECIO_ASFALTO_USD_NETO + '):', _usdAsfaltoNeto());
+  const v = prompt('Precio de referencia del asfalto en USD/tn NETO (sin IVA) — valor comercial según empresa Cartellone. Vacío = volver al valor por defecto (USD ' + PRECIO_ASFALTO_USD_NETO + '):', _usdAsfaltoNeto());
   if (v === null) return;
   const n = parseFloat(String(v).replace(',', '.').trim());
   if (!(n > 0)) { PRECIO_ASFALTO_USD_OVERRIDE = null; try { localStorage.removeItem('ingeco_precio_asfalto_usd'); } catch(e) {} }
@@ -2807,7 +2807,7 @@ function computeMargenObrasMes(mes) {
   const _notaPrecio = document.getElementById('nota-precio-asfalto');
   if (_notaPrecio) {
     if (precioMesResumen && precioMesResumen.fuente === 'usd') {
-      _notaPrecio.innerHTML = `Costo asfalto: tn × <strong>USD ${precioMesResumen.usdNeto}/tn + IVA = USD ${precioMesResumen.usd.toLocaleString('es-AR', {minimumFractionDigits: 2})}</strong> (valor comercial de referencia, Agustín) × dólar oficial promedio de ${MES[mes] || mes} <strong>$${precioMesResumen.dolar.toLocaleString('es-AR')}</strong>${precioMesResumen.dolarParcial ? ' (promedio parcial, ' + precioMesResumen.dolarDias + ' días)' : ''} = <strong>$${precioMesResumen.caliente.toLocaleString('es-AR')}/tn</strong>, caliente y frío por igual`;
+      _notaPrecio.innerHTML = `Costo asfalto: tn × <strong>USD ${precioMesResumen.usdNeto}/tn + IVA = USD ${precioMesResumen.usd.toLocaleString('es-AR', {minimumFractionDigits: 2})}</strong> (valor comercial según empresa Cartellone) × dólar oficial promedio de ${MES[mes] || mes} <strong>$${precioMesResumen.dolar.toLocaleString('es-AR')}</strong>${precioMesResumen.dolarParcial ? ' (promedio parcial, ' + precioMesResumen.dolarDias + ' días)' : ''} = <strong>$${precioMesResumen.caliente.toLocaleString('es-AR')}/tn</strong>, caliente y frío por igual`;
     } else if (precioMesResumen) {
       _notaPrecio.innerHTML = `Costo asfalto: tn × precio del mes (${_precioAsfTip(precioMesResumen)}) — <span style="color:#b45309;">sin cotización del dólar para aplicar la referencia USD ${_usdAsfaltoNeto()} + IVA</span>`;
     } else {
@@ -3008,7 +3008,7 @@ function _precioAsfTip(p) {
   if (!p) return 'Sin precio de asfalto';
   if (p.fuente === 'usd') {
     return 'Precio de referencia: USD ' + p.usdNeto + '/tn + IVA = USD ' + p.usd.toLocaleString('es-AR', {minimumFractionDigits: 2}) + '/tn × dólar oficial promedio $' + p.dolar.toLocaleString('es-AR') +
-      (p.dolarParcial ? ' (parcial, ' + p.dolarDias + ' días)' : '') + ' = $' + (p.caliente || 0).toLocaleString('es-AR') + '/tn (caliente y frío). Valor comercial que informa Agustín.';
+      (p.dolarParcial ? ' (parcial, ' + p.dolarDias + ' días)' : '') + ' = $' + (p.caliente || 0).toLocaleString('es-AR') + '/tn (caliente y frío). Valor comercial según empresa Cartellone.';
   }
   const val = 'Precio usado: caliente $' + (p.caliente || 0).toLocaleString('es-AR') + '/tn · frío $' + (p.frio || 0).toLocaleString('es-AR') + '/tn';
   const fte = p.fuente === 'planilla' ? 'planilla del mes'
@@ -3337,7 +3337,9 @@ function _filasOtroGastoTR(r) {
       filas.push(`<tr style="${trStyle}">
         ${tdItem(` <span style="color:#9a3412;">· ${_tnDetLabel(e)}</span>`)}
         ${tdV}${tdV}
-        ${td(`<strong>${e.nota ? '✂️ ' : ''}${fmtTn(e.t)} ${unidad}${(!e.ds && e.s === 'frio') ? ' frío' : ''}</strong>`)}
+        ${mesActual === 'total'
+          ? `<td style="padding:8px 10px;font-size:12px;text-align:right;white-space:nowrap;cursor:pointer;" title="Click para ver cuánto es de cada mes" onclick="event.stopPropagation();openTnPorMesProvision('${codEsc2}','${nomEsc}','${eEnc}')"><strong style="text-decoration:underline dotted;">${fmtTn(e.t)} ${unidad}${(!e.ds && e.s === 'frio') ? ' frío' : ''}</strong></td>`
+          : td(`<strong>${e.nota ? '✂️ ' : ''}${fmtTn(e.t)} ${unidad}${(!e.ds && e.s === 'frio') ? ' frío' : ''}</strong>`)}
         ${precioCell}
         ${pTn ? td(`<strong class="pos-val" title="${fmtTn(e.t)} ${unidad} × $${pTn.toLocaleString('es-AR')}/${unidad}">${fmt(Math.round(e.t * pTn))}</strong>`) : tdV}
         ${tdV}
@@ -7433,6 +7435,76 @@ function closePanel() {
 // Subdetalle: salidas de asfalto por FECHA de una obra (con filtro opcional
 // por tipo/destino al clickear una fila del desglose). La ✕ vuelve al panel
 // de Tn Asfalto. Datos: porObra[obra].dias del backend (María, sep-2026).
+// Vista TOTAL → click en las tn de una categoría de provisión: cuánto es de
+// cada mes (tn, precio del mes y cert. teórica), con link a las salidas por
+// fecha de ese mes (María, sep-2026).
+function openTnPorMesProvision(codObra, nombreObra, eEnc) {
+  let f = {};
+  try { f = JSON.parse(decodeURIComponent(eEnc)); } catch(err) { f = {}; }
+  const mk = e => [e.s || '', e.d || '', e.ds || '', e.tp || '', e.u || ''].join('|');
+  const claveF = mk(f);
+  const ck = (codObra || '').toLowerCase().trim(), nk = (nombreObra || '').toLowerCase().trim();
+  const unidad = f.u === 'M3' ? 'm3' : f.u === 'Viaje' ? 'viaje(s)' : 'tn';
+  const filas = [];
+  let totT = 0, totCert = 0, hayPrecio = false;
+  MES_ORDER.forEach(m => {
+    const rm = REMITOS_ASFALTO[m];
+    if (!rm || !rm.porObra) return;
+    // Igual que la tabla: la obra puede estar escrita con distintas mayúsculas
+    // en los remitos ("Provisión de asfalto caliente" / "Provisión de Asfalto
+    // caliente") — se juntan todas las variantes y todas las coincidencias.
+    const entries = Object.entries(rm.porObra).filter(([k]) => k.toLowerCase().trim() === ck || k.toLowerCase().trim() === nk);
+    if (!entries.length) return;
+    let lista = [];
+    entries.forEach(([, v]) => {
+      lista = lista.concat((v.cat && v.cat.length) ? v.cat.map(e => Object.assign({}, e, {
+          u: /^t/i.test(e.u || '') ? 'TN' : /viaje/i.test(e.u || '') ? 'Viaje' : (e.u || 'M3'), tp: (e.tp || '').trim() }))
+        : (v.det || []));
+    });
+    const hits = lista.filter(x => mk(x) === claveF && x.t > 0);
+    if (!hits.length) return;
+    const e = Object.assign({}, hits[0], { t: Math.round(hits.reduce((s2, x) => s2 + x.t, 0) * 10) / 10 });
+    // Mismo criterio que la vista mensual: cortes manuales y precio vigente ese mes
+    const corte = _aplicarCorteDet(m, codObra || nombreObra, [e]).det[0] || e;
+    const pTn = _precioProvision(corte, m);
+    if (pTn) hayPrecio = true;
+    const cert = pTn ? Math.round(corte.t * pTn) : 0;
+    totT += corte.t; totCert += cert;
+    filas.push({ m, t: corte.t, tRaw: e.t, nota: corte.nota, pTn, cert });
+  });
+  const titulo = 'Tn por mes — ' + _tnDetLabel(f);
+  const sub = (codObra || nombreObra) + ' · suma de todos los meses con remitos';
+  let html = `<div style="font-size:12px;color:var(--muted);margin-bottom:12px;">${sub}</div>`;
+  if (!filas.length) {
+    html += '<p class="nd" style="padding:16px;">Sin remitos de esta categoría en ningún mes.</p>';
+  } else {
+    html += `<table style="width:100%;font-size:12.5px;"><thead><tr>
+        <th style="text-align:left;padding:6px 8px;">Mes</th>
+        <th style="text-align:right;padding:6px 8px;">${unidad === 'tn' ? 'TN' : unidad.toUpperCase()}</th>
+        <th style="text-align:right;padding:6px 8px;">$/${unidad}</th>
+        <th style="text-align:right;padding:6px 8px;">Cert. teórica</th>
+        <th style="padding:6px 8px;"></th></tr></thead><tbody>` +
+      filas.map(r => `<tr style="border-top:1px solid var(--border);">
+        <td style="padding:7px 8px;font-weight:600;">${MES[r.m] || r.m}</td>
+        <td style="padding:7px 8px;text-align:right;"><strong>${r.nota ? '✂️ ' : ''}${fmtTn(r.t)}</strong>${r.nota ? `<div style="font-size:10.5px;color:#b45309;font-weight:400;">${r.nota}</div>` : ''}</td>
+        <td style="padding:7px 8px;text-align:right;">${r.pTn ? '$' + r.pTn.toLocaleString('es-AR') : '<span style="color:#9a3412;">sin precio</span>'}</td>
+        <td style="padding:7px 8px;text-align:right;" class="pos-val">${r.cert ? fmt(r.cert) : '—'}</td>
+        <td style="padding:7px 8px;text-align:right;white-space:nowrap;">${f.u === 'M3' || f.u === 'Viaje' ? '' : `<span onclick="openSalidasAsfalto('${(codObra || '').replace(/'/g, "\\'")}','${(nombreObra || '').replace(/'/g, "\\'")}','${r.m}', ${f.ds ? `'${/caliente/i.test(f.ds) ? 'caliente' : 'frio'}'` : (f.s ? `'${f.s}'` : 'null')}, '${(f.d || '').replace(/'/g, "\\'")}'); _panelBack = () => openTnPorMesProvision('${(codObra || '').replace(/'/g, "\\'")}','${(nombreObra || '').replace(/'/g, "\\'")}','${eEnc}');" style="cursor:pointer;color:var(--primary);text-decoration:underline dotted;font-size:11px;">salidas por fecha ↗</span>`}</td>
+      </tr>`).join('') +
+      `<tr style="border-top:2px solid var(--border);background:#f8fafc;font-weight:700;">
+        <td style="padding:8px;">TOTAL</td>
+        <td style="padding:8px;text-align:right;">${fmtTn(totT)}</td>
+        <td style="padding:8px;"></td>
+        <td style="padding:8px;text-align:right;" class="pos-val">${hayPrecio ? fmt(totCert) : '—'}</td>
+        <td></td></tr></tbody></table>
+      <div style="font-size:11px;color:var(--muted);margin-top:10px;">Cada mes usa el precio que regía ese mes (✎) y sus cortes manuales, igual que en la vista mensual. Cert. teórica es informativa: no suma al margen.</div>`;
+  }
+  const panel = document.getElementById('sidePanel'), overlay = document.getElementById('overlay');
+  document.getElementById('panelContent').innerHTML = `<div class="panel-title">${titulo}</div>` + html;
+  _panelBack = null;
+  panel.classList.add('open'); overlay.classList.add('open');
+}
+
 function openSalidasAsfalto(codObra, nombreObra, mesP, sFiltro, dFiltro) {
   const panel   = document.getElementById('sidePanel');
   const overlay = document.getElementById('overlay');
@@ -7698,24 +7770,24 @@ function openDetalleCelda(tipo, codObra, nombreObra, mesOver) {
       <div style="background:${precio ? '#f0f9ff' : '#fffbeb'};border:1px solid ${precio ? '#bae6fd' : '#fde68a'};border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;">
         ${precio && precio.fuente === 'usd'
           ? `<strong>Cálculo:</strong> tn despachadas a la obra × precio de referencia del mes.<br>
-             <strong>USD ${precio.usdNeto}/tn</strong> (valor comercial, Agustín) + IVA 21% = <strong>USD ${precio.usd.toLocaleString('es-AR', {minimumFractionDigits: 2})}/tn</strong> × dólar oficial promedio de ${MES[mesP] || mesP} <strong>$${precio.dolar.toLocaleString('es-AR')}</strong>${precio.dolarParcial ? ` <span style="color:#b45309;">(promedio parcial: ${precio.dolarDias} días transcurridos)</span>` : ` <span style="color:var(--muted);">(${precio.dolarDias} días)</span>`} = <strong>$${(precio.caliente || 0).toLocaleString('es-AR')}/tn</strong>, mismo precio para caliente y frío.
+             <strong>USD ${precio.usdNeto}/tn</strong> (valor comercial según empresa Cartellone) + IVA 21% = <strong>USD ${precio.usd.toLocaleString('es-AR', {minimumFractionDigits: 2})}/tn</strong> × dólar oficial promedio de ${MES[mesP] || mesP} <strong>$${precio.dolar.toLocaleString('es-AR')}</strong>${precio.dolarParcial ? ` <span style="color:#b45309;">(promedio parcial: ${precio.dolarDias} días transcurridos)</span>` : ` <span style="color:var(--muted);">(${precio.dolarDias} días)</span>`} = <strong>$${(precio.caliente || 0).toLocaleString('es-AR')}/tn</strong>, mismo precio para caliente y frío.
              <br><span style="color:var(--muted);font-size:10.5px;">Dólar oficial: promedio compra/venta diario — api.argentinadatos.com</span>`
           : precio
           ? `<strong>Cálculo:</strong> tn despachadas a la obra × precio del mes.<br>Precio usado: caliente <strong>$${(precio.caliente || 0).toLocaleString('es-AR')}/tn</strong> · frío <strong>$${(precio.frio || 0).toLocaleString('es-AR')}/tn</strong> <span style="color:var(--muted);">(${fuentePrecio})</span><br><span style="color:#b45309;font-size:10.5px;">⚠ Sin cotización del dólar para este mes: no se pudo aplicar la referencia USD ${_usdAsfaltoNeto()} + IVA.</span>`
           : `⚠️ <strong>Este mes no tiene precio de asfalto</strong> — se muestran las toneladas pero el costo NO se descuenta del margen.`}
         <br><span onclick="editarPrecioAsfaltoUSD()" style="cursor:pointer;text-decoration:underline dotted;color:var(--primary);font-weight:600;">✎ Cambiar el USD/tn de referencia</span>
-        <span style="color:var(--muted);font-size:10.5px;"> · hoy USD ${_usdAsfaltoNeto()} neto — lo define Agustín (valor comercial)</span>
+        <span style="color:var(--muted);font-size:10.5px;"> · hoy USD ${_usdAsfaltoNeto()} neto — valor comercial según empresa Cartellone</span>
       </div>
       <div style="display:grid;gap:8px;">
         <div style="background:#f8fafc;border-radius:8px;padding:12px;">
           <div style="font-size:11px;color:var(--muted);">Asfalto caliente</div>
           <div style="font-size:20px;font-weight:700;">${fmtTn(tnCal)} tn</div>
-          ${precio&&precio.caliente?`<div style="font-size:11px;color:var(--muted);">${fmtTn(tnCal)} tn × ${fmt(precio.caliente)}/tn</div>`:''}
+          ${precio&&precio.caliente?`<div style="font-size:11px;color:var(--muted);">${fmtTn(tnCal)} tn × $${(precio.caliente || 0).toLocaleString('es-AR')}/tn</div>`:''}
         </div>
         ${tnFrio>0?`<div style="background:#f8fafc;border-radius:8px;padding:12px;">
           <div style="font-size:11px;color:var(--muted);">Asfalto frío</div>
           <div style="font-size:20px;font-weight:700;">${fmtTn(tnFrio)} tn</div>
-          ${precio&&precio.frio?`<div style="font-size:11px;color:var(--muted);">${fmtTn(tnFrio)} tn × ${fmt(precio.frio)}/tn</div>`:''}
+          ${precio&&precio.frio?`<div style="font-size:11px;color:var(--muted);">${fmtTn(tnFrio)} tn × $${(precio.frio || 0).toLocaleString('es-AR')}/tn</div>`:''}
         </div>`:''}
         ${tnDetPanel.length?`<div style="background:#f8fafc;border-radius:8px;padding:12px;">
           <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">Desglose por destino <span style="font-weight:400;">(col E + col H del remito) · click en una fila para ver las salidas por fecha</span></div>
