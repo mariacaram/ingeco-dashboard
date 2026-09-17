@@ -2944,10 +2944,18 @@ function computeMargenObrasTotal() {
       const key = ((r.o.cod_obra || r.o.nombre || '') + '').toLowerCase().trim();
       let acc = porObra[key];
       if (!acc) {
-        acc = porObra[key] = { o: Object.assign({}, r.o), aCobrar: 0, insumos: 0, moHormigon: 0, alquiler: 0,
+        acc = porObra[key] = { o: Object.assign({}, r.o), aCobrar: 0, insumos: 0, insumosOC: 0, moHormigon: 0, alquiler: 0,
           tnObra: 0, tnFrioObra: 0, tnCarpeta: 0, tnBacheo: 0, tnDet: [], tnCat: [], tnObraTotal: 0, moObra: null, costoAsfObra: null,
-          margen: 0, hasData: false, extra: r.extra };
+          certTeorica: 0, precioAsf: null, margen: 0, hasData: false, extra: r.extra,
+          // Mismo criterio que la vista mensual: las provisiones / placeholders
+          // ("Otros gastos o salidas") se listan aparte, no como obras
+          otroGasto: !!r.otroGasto };
       }
+      // Si en algún mes se clasificó como "otro gasto", lo es en el total
+      if (r.otroGasto) acc.otroGasto = true;
+      acc.certTeorica += r.certTeorica || 0;
+      acc.insumosOC   += r.insumosOC || 0;
+      if (r.precioAsf) acc.precioAsf = r.precioAsf; // el más reciente, para el tooltip
       acc.aCobrar  += r.aCobrar;
       acc.insumos  += r.insumos;
       acc.moHormigon += r.moHormigon || 0;
