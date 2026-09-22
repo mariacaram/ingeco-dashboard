@@ -7074,6 +7074,7 @@ const ALIAS_ESTEBAN = {
   'Bacheo Munic.- Etapa 2': 'Bacheo SMT',
   'Canteros Av. Soldati': 'Cantero Soldati',
   'Muni de Tafi viejo': 'Lomas de Tafí',
+  'Pérez Palavecino': '9 de Julio y Perez Palavecino',
   // En la pestaña de julio los certificados de R357 aparecen como "Ruta 307 - Quilmes"
   'Ruta 307 - Quilmes': 'Ruta 357 - Quilmes',
   // La misma provisión aparece con 3 nombres según el mes (may/jun/jul)
@@ -7142,7 +7143,9 @@ function _juliaPendPorCanon(obrasSeg) {
     const ens = MAPA_OBRAS_AUDIT[oj.nombre];
     let canon;
     if (ens && ens.length) {
-      const canons = ens.map(_segNorm);
+      // Esteban puede haber pasado a usar el mismo nombre que Agustín aunque
+      // el mapa conserve solo los rótulos viejos: se prueba también ese.
+      const canons = ens.map(_segNorm).concat([_segNorm(oj.nombre)]);
       canon = canons.find(c => obrasSeg[c]) || canons[0];
     } else {
       canon = _segNorm(oj.nombre);
