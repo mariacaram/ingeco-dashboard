@@ -229,6 +229,10 @@
 
   /* TABLES */
   .table-wrap { overflow-x: auto; border-radius: 8px; border: 1px solid var(--border); background: var(--card); }
+  /* Rótulo chico arriba de cada tabla hermana (Obras / Provisiones) */
+  .tabla-rotulo { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin: 18px 0 6px 2px; display: flex; align-items: baseline; gap: 8px; }
+  .tabla-rotulo:first-of-type { margin-top: 4px; }
+  .tabla-rotulo span { font-weight: 500; text-transform: none; letter-spacing: 0; }
   table { width: 100%; border-collapse: collapse; }
   th { background: #f8fafc; font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
   td { padding: 9px 12px; border-bottom: 1px solid #f0f4f8; font-size: 13px; }
@@ -833,6 +837,7 @@
       <div id="busqueda-obra-dropdown" style="display:none;position:absolute;z-index:80;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.14);max-height:260px;overflow-y:auto;"></div>
       <div id="busqueda-obra-chips" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;"></div>
     </div>
+    <div class="tabla-rotulo">Obras</div>
     <div class="table-wrap">
       <table id="tabla-resumen-obra">
         <thead>
@@ -3353,10 +3358,10 @@ function _filasOtroGastoTR(r) {
   const codEsc2 = (o.cod_obra || '').replace(/'/g, "\\'");
   const nomEsc  = (o.nombre  || '').replace(/'/g, "\\'");
   const nombreLink = `<span style="cursor:pointer;font-weight:600;color:#1e3a5f;text-decoration:underline dotted;" title="Ver historial de todos los meses" onclick="openHistorialObra('${codEsc2}','${nomEsc}')">${o.cod_obra}</span>`;
-  const td = html => `<td style="padding:8px 10px;font-size:12px;text-align:right;white-space:nowrap;">${html}</td>`;
+  const td = html => `<td class="num" style="font-size:12px;white-space:nowrap;">${html}</td>`;
   const tdV = td('<span style="color:#cbd5e1;">—</span>');
-  const trStyle = 'border-top:1px dashed #cbd5e1;';
-  const tdItem = extra => `<td style="padding:8px 4px;font-size:12.5px;">${nombreLink}${extra || ''}</td>`;
+  const trStyle = 'background:#fafbfc;';
+  const tdItem = extra => `<td style="font-size:12px;padding-left:28px;color:#334155;">${extra || '<span style="color:#475569;">Órdenes de compra</span>'}</td>`;
   const filas = [];
 
   if ((r.tnCat && r.tnCat.length) || (r.tnDet && r.tnDet.length)) {
@@ -3386,7 +3391,7 @@ function _filasOtroGastoTR(r) {
       const unidad = e.u === 'M3' ? 'm3' : e.u === 'Viaje' ? 'viaje(s)' : 'tn';
       const precioCell = td(`<span onclick="event.stopPropagation();editarPrecioProvisionE('${eEnc}')" style="cursor:pointer;text-decoration:underline dotted;" title="Click para actualizar el precio de esta combinación — rige desde el mes visible en adelante">${pTn ? '$' + pTn.toLocaleString('es-AR') : '<span style="color:#475569;">poner precio</span>'} ✎</span>`);
       filas.push(`<tr style="${trStyle}">
-        ${tdItem(` <span style="color:#475569;">· ${_tnDetLabel(e)}</span>`)}
+        ${tdItem(`<span style="color:#475569;">${_tnDetLabel(e)}</span>`)}
         ${tdV}${tdV}
         ${mesActual === 'total'
           ? `<td style="padding:8px 10px;font-size:12px;text-align:right;white-space:nowrap;cursor:pointer;" title="Click para ver cuánto es de cada mes" onclick="event.stopPropagation();openTnPorMesProvision('${codEsc2}','${nomEsc}','${eEnc}')"><strong style="text-decoration:underline dotted;">${fmtTn(e.t)} ${unidad}${(!e.ds && e.s === 'frio') ? ' frío' : ''}</strong></td>`
@@ -3409,7 +3414,7 @@ function _filasOtroGastoTR(r) {
       _PROV_OTROS[o.cod_obra || o.nombre] = { obra: o.cod_obra || o.nombre, mes: mesActual, entries: otrosFrio };
       const codKey = (o.cod_obra || o.nombre || '').replace(/'/g, "\\'");
       filas.push(`<tr style="${trStyle}cursor:pointer;" title="Click para ver el detalle por destino" onclick="openProvisionFrioOtros('${codKey}')">
-        ${tdItem(` <span style="color:#475569;">· Frío → Otros <span style="font-weight:400;">(${otrosFrio.length} destino${otrosFrio.length !== 1 ? 's' : ''} — ver detalle ▸)</span></span>`)}
+        ${tdItem(`<span style="color:#475569;">Frío → Otros <span style="font-weight:400;">(${otrosFrio.length} destino${otrosFrio.length !== 1 ? 's' : ''} — ver detalle ▸)</span></span>`)}
         ${tdV}${tdV}
         ${td(`<strong>${fmtTn(tnOtros)} tn frío</strong>`)}
         ${tdV}
@@ -3480,12 +3485,12 @@ function _grupoOtroGastoTR(r, i) {
   const real = mesActual !== 'total' ? _certRealProvision(mesActual, o.cod_obra || o.nombre) : null;
   const realFirme = real ? real.totalFirme : 0;
   const abierto = !!_OG_ABIERTOS[i];
-  const tdR = h => `<td style="padding:9px 10px;font-size:12px;text-align:right;white-space:nowrap;">${h}</td>`;
+  const tdR = h => `<td class="num" style="white-space:nowrap;">${h}</td>`;
   const vac = tdR('<span style="color:#cbd5e1;">—</span>');
-  const resumen = `<tr style="border-top:2px solid #cbd5e1;cursor:pointer;background:#f8fafc;" onclick="toggleOtroGasto(${i})" title="Click para ver/plegar el detalle por categoría">
-    <td style="padding:9px 4px;font-size:12.5px;"><span id="og-flecha-${i}" style="display:inline-block;width:14px;color:#475569;font-weight:700;">${abierto ? '▾' : '▸'}</span><strong style="color:#1e3a5f;">${o.cod_obra}</strong> <span style="font-size:11px;color:var(--muted);">· ${combos > 0 ? combos + ' ítem' + (combos !== 1 ? 's' : '') : 'sin remitos'}${r.tnObraTotal > 0 ? ' · ' + fmtTn(r.tnObraTotal) + ' tn' : ''}</span></td>
-    ${r.insumos  > 0 ? `<td style="padding:9px 10px;font-size:12px;text-align:right;white-space:nowrap;cursor:pointer;" title="Ver de dónde sale este monto" onclick="event.stopPropagation();openDetalleCelda('insumos','${(o.cod_obra || '').replace(/'/g, "\\'")}','${(o.nombre || '').replace(/'/g, "\\'")}')"><strong style="text-decoration:underline dotted;">${fmt(r.insumos)}</strong></td>`  : vac}
-    ${r.alquiler > 0 ? `<td style="padding:9px 10px;font-size:12px;text-align:right;white-space:nowrap;cursor:pointer;" title="Ver de dónde sale este monto" onclick="event.stopPropagation();openDetalleCelda('alquiler','${(o.cod_obra || '').replace(/'/g, "\\'")}','${(o.nombre || '').replace(/'/g, "\\'")}')"><strong style="text-decoration:underline dotted;">${fmt(r.alquiler)}</strong></td>` : vac}
+  const resumen = `<tr style="cursor:pointer;" onclick="toggleOtroGasto(${i})" title="Click para ver/plegar el detalle por categoría">
+    <td><span id="og-flecha-${i}" style="display:inline-block;width:14px;color:#475569;font-weight:700;">${abierto ? '▾' : '▸'}</span><strong style="color:#1e3a5f;text-decoration:underline dotted;" title="Ver historial de todos los meses" onclick="event.stopPropagation();openHistorialObra('${(o.cod_obra || '').replace(/'/g, "\\'")}','${(o.nombre || '').replace(/'/g, "\\'")}')">${o.cod_obra}</strong> <span style="font-size:11px;color:var(--muted);">· ${combos > 0 ? combos + ' ítem' + (combos !== 1 ? 's' : '') : 'sin remitos'}${r.tnObraTotal > 0 ? ' · ' + fmtTn(r.tnObraTotal) + ' tn' : ''}</span></td>
+    ${r.insumos  > 0 ? `<td class="num" style="white-space:nowrap;cursor:pointer;" title="Ver de dónde sale este monto" onclick="event.stopPropagation();openDetalleCelda('insumos','${(o.cod_obra || '').replace(/'/g, "\\'")}','${(o.nombre || '').replace(/'/g, "\\'")}')"><strong style="text-decoration:underline dotted;">${fmt(r.insumos)}</strong></td>`  : vac}
+    ${r.alquiler > 0 ? `<td class="num" style="white-space:nowrap;cursor:pointer;" title="Ver de dónde sale este monto" onclick="event.stopPropagation();openDetalleCelda('alquiler','${(o.cod_obra || '').replace(/'/g, "\\'")}','${(o.nombre || '').replace(/'/g, "\\'")}')"><strong style="text-decoration:underline dotted;">${fmt(r.alquiler)}</strong></td>` : vac}
     ${r.tnObraTotal > 0 ? tdR(`<strong title="${(r.tnObra > 0 ? 'Caliente ' + fmtTn(r.tnObra) + ' tn' : '') + (r.tnObra > 0 && r.tnFrioObra > 0 ? ' · ' : '') + (r.tnFrioObra > 0 ? 'Frío ' + fmtTn(r.tnFrioObra) + ' tn' : '')} — suma de todas las categorías del grupo">${fmtTn(r.tnObraTotal)} tn</strong>`) : vac}${vac}
     ${teo > 0 ? tdR(`<strong class="pos-val">${fmt(teo)}</strong>`) : vac}
     ${realFirme > 0 ? tdR(`<strong class="pos-val">${fmt(realFirme)}</strong>`)
@@ -3534,19 +3539,20 @@ function _renderOtrosGastosBlock(otrosGastos) {
   const _tnTot = [];
   if (totTnCal > 0)  _tnTot.push(fmtTn(totTnCal) + ' tn');
   if (totTnFrio > 0) _tnTot.push(fmtTn(totTnFrio) + ' frío');
-  const th = t => `<th style="text-align:right;padding:6px 10px;font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;">${t}</th>`;
-  const tdT = html => `<td style="padding:9px 10px;font-size:12.5px;text-align:right;font-weight:700;white-space:nowrap;">${html}</td>`;
-  return `<div style="margin-top:16px;background:#f8fafc;border:1.5px dashed #cbd5e1;border-radius:10px;padding:12px 16px;">
-    <div style="font-size:12px;font-weight:700;color:#1e3a5f;margin-bottom:2px;">Provisiones y otras salidas <span style="font-weight:400;color:#64748b;">· ${otrosGastos.length} ítem${otrosGastos.length !== 1 ? 's' : ''} — no son obras: se muestran aparte y no entran en la contribución marginal</span></div>
-    <div class="table-wrap"><table style="width:100%;border-collapse:collapse;">
+  // Mismo formato que la tabla de obras (th/td estándar del tablero): dos
+  // tablas hermanas con un rótulo arriba de cada una (María, sep-2026).
+  const th = t => `<th class="num" style="text-align:right;white-space:nowrap;">${t}</th>`;
+  const tdT = html => `<td class="num" style="font-weight:700;white-space:nowrap;">${html}</td>`;
+  return `<div class="tabla-rotulo">Provisiones y otras salidas <span title="Provisiones de asfalto, Pavimax, OC sin obra… No son obras: no entran en la contribución marginal">· no entran en la contribución marginal</span></div>
+    <div class="table-wrap"><table id="tabla-provisiones">
       <thead><tr>
-        <th style="text-align:left;padding:6px 4px;font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.04em;">Ítem</th>
+        <th>Ítem</th>
         ${th('Insumos')}${th('Alquiler')}${th('TN')}${th('$/tn')}${th('Cert. teórica')}${th('Cert. real')}
       </tr></thead>
       <tbody>
         ${otrosGastos.map((r, i) => _grupoOtroGastoTR(r, i)).join('')}
-        <tr style="border-top:2px solid #cbd5e1;background:#e2e8f0;">
-          <td style="padding:9px 4px;font-size:12px;font-weight:700;color:#1e3a5f;">TOTAL</td>
+        <tr style="background:#f8fafc;font-weight:700;border-top:2px solid var(--border);">
+          <td style="font-size:12px;">TOTAL</td>
           ${tdT(totIns > 0 ? fmt(totIns) : '—')}
           ${tdT(totAlq > 0 ? fmt(totAlq) : '—')}
           ${tdT(_tnTot.length ? _tnTot.join(' + ') : '—')}
@@ -3556,7 +3562,7 @@ function _renderOtrosGastosBlock(otrosGastos) {
         </tr>
       </tbody>
     </table></div>
-    <div style="font-size:10.5px;color:#64748b;margin-top:6px;">Cert. teórica = tn × precio de convenio por cliente ($/tn — click en el precio para actualizarlo; el precio nuevo rige desde el mes visible en adelante y los meses anteriores conservan el suyo)${hayAjuste ? ', neta del excedente que Esteban pagó de más el mes anterior (ya pagado, no debe volver a pagarse)' : ''}. Cert. real = certificados de la provisión cargados por Esteban en su planilla del mes siguiente (las provisiones se pagan hasta el día 10). Valores informativos: no suman al margen.</div>
+    <div style="font-size:10.5px;color:var(--muted);margin-top:6px;">Cert. teórica = tn × precio de convenio por cliente ($/tn — click en el precio para actualizarlo; el precio nuevo rige desde el mes visible en adelante y los meses anteriores conservan el suyo)${hayAjuste ? ', neta del excedente que Esteban pagó de más el mes anterior (ya pagado, no debe volver a pagarse)' : ''}. Cert. real = certificados de la provisión cargados por Esteban en su planilla del mes siguiente (las provisiones se pagan hasta el día 10). Valores informativos: no suman al margen.</div>
   </div>`;
 }
 
