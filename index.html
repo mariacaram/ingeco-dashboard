@@ -750,6 +750,7 @@
   </div>
   <button class="tab-btn" onclick="openTab('cobros')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6" width="19" height="13" rx="2.5"/><path d="M2.5 10h19"/><path d="M6 15h4"/></svg>Estado financiero</button>
   <button class="tab-btn" onclick="openTab('fondos')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><path d="M12 15v2"/></svg>Fondos de reparo<span id="fondos-nav-badge" style="display:none;margin-left:auto;background:#dc2626;color:#fff;font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;"></span></button>
+  <button class="tab-btn" onclick="openTab('redets')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M17 7h4v4"/></svg>Redeterminaciones<span id="redets-nav-badge" style="display:none;margin-left:auto;background:#dc2626;color:#fff;font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;"></span></button>
   <button class="tab-btn" onclick="openTab('planta')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20V10l5 3V10l5 3V9l5 3v8z"/><path d="M3 20h18"/><path d="M6 7V4"/></svg>Planta de Asfalto</button>
   <button class="tab-btn" data-restrict="sueldos" onclick="openTab('taller')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.2 5.2L4 17l3 3 5.5-5.5a4 4 0 0 0 5.2-5.2l-2.6 2.6-2.2-.4-.4-2.2z"/></svg>Taller Mecánico</button>
   <button class="tab-btn" onclick="openTab('gastos-estructura')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16"/><path d="M16 8h2a2 2 0 0 1 2 2v11"/><path d="M2 21h20"/><path d="M8 7h2M8 11h2M8 15h2"/></svg>Gastos de Estructura</button>
@@ -1664,6 +1665,19 @@
     <div id="fondos-filtros" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;"></div>
     <div id="fondos-list"></div>
     <div style="font-size:11px;color:var(--muted);margin-top:14px;">Fuente: planilla de cobros de Esteban, todas las pestañas. Cada fondo se cuenta una sola vez aunque se repita en varios meses.</div>
+  </div>
+</div>
+
+<div class="tab-panel" id="tab-redets">
+  <div class="section">
+    <div class="section-title" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      📈 Redeterminaciones de precio
+      <a href="https://docs.google.com/spreadsheets/d/1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY/edit" target="_blank" style="margin-left:auto;font-size:12px;font-weight:600;">Planilla de Esteban ↗</a>
+    </div>
+    <div id="redets-kpis" class="kpi-grid" style="margin-bottom:14px;"></div>
+    <div id="redets-filtros" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;"></div>
+    <div id="redets-list"></div>
+    <div style="font-size:11px;color:var(--muted);margin-top:14px;">Fuente: planilla de cobros de Esteban, todas las pestañas. Cada redeterminación se cuenta una sola vez aunque se repita en varios meses.</div>
   </div>
 </div>
 
@@ -7570,7 +7584,7 @@ function openSeguimientoPanel(nombre) {
 // cobró, si sigue pendiente en la última programación, o si desapareció de
 // las pestañas sin cobro registrado (María, sep-2026).
 const _FONDO_OBRA_GENERICA = t => !t || /^\s*(fondo\s+de\s+reparo|redeterminaci[oó]n|fdo\.?\s*rep\.?)\s*$/i.test(t);
-function _fondosReparoConsolidado() {
+function _consolidadoEsteban(pred, esGenerica) {
   const meses = MES_ORDER.filter(m => COBROS_ESTEBAN[m] && typeof COBROS_ESTEBAN[m] === 'object');
   if (!meses.length) return null;
   const ult = meses[meses.length - 1];
@@ -7579,7 +7593,7 @@ function _fondosReparoConsolidado() {
   meses.forEach((m, mi) => {
     const x = COBROS_ESTEBAN[m];
     CATS.forEach(cat => (x[cat] || []).forEach(it => {
-      if (!(ES_FONDO_REPARO(it.obra) || ES_FONDO_REPARO(it.concepto))) return;
+      if (!pred(it)) return;
       const imp = Math.round(it.importe || 0);
       if (imp <= 0) return;
       const k = String(imp);
@@ -7598,7 +7612,7 @@ function _fondosReparoConsolidado() {
     else if (enUlt) { estado = 'pendiente'; sub = enUlt.cat; fecha = enUlt.fechaProb; }
     else { estado = 'desaparecido'; sub = ultimaAp.cat; fecha = ultimaAp.fechaProb; }
     // Obra: la primera aparición con un nombre real (no el genérico "Fondo de reparo")
-    const obraRaw = f.obrasRaw.find(o => !_FONDO_OBRA_GENERICA(o)) || '';
+    const obraRaw = f.obrasRaw.find(o => !esGenerica(o)) || '';
     const obra = obraRaw ? _segNorm(obraRaw) : null;
     // Concepto más descriptivo (el más largo) para mostrar
     const concepto = f.conceptos.slice().sort((a, b) => b.length - a.length)[0] || '(sin concepto)';
@@ -7617,13 +7631,25 @@ function _fondosReparoConsolidado() {
     sinAsignar:   sum(fondos.filter(f => f.sinAsignar && f.estado !== 'cobrado')),
   };
 }
-let _FONDOS_FILTRO = 'todos';
-function setFondosFiltro(f) { _FONDOS_FILTRO = f; renderFondosReparo(); }
-function renderFondosReparo() {
-  const kp = document.getElementById('fondos-kpis'), fl = document.getElementById('fondos-filtros'), list = document.getElementById('fondos-list');
-  const badge = document.getElementById('fondos-nav-badge');
+// Fondos de reparo y redeterminaciones: mismo consolidado, distinto filtro
+function _fondosReparoConsolidado() { return _consolidadoEsteban(it => ES_FONDO_REPARO(it.obra) || ES_FONDO_REPARO(it.concepto), _FONDO_OBRA_GENERICA); }
+function _redetsConsolidado() { return _consolidadoEsteban(it => !(ES_FONDO_REPARO(it.obra) || ES_FONDO_REPARO(it.concepto)) && (ES_REDET(it.obra) || ES_REDET(it.concepto)), _FONDO_OBRA_GENERICA); }
+const _CONSOL_FILTRO = { fondos: 'todos', redets: 'todos' };
+function setFondosFiltro(f) { _CONSOL_FILTRO.fondos = f; renderFondosReparo(); }
+function setRedetsFiltro(f) { _CONSOL_FILTRO.redets = f; renderRedets(); }
+const _CFG_FONDOS = { key: 'fondos', setFn: 'setFondosFiltro', ids: { kpis: 'fondos-kpis', filtros: 'fondos-filtros', list: 'fondos-list', badge: 'fondos-nav-badge' },
+  get: () => _fondosReparoConsolidado(), unidad: 'fondo', labelTotal: 'Total de fondos de reparo', color: '#f59e0b', generico: 'Fondo de reparo' };
+const _CFG_REDETS = { key: 'redets', setFn: 'setRedetsFiltro', ids: { kpis: 'redets-kpis', filtros: 'redets-filtros', list: 'redets-list', badge: 'redets-nav-badge' },
+  get: () => _redetsConsolidado(), unidad: 'redeterminación', labelTotal: 'Total de redeterminaciones', color: '#7c3aed', generico: 'Redeterminación' };
+function renderFondosReparo() { _renderConsolidadoSeccion(_CFG_FONDOS); }
+function renderRedets() { _renderConsolidadoSeccion(_CFG_REDETS); }
+function _renderConsolidadoSeccion(cfg) {
+  const kp = document.getElementById(cfg.ids.kpis), fl = document.getElementById(cfg.ids.filtros), list = document.getElementById(cfg.ids.list);
+  const badge = document.getElementById(cfg.ids.badge);
   if (!list) return;
-  const d = _fondosReparoConsolidado();
+  const FILTRO = _CONSOL_FILTRO[cfg.key];
+  const U = cfg.unidad, Us = cfg.unidad === 'fondo' ? 'fondos' : 'redeterminaciones';
+  const d = cfg.get();
   if (!d) {
     kp.innerHTML = ''; fl.innerHTML = '';
     list.innerHTML = '<div class="nd" style="text-align:center;padding:20px;font-size:13px;">Presioná "Actualizar datos" para cargar la planilla de Esteban</div>';
@@ -7634,7 +7660,7 @@ function renderFondosReparo() {
   const nDes = d.fondos.filter(f => f.estado === 'desaparecido').length;
   if (badge) { const n = nSin + nDes; badge.style.display = n ? '' : 'none'; badge.textContent = n; }
   const card = (lbl, val, sub, color, filtro) => `
-    <div class="kpi-card" style="cursor:pointer;border-left-color:${color};" onclick="setFondosFiltro('${filtro}')" title="Click para filtrar">
+    <div class="kpi-card" style="cursor:pointer;border-left-color:${color};" onclick="${cfg.setFn}('${filtro}')" title="Click para filtrar">
       <div class="kpi-label">${lbl}</div>
       <div class="kpi-value" style="color:${color};">${val}</div>
       <div class="kpi-sub">${sub}</div>
@@ -7642,20 +7668,20 @@ function renderFondosReparo() {
   const nCob = d.fondos.filter(f => f.estado === 'cobrado').length;
   const nPend = d.fondos.filter(f => f.estado === 'pendiente').length;
   kp.innerHTML =
-    card('Total de fondos de reparo', fmt(d.total), d.fondos.length + ' fondos', '#0f172a', 'todos') +
-    card('Cobrados', fmt(d.cobrado), nCob + ' fondo' + (nCob !== 1 ? 's' : ''), '#16a34a', 'cobrado') +
-    card('Pendientes de cobro', fmt(d.pendiente + d.desaparecido), (nPend + nDes) + ' fondo' + ((nPend + nDes) !== 1 ? 's' : ''), '#b45309', 'pendiente');
+    card(cfg.labelTotal, fmt(d.total), d.fondos.length + ' ' + Us, '#0f172a', 'todos') +
+    card('Cobrados', fmt(d.cobrado), nCob + ' ' + (nCob !== 1 ? Us : U), '#16a34a', 'cobrado') +
+    card('Pendientes de cobro', fmt(d.pendiente + d.desaparecido), (nPend + nDes) + ' ' + ((nPend + nDes) !== 1 ? Us : U), '#b45309', 'pendiente');
   // Avisos discretos, solo si corresponde
   const avisos = [];
-  if (nSin) avisos.push(`<span onclick="setFondosFiltro('sinAsignar')" style="cursor:pointer;font-size:12px;font-weight:700;background:#7c3aed;color:#fff;border-radius:12px;padding:4px 12px;">SIN ASIGNAR · ${nSin} fondo${nSin !== 1 ? 's' : ''} · ${fmt(d.sinAsignar)}</span>`);
-  if (nDes) avisos.push(`<span onclick="setFondosFiltro('desaparecido')" style="cursor:pointer;font-size:12px;background:#fff7ed;border:1px solid #fdba74;color:#9a3412;border-radius:12px;padding:4px 12px;" title="Figuraban en la programación de un mes y en las siguientes ya no, sin cobro registrado">${nDes} fondo${nDes !== 1 ? 's' : ''} por ${fmt(d.desaparecido)} sin seguimiento — consultar a Esteban</span>`);
+  if (nSin) avisos.push(`<span onclick="${cfg.setFn}('sinAsignar')" style="cursor:pointer;font-size:12px;font-weight:700;background:#7c3aed;color:#fff;border-radius:12px;padding:4px 12px;">SIN ASIGNAR · ${nSin} ${nSin !== 1 ? Us : U} · ${fmt(d.sinAsignar)}</span>`);
+  if (nDes) avisos.push(`<span onclick="${cfg.setFn}('desaparecido')" style="cursor:pointer;font-size:12px;background:#fff7ed;border:1px solid #fdba74;color:#9a3412;border-radius:12px;padding:4px 12px;" title="Figuraban en la programación de un mes y en las siguientes ya no, sin cobro registrado">${nDes} ${nDes !== 1 ? Us : U} por ${fmt(d.desaparecido)} sin seguimiento — consultar a Esteban</span>`);
   const chips = [['todos', 'Todos'], ['pendiente', 'Pendientes'], ['cobrado', 'Cobrados']];
-  fl.innerHTML = chips.map(([k, l]) => `<button onclick="setFondosFiltro('${k}')" style="font-size:12px;padding:5px 12px;border-radius:14px;border:1px solid ${_FONDOS_FILTRO === k ? 'var(--primary)' : 'var(--border)'};background:${_FONDOS_FILTRO === k ? 'var(--primary)' : '#fff'};color:${_FONDOS_FILTRO === k ? '#fff' : 'inherit'};cursor:pointer;font-weight:600;">${l}</button>`).join('')
+  fl.innerHTML = chips.map(([k, l]) => `<button onclick="${cfg.setFn}('${k}')" style="font-size:12px;padding:5px 12px;border-radius:14px;border:1px solid ${FILTRO === k ? 'var(--primary)' : 'var(--border)'};background:${FILTRO === k ? 'var(--primary)' : '#fff'};color:${FILTRO === k ? '#fff' : 'inherit'};cursor:pointer;font-weight:600;">${l}</button>`).join('')
     + (avisos.length ? `<span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;">${avisos.join('')}</span>` : '');
-  const filtrados = d.fondos.filter(f => _FONDOS_FILTRO === 'todos' ? true
-    : _FONDOS_FILTRO === 'sinAsignar' ? (f.sinAsignar && f.estado !== 'cobrado')
-    : _FONDOS_FILTRO === 'pendiente' ? f.estado !== 'cobrado'
-    : f.estado === _FONDOS_FILTRO);
+  const filtrados = d.fondos.filter(f => FILTRO === 'todos' ? true
+    : FILTRO === 'sinAsignar' ? (f.sinAsignar && f.estado !== 'cobrado')
+    : FILTRO === 'pendiente' ? f.estado !== 'cobrado'
+    : f.estado === FILTRO);
   // Agrupar por obra; "Sin asignar" siempre al final
   const grupos = {};
   filtrados.forEach(f => { const g = f.sinAsignar ? '__sin__' : f.obra; (grupos[g] = grupos[g] || []).push(f); });
@@ -7682,9 +7708,9 @@ function renderFondosReparo() {
     const pend = rows.filter(f => f.estado !== 'cobrado').reduce((s2, f) => s2 + f.importe, 0);
     const cobr = rows.filter(f => f.estado === 'cobrado').reduce((s2, f) => s2 + f.importe, 0);
     const sin = g === '__sin__';
-    return `<div style="background:#fff;border:1px solid ${sin ? '#ddd6fe' : 'var(--border)'};border-left:4px solid ${sin ? '#7c3aed' : '#f59e0b'};border-radius:10px;padding:10px 14px;margin-bottom:10px;">
+    return `<div style="background:#fff;border:1px solid ${sin ? '#ddd6fe' : 'var(--border)'};border-left:4px solid ${sin ? '#7c3aed' : cfg.color};border-radius:10px;padding:10px 14px;margin-bottom:10px;">
       <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:6px;">
-        ${sin ? `<span style="font-size:12px;font-weight:800;letter-spacing:.3px;background:#7c3aed;color:#fff;border-radius:6px;padding:4px 12px;">SIN ASIGNAR</span><span style="font-size:11.5px;color:#5b21b6;" title="En la planilla de Esteban la columna Obra dice solo 'Fondo de reparo'">Esteban debe completar la columna Obra en la planilla</span>`
+        ${sin ? `<span style="font-size:12px;font-weight:800;letter-spacing:.3px;background:#7c3aed;color:#fff;border-radius:6px;padding:4px 12px;">SIN ASIGNAR</span><span style="font-size:11.5px;color:#5b21b6;" title="En la planilla de Esteban la columna Obra dice solo '${cfg.generico}'">Esteban debe completar la columna Obra en la planilla</span>`
              : `<strong style="font-size:13px;" ${conocidas.size && !conocidas.has(g.toLowerCase().trim()) ? 'title="Nombre tal como lo escribió Esteban (no coincide con el Maestro de obras)" style="font-size:13px;text-decoration:underline dotted;text-decoration-color:#cbd5e1;"' : ''}>${g}</strong>`}
         <span style="margin-left:auto;font-size:12px;white-space:nowrap;">${pend > 0 ? `Pendiente <strong style="color:#b45309;">${fmt(pend)}</strong>` : ''}${cobr > 0 ? ` <span style="color:var(--muted);">${pend > 0 ? '· ' : ''}cobrado ${fmt(cobr)}</span>` : ''}</span>
       </div>
@@ -7820,18 +7846,20 @@ function renderCobranzaMargen() {
     // Fondos: misma fuente y mismos conteos que la sección "Fondos de reparo"
     // (consolidado por fondo); el click lleva a esa sección.
     const dF = (typeof _fondosReparoConsolidado === 'function') ? _fondosReparoConsolidado() : null;
+    const dR = (typeof _redetsConsolidado === 'function') ? _redetsConsolidado() : null;
     const card = (tipo, icono, nombre, b) => {
-      const esF = tipo === 'fondo' && dF;
-      const pend = esF ? dF.pendiente + dF.desaparecido : b.pend;
-      const cob  = esF ? dF.cobrado : b.cob;
-      const nPend = esF ? dF.fondos.filter(f => f.estado !== 'cobrado').length : b.items.filter(i => i.estado === 'pendiente').length;
-      const nObras = esF ? new Set(dF.fondos.filter(f => f.estado !== 'cobrado').map(f => f.obra || 'Sin asignar')).size : new Set(b.items.filter(i => i.estado === 'pendiente').map(i => i.obra)).size;
-      const unidad = tipo === 'fondo' ? 'fondo' : 'ítem';
+      const dd = tipo === 'fondo' ? dF : dR;
+      const esF = !!dd;
+      const pend = esF ? dd.pendiente + dd.desaparecido : b.pend;
+      const cob  = esF ? dd.cobrado : b.cob;
+      const nPend = esF ? dd.fondos.filter(f => f.estado !== 'cobrado').length : b.items.filter(i => i.estado === 'pendiente').length;
+      const nObras = esF ? new Set(dd.fondos.filter(f => f.estado !== 'cobrado').map(f => f.obra || 'Sin asignar')).size : new Set(b.items.filter(i => i.estado === 'pendiente').map(i => i.obra)).size;
+      const unidad = tipo === 'fondo' ? 'fondo' : 'redeterminación';
       return `
-      <div onclick="${esF ? "openTab('fondos')" : `openFondosRedetsPanel('${tipo}')`}" style="cursor:pointer;flex:1;min-width:250px;background:#fff;border:1px solid var(--border);border-left:4px solid ${tipo === 'fondo' ? '#f59e0b' : '#7c3aed'};border-radius:10px;padding:12px 16px;" title="${esF ? 'Click para ir a la sección Fondos de reparo' : 'Click para ver el detalle por obra'}">
+      <div onclick="${esF ? (tipo === 'fondo' ? "openTab('fondos')" : "openTab('redets')") : `openFondosRedetsPanel('${tipo}')`}" style="cursor:pointer;flex:1;min-width:250px;background:#fff;border:1px solid var(--border);border-left:4px solid ${tipo === 'fondo' ? '#f59e0b' : '#7c3aed'};border-radius:10px;padding:12px 16px;" title="${esF ? 'Click para ir a la sección ' + (tipo === 'fondo' ? 'Fondos de reparo' : 'Redeterminaciones') : 'Click para ver el detalle por obra'}">
         <div style="font-size:12px;font-weight:700;margin-bottom:6px;">${icono} ${nombre}</div>
         <div style="display:flex;gap:18px;flex-wrap:wrap;">
-          <span style="font-size:12px;">Pendiente: <strong style="color:#b45309;">${fmt(pend)}</strong> <span style="color:var(--muted);">· ${nPend} ${unidad}${nPend !== 1 ? 's' : ''} en ${nObras} obra${nObras !== 1 ? 's' : ''}</span></span>
+          <span style="font-size:12px;">Pendiente: <strong style="color:#b45309;">${fmt(pend)}</strong> <span style="color:var(--muted);">· ${nPend} ${nPend !== 1 ? (unidad === 'fondo' ? 'fondos' : 'redeterminaciones') : unidad} en ${nObras} obra${nObras !== 1 ? 's' : ''}</span></span>
           <span style="font-size:12px;">Cobrado: <strong class="pos-val">${fmt(cob)}</strong></span>
         </div>
       </div>`;
@@ -10784,6 +10812,7 @@ function renderAll() {
   renderSeguimientoCobros();
   renderCobranzaMargen();
   renderFondosReparo();
+  renderRedets();
   _syncKpiCardsTipo();
 }
 
