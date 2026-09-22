@@ -1117,186 +1117,85 @@
 <!-- ================================================================ -->
 <div class="tab-panel" id="tab-planta">
   <div class="kpi-grid">
-    <div class="kpi-card pos" style="cursor:pointer;" onclick="openTnPanel()" title="Ver detalle por obra">
-      <div class="kpi-label">TN TOTALES PRODUCIDAS · <span id="mes-label-planta"></span></div>
+    <div class="kpi-card pos" style="cursor:pointer;" onclick="openTnPanel()" title="Click para ver el detalle por destino">
+      <div class="kpi-label">TN PRODUCIDAS</div>
       <div class="kpi-value nd" id="kpi-tn-total">sin dato</div>
       <div class="kpi-sub" id="kpi-tn-sub">caliente + frío</div>
-      <div class="fuente">Real — <a href="https://docs.google.com/spreadsheets/d/1_c6El5XDWoy84J7UAe8xlA1WC03IdklQyraMZEbQiEs/edit" target="_blank" onclick="event.stopPropagation()">Remitos Oficiales</a></div>
+      <div class="fuente">Remitos oficiales · click para ver por destino</div>
     </div>
-    <div class="kpi-card neg" style="cursor:pointer;" onclick="openOCPlantaPanel()" title="Ver detalle de OC Insumos Planta">
-      <div class="kpi-label">OC INSUMOS PLANTA</div>
+    <div class="kpi-card neg" style="cursor:pointer;" onclick="openOCPlantaPanel()" title="Click para ver las OC del mes y la serie mensual">
+      <div class="kpi-label">INSUMOS PLANTA</div>
       <div class="kpi-value nd" id="kpi-planta-oc">sin dato</div>
-      <div class="kpi-sub" id="kpi-planta-oc-sub">Insumos asfalto y planta</div>
-      <div class="fuente"><a href="https://docs.google.com/spreadsheets/d/1UWUIW4sNtRBa90nYoGg88ghGK8SyyjKe9UdZLRcHMEE/edit" target="_blank" onclick="event.stopPropagation()">OC Insumos — Guillermo</a></div>
+      <div class="kpi-sub" id="kpi-planta-oc-sub">OC de insumos</div>
+      <div class="fuente">OC Insumos · click para ver el detalle</div>
     </div>
-    <div class="kpi-card neg" style="cursor:pointer;" onclick="openMOPlantaPanel()" title="Ver detalle de MO Planta">
+    <div class="kpi-card neg" style="cursor:pointer;" onclick="openMOPlantaPanel()" title="Click para ver el detalle de MO Planta">
       <div class="kpi-label">MO PLANTA</div>
       <div class="kpi-value nd" id="kpi-planta-mo">sin dato</div>
-      <div class="kpi-sub" id="kpi-planta-mo-sub">Mano de obra planta asfalto</div>
-      <div class="fuente"><a href="https://drive.google.com/drive/u/0/folders/1hQZoJovbFDHNsJhNiGMEueH1bLfXuuCP" target="_blank" onclick="event.stopPropagation()">TANGO — Mauro Orellana</a></div>
+      <div class="kpi-sub" id="kpi-planta-mo-sub">Mano de obra propia</div>
+      <div class="fuente">TANGO · click para ver el detalle</div>
     </div>
-    <div class="kpi-card" style="cursor:pointer;" onclick="openCostoTnPanel()" title="Ver detalle del cálculo">
-      <div class="kpi-label">COSTO PROMEDIO / TN</div>
+    <div class="kpi-card" style="cursor:pointer;" onclick="openCostoTnPanel()" title="Click para ver el cálculo">
+      <div class="kpi-label">COSTO / TN</div>
       <div class="kpi-value nd" id="kpi-planta-costo-tn">sin dato</div>
-      <div class="kpi-sub" id="kpi-planta-costo-tn-sub">caliente ≈ frío en costo</div>
-      <div class="fuente">100% real</div>
+      <div class="kpi-sub" id="kpi-planta-costo-tn-sub">Insumos + MO</div>
+      <div class="fuente">Click para ver el cálculo</div>
     </div>
-    <div class="kpi-card accent" style="cursor:pointer;" onclick="openMoTnPanel()" title="Ver detalle del cálculo">
-      <div class="kpi-label">MO PLANTA / TN</div>
+    <div class="kpi-card accent" style="cursor:pointer;" onclick="openMoTnPanel()" title="Click para ver el cálculo">
+      <div class="kpi-label">MO / TN</div>
       <div class="kpi-value nd" id="kpi-planta-mo-tn">sin dato</div>
-      <div class="kpi-sub" id="kpi-planta-mo-tn-sub">MO real / TN producidas</div>
-      <div class="fuente">⚠ Sube en lluvia</div>
+      <div class="kpi-sub" id="kpi-planta-mo-tn-sub">MO / tn producidas</div>
+      <div class="fuente">Click para ver el cálculo</div>
     </div>
   </div>
 
-  <div class="section" style="border:2px solid #22c55e33;background:linear-gradient(135deg,#f0fdf4,#fff);">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;">
-      <div>
-        <div style="font-size:15px;font-weight:700;color:var(--text);">🏭 Stock de asfalto y capacidad de producción</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:3px;">✅ Corte real confirmado por Agustín · 07/05/2026. Se suman ingresos cuando entren por el formulario.</div>
-      </div>
-      <span class="badge real" style="flex-shrink:0;margin-left:12px;">✅ Real — Agustín</span>
+  <div class="section">
+    <div class="section-title" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      🏭 Stock de asfalto
+      <span style="font-size:11px;font-weight:500;color:var(--muted);" id="stock-mp-label"></span>
+      <button onclick="openAjusteStockPanel()" style="margin-left:auto;font-size:11px;font-weight:700;padding:4px 12px;border-radius:14px;border:1px solid var(--border);background:#fff;color:var(--text);cursor:pointer;" title="Cargar un nuevo corte de stock (Agustín)">✏️ Ajustar stock</button>
     </div>
-
-    <!-- Fila de métricas -->
-    <div style="display:flex;align-items:stretch;gap:12px;margin-top:16px;flex-wrap:wrap;">
-      <div class="clickable-panel" onclick="openStockDetallePanel()" title="Ver cómo se forma el stock" style="cursor:pointer;flex:1;min-width:160px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center;">
-        <div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.06em;margin-bottom:8px;">STOCK ASFALTO (MATERIA PRIMA)</div>
-        <div style="font-size:32px;font-weight:800;color:#16a34a;" id="stock-mp-valor">700 tn</div>
-        <div style="font-size:11px;color:var(--primary);margin-top:4px;font-weight:700;">Ver cómo se forma →</div>
+    <div style="display:flex;align-items:stretch;gap:12px;flex-wrap:wrap;">
+      <div class="clickable-panel" onclick="openStockDetallePanel()" title="Click para ver cómo se forma el stock" style="cursor:pointer;flex:1;min-width:160px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center;">
+        <div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.06em;margin-bottom:8px;">ASFALTO (MATERIA PRIMA)</div>
+        <div style="font-size:32px;font-weight:800;color:#16a34a;" id="stock-mp-valor">sin dato</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;" id="ajuste-stock-fecha-sub"></div>
       </div>
-
-      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 4px;color:var(--muted);">
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 4px;color:var(--muted);" title="25 tn de asfalto (1 camión) rinden 500 tn de mezcla">
         <div style="font-size:22px;font-weight:800;color:var(--text);">×20</div>
-        <div style="font-size:10px;color:var(--muted);">(25tn→500tn)</div>
       </div>
-
-      <div style="flex:1;min-width:160px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center;">
-        <div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.06em;margin-bottom:8px;">MEZCLA TOTAL PRODUCIBLE</div>
-        <div style="font-size:32px;font-weight:800;color:var(--text);" id="stock-producible-valor">14.000 tn</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:4px;" id="stock-producible-sub">700 tn × 20</div>
+      <div class="clickable-panel" onclick="openStockDetallePanel()" title="Click para ver cómo se forma el stock" style="cursor:pointer;flex:1;min-width:160px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center;">
+        <div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.06em;margin-bottom:8px;">MEZCLA PRODUCIBLE</div>
+        <div style="font-size:32px;font-weight:800;color:var(--text);" id="stock-producible-valor">sin dato</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;" id="stock-producible-sub">caliente o frío</div>
       </div>
-
-    </div>
-
-    <!-- Fila resumen total -->
-    <!-- Fórmula dinámica: base + ingresos - consumo -->
-    <div style="margin-top:14px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px 16px;font-size:13px;line-height:2;" id="stock-formula-desglose">
-      <span style="color:var(--muted);font-size:11px;">Actualizá datos para ver el cálculo</span>
-    </div>
-
-    <!-- Tabla de movimientos post-corte: salidas caliente/frío + ingresos -->
-    <div id="salidas-post-corte" class="clickable-panel" style="display:none;margin-top:10px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px 16px;font-size:12px;"></div>
-
-    <!-- Notas -->
-    <div style="margin-top:10px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px 16px;font-size:12px;color:var(--text);line-height:1.7;">
-      <div id="stock-formula-nota">📐 <strong>Fórmula:</strong> 25 tn asfalto (1 camión) → 500 tn mezcla. Ratio ×20. Con 700 tn stock → <strong>14.000 tn de mezcla producible</strong> (caliente o frío). Toda salida —caliente o frío— descuenta asfalto (÷20).</div>
-      <div style="margin-top:6px;">📋 <strong>Formulario de ingresos listo.</strong> Cuando entre asfalto nuevo, se registra en el form y suma al stock. Por ahora sin ingresos registrados — base: 700 tn al 07/05.</div>
-    </div>
-  </div>
-
-  <!-- Ajuste de stock -->
-  <div class="section" style="border:2px solid #fde68a;background:linear-gradient(135deg,#fffbeb,#fff);">
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
-      <div style="font-size:15px;font-weight:700;color:var(--text);">✏️ Ajuste de stock</div>
-      <span style="font-size:11px;font-weight:700;background:#fef3c7;color:#92400e;border:1px solid #fde68a;border-radius:12px;padding:2px 10px;">Agustín</span>
-    </div>
-    <!-- Ajuste 1: Asfalto materia prima -->
-    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
-      <div style="background:var(--card);border:1.5px solid #86efac;border-radius:10px;padding:12px 20px;text-align:center;min-width:130px;">
-        <div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.06em;margin-bottom:6px;">🛢️ ASFALTO (MATERIA PRIMA)</div>
-        <div style="font-size:26px;font-weight:800;color:#16a34a;" id="ajuste-stock-actual">700 tn</div>
-        <div style="font-size:10px;color:#16a34a;margin-top:4px;" id="ajuste-stock-fecha">Agustín · 07/05/2026</div>
-      </div>
-      <div style="font-size:24px;color:var(--muted);">→</div>
-      <div style="display:flex;flex-direction:column;gap:8px;">
-        <label style="font-size:12px;font-weight:600;color:var(--text);">Nuevo stock de asfalto:</label>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-          <input type="number" id="ajuste-input" min="0" step="0.5" placeholder="ej: 680"
-            style="width:110px;padding:8px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:15px;font-weight:700;color:var(--text);outline:none;"
-            onkeydown="if(event.key==='Enter') ajustarStock('asfalto')">
-          <span style="font-size:13px;color:var(--muted);font-weight:600;">tn</span>
-          <button onclick="ajustarStock('asfalto')" id="ajuste-btn"
-            style="padding:8px 18px;background:var(--accent);border:none;border-radius:7px;color:#fff;font-weight:700;cursor:pointer;font-size:13px;transition:opacity .2s;">
-            Guardar ajuste
-          </button>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <label style="font-size:11px;color:var(--muted);">Fecha del corte:</label>
-          <input type="date" id="ajuste-fecha-input"
-            style="padding:5px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;color:var(--text);">
-          <span style="font-size:10px;color:var(--muted);">(vacío = hoy)</span>
-        </div>
-        <div id="ajuste-feedback" style="font-size:12px;min-height:16px;"></div>
-      </div>
-    </div>
-    <div class="nota-fuente" style="margin-top:12px;">
-      <strong>Registro:</strong> Se guarda en <a href="https://docs.google.com/spreadsheets/d/1yZArsIKYMfq9UPUXyiASXtDNXyubTjFx3PPW2VjG-uA/edit?gid=60310599#gid=60310599" target="_blank">Formulario Ingreso Asfalto Agustín → pestaña Ajuste de stock</a>
     </div>
   </div>
 
   <!-- Costo de producción caliente / frío -->
   <div class="section">
-    <div class="section-title">Costo de producción · <span id="mes-label-planta-costo"></span></div>
+    <div class="section-title" title="Insumos y MO del mes distribuidos según las toneladas de cada proceso">Costo de producción · <span id="mes-label-planta-costo"></span></div>
     <div id="planta-costo-container">
       <div class="nd" style="text-align:center;padding:20px;font-size:13px;">Actualizá datos para ver el desglose</div>
     </div>
   </div>
 
-  <!-- Gráficos históricos -->
   <div class="grid2">
     <div class="section">
-      <div class="section-title">Producción mensual <span class="badge real">Remitos · Real</span></div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">Tn totales (caliente + frío)</div>
+      <div class="section-title">Producción mensual (tn)</div>
       <div id="planta-chart-produccion"></div>
     </div>
     <div class="section">
-      <div class="section-title">Tn caliente por obra · <span id="mes-label-remitos-obra"></span> <span class="badge real">Remitos · Real</span></div>
+      <div class="section-title">Despachado por destino · <span id="mes-label-remitos-obra"></span></div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Obra</th><th class="num">Tn caliente</th><th class="num">%</th></tr></thead>
+          <thead><tr><th>Destino</th><th class="num">Caliente</th><th class="num">Frío</th><th class="num">Total</th></tr></thead>
           <tbody id="tbody-remitos-obra">
-            <tr><td colspan="3" class="nd" style="text-align:center;padding:20px;">Actualizá datos para ver</td></tr>
+            <tr><td colspan="4" class="nd" style="text-align:center;padding:20px;">Actualizá datos para ver</td></tr>
           </tbody>
         </table>
       </div>
-      <div class="nota-fuente"><a href="https://docs.google.com/spreadsheets/d/1_c6El5XDWoy84J7UAe8xlA1WC03IdklQyraMZEbQiEs/edit" target="_blank">Remitos Oficiales (Nico Dall'Agata)</a> — columna OBRA · Base para prorratear MO en "Margen por obra"</div>
-    </div>
-  </div>
-
-  <div class="grid2">
-    <div class="section">
-      <div class="section-title">Insumos planta (OC reales) + Producción</div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Mes</th><th class="num">OC Insumos (Guillermo)</th><th class="num">N° órdenes</th><th class="num">Tn Caliente</th><th class="num">Tn Frío</th></tr></thead>
-          <tbody id="tbody-planta-produccion"></tbody>
-        </table>
-      </div>
-      <div class="nota-fuente"><strong>Insumos:</strong> <a href="https://docs.google.com/spreadsheets/d/1UWUIW4sNtRBa90nYoGg88ghGK8SyyjKe9UdZLRcHMEE/edit" target="_blank">OC Insumos para Obras (Guillermo Konicek)</a> — Leído: 13/05/2026 — filtro OC con descripción "Planta Asfalto/Warnes" — <strong>Tn:</strong> REMITOS OFICIALES (Nico Dall'Agata) — columna PRECIO vacía, tn sin precio; solicitar a Nico que complete el Google Sheet para habilitar Costo/tn</div>
-    </div>
-
-    <div class="section">
-      <div class="section-title">OC Planta Asfalto (Repuestos/insumos) <span class="badge real">Dato real</span></div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Proveedor</th><th>N° OC</th><th class="num">Monto</th><th>Descripción</th></tr></thead>
-          <tbody id="tbody-oc-planta"></tbody>
-        </table>
-      </div>
-      <div class="nota-fuente"><strong>Fuente:</strong> OC Repuestos para Equipos.xlsx — Responsable: Alberto Lescano — Leído: 12/05/2026 — Columnas usadas: N° Orden, Proveedor, Monto, Descripción — Filtro: sector Planta Asfalto (6 órdenes visibles)</div>
-    </div>
-  </div>
-
-  <div class="section" data-restrict="sueldos">
-    <div class="section-title">Análisis MO / tn <span class="badge">sin dato — requiere TANGO</span></div>
-    <div class="kpi-grid">
-      <div class="kpi-card neg">
-        <div class="kpi-label">MO Planta · <span id="mes-label-mo-planta"></span></div>
-        <div class="kpi-value nd" id="kpi-planta-mo">sin dato</div>
-        <div class="kpi-sub" id="kpi-planta-mo-sub">Actualizá datos para cargar desde TANGO</div>
-        <div class="fuente">TANGO (Mauro Orellana) — clasificación: Pta. Asfalto</div>
-      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:8px;">Remitos oficiales · click en una fila para ver los remitos</div>
     </div>
   </div>
 </div>
@@ -5763,6 +5662,7 @@ function renderMODetalle() {
 
 function renderOCPlanta() {
   const tbody = document.getElementById('tbody-oc-planta');
+  if (!tbody) return;
   tbody.innerHTML = OC_PLANTA.map(oc => `
     <tr>
       <td>${oc.proveedor}</td>
@@ -8510,10 +8410,34 @@ function openOCPlantaPanel() {
       </tbody></table>`;
   }
 
+  // Serie mensual: OC de la planta + tn producidas
+  const mesesSerie = MES_ORDER.filter(m => getOCPlantaInterna(m) || (REMITOS_ASFALTO[m] && REMITOS_ASFALTO[m].total > 0));
+  const serie = mesesSerie.length ? `
+    <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:22px 0 6px;">Por mes</div>
+    <table style="width:100%;border-collapse:collapse;">
+      <thead><tr style="background:#f8fafc;border-bottom:2px solid var(--border);">
+        <th style="text-align:left;padding:7px 10px;font-size:11px;color:var(--muted);font-weight:600;">MES</th>
+        <th style="text-align:right;padding:7px 10px;font-size:11px;color:var(--muted);font-weight:600;">INSUMOS</th>
+        <th style="text-align:right;padding:7px 10px;font-size:11px;color:var(--muted);font-weight:600;">N° OC</th>
+        <th style="text-align:right;padding:7px 10px;font-size:11px;color:var(--muted);font-weight:600;">TN PRODUCIDAS</th>
+        <th style="text-align:right;padding:7px 10px;font-size:11px;color:var(--muted);font-weight:600;">$/TN</th>
+      </tr></thead>
+      <tbody>${mesesSerie.map(m => {
+        const oc = getOCPlantaInterna(m); const r = REMITOS_ASFALTO[m];
+        const tn = r && r.total > 0 ? r.total : null;
+        return `<tr style="border-top:1px solid var(--border);${m === mesActual ? 'background:#fffbeb;font-weight:700;' : ''}">
+          <td style="padding:7px 10px;font-size:12px;">${MES[m] || m}</td>
+          <td style="padding:7px 10px;font-size:12px;text-align:right;" class="neg-val">${oc ? fmt(oc.total) : '—'}</td>
+          <td style="padding:7px 10px;font-size:12px;text-align:right;color:var(--muted);">${oc && oc.nOC ? oc.nOC : '—'}</td>
+          <td style="padding:7px 10px;font-size:12px;text-align:right;">${tn != null ? fmtTn(tn) + ' tn' : '—'}</td>
+          <td style="padding:7px 10px;font-size:12px;text-align:right;">${oc && tn ? '$' + Math.round(oc.total / tn).toLocaleString('es-AR') : '—'}</td>
+        </tr>`; }).join('')}
+      </tbody></table>` : '';
+
   content.innerHTML = `
-    <div class="panel-title">OC Insumos — Planta de Asfalto</div>
-    <div class="panel-sub">${mesLabel} · OC Insumos — Guillermo Konicek</div>
-    <div style="margin-top:14px;">${html}</div>`;
+    <div class="panel-title">Insumos — Planta de Asfalto</div>
+    <div class="panel-sub">${mesLabel} · OC de insumos con destino Planta Asfalto / Warnes (Guillermo Konicek)</div>
+    <div style="margin-top:14px;">${html}${serie}</div>`;
   panel.classList.add('open');
   overlay.classList.add('open');
 }
@@ -9681,7 +9605,12 @@ function renderStockDisplay() {
   };
 
   if (el.mpValor)    el.mpValor.textContent  = stockStr + ' tn';
-  if (el.mpLabel)    el.mpLabel.textContent   = '✅ Calculado al día de hoy';
+  if (el.mpLabel)    el.mpLabel.textContent   = 'Corte de ' + (stockData.usuarioBase || stockUsuario) + ' · ' + (stockData.fechaBase || stockFecha) + ' · click para ver cómo se forma';
+  const elFechaSub = document.getElementById('ajuste-stock-fecha-sub');
+  if (elFechaSub) {
+    const ing = stockData.ingresos || 0, cons = stockData.consumo || 0;
+    elFechaSub.textContent = (ing > 0 || cons > 0) ? 'Corte ' + fmtTn(stockData.stockBase != null ? stockData.stockBase : stockAsfalto) + ' tn' + (ing > 0 ? ' + ' + fmtTn(ing) + ' ingresos' : '') + (cons > 0 ? ' − ' + fmtTn(cons) + ' consumo' : '') : 'Sin movimientos desde el corte';
+  }
   if (el.prodValor)  el.prodValor.textContent = prodStr + ' tn';
   if (el.prodSub)    el.prodSub.textContent   = stockStr + ' tn × 20';
   if (el.ajusteActual) el.ajusteActual.textContent = stockStr + ' tn';
@@ -9747,6 +9676,46 @@ function renderStockDisplay() {
   if (el.formulaNota) el.formulaNota.innerHTML =
     '📐 <strong>Fórmula:</strong> 25 tn asfalto (1 camión) → 500 tn mezcla. Ratio ×20. Con ' + stockStr +
     ' tn stock → <strong>' + prodStr + ' tn de mezcla producible</strong> (caliente o frío). Toda salida —caliente o frío— descuenta asfalto (÷20).';
+}
+
+// Formulario de ajuste de stock (Agustín) — en panel lateral, no a la vista del directorio
+function openAjusteStockPanel() {
+  const panel   = document.getElementById('sidePanel');
+  const overlay = document.getElementById('overlay');
+  const content = document.getElementById('panelContent');
+  if (!panel || !content) return;
+  content.innerHTML = `
+    <div class="panel-title">Ajuste de stock de asfalto</div>
+    <div class="panel-sub">Carga manual de Agustín · reinicia el cálculo desde la fecha del corte</div>
+    <div style="margin-top:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+      <div style="background:var(--card);border:1.5px solid #86efac;border-radius:10px;padding:12px 20px;text-align:center;min-width:130px;">
+        <div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.06em;margin-bottom:6px;">STOCK ACTUAL</div>
+        <div style="font-size:26px;font-weight:800;color:#16a34a;" id="ajuste-stock-actual">${fmtTn(stockAsfalto)} tn</div>
+        <div style="font-size:10px;color:#16a34a;margin-top:4px;" id="ajuste-stock-fecha">${(stockData.usuarioBase || stockUsuario) + ' · ' + (stockData.fechaBase || stockFecha)}</div>
+      </div>
+      <div style="font-size:24px;color:var(--muted);">→</div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <label style="font-size:12px;font-weight:600;color:var(--text);">Nuevo stock de asfalto</label>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <input type="number" id="ajuste-input" min="0" step="0.5" placeholder="ej: 680" style="width:110px;padding:8px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:15px;font-weight:700;color:var(--text);outline:none;" onkeydown="if(event.key==='Enter') ajustarStock('asfalto')">
+          <span style="font-size:13px;color:var(--muted);font-weight:600;">tn</span>
+          <button onclick="ajustarStock('asfalto')" id="ajuste-btn" style="padding:8px 18px;background:var(--accent);border:none;border-radius:7px;color:#fff;font-weight:700;cursor:pointer;font-size:13px;">Guardar ajuste</button>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <label style="font-size:11px;color:var(--muted);">Fecha del corte</label>
+          <input type="date" id="ajuste-fecha-input" style="padding:5px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;color:var(--text);">
+          <span style="font-size:10px;color:var(--muted);">(vacío = hoy)</span>
+        </div>
+        <div id="ajuste-feedback" style="font-size:12px;min-height:16px;"></div>
+      </div>
+    </div>
+    <div style="margin-top:16px;font-size:11px;color:var(--muted);line-height:1.6;">
+      Se guarda en <a href="https://docs.google.com/spreadsheets/d/1yZArsIKYMfq9UPUXyiASXtDNXyubTjFx3PPW2VjG-uA/edit?gid=60310599#gid=60310599" target="_blank">Formulario Ingreso Asfalto → pestaña Ajuste de stock</a>.
+      Desde la fecha del corte se suman los ingresos del formulario y se descuenta la mezcla producida (÷20).
+    </div>`;
+  panel.classList.add('open');
+  overlay.classList.add('open');
+  setTimeout(() => { const i = document.getElementById('ajuste-input'); if (i) i.focus(); }, 50);
 }
 
 // Modelo simplificado: un solo stock de asfalto (el frío ya no es stock aparte).
@@ -9849,39 +9818,54 @@ async function ajustarStock(tipo) {
 
 function renderRemitosPorObra() {
   const mesLbl = document.getElementById('mes-label-remitos-obra');
-  if (mesLbl) mesLbl.textContent = MES[mesActual] || mesActual;
+  if (mesLbl) mesLbl.textContent = mesActual === 'total' ? 'Total' : (MES[mesActual] || mesActual);
 
   const tbody = document.getElementById('tbody-remitos-obra');
   if (!tbody) return;
 
   const rem = REMITOS_ASFALTO[mesActual];
   if (!rem || !rem.porObra || Object.keys(rem.porObra).length === 0) {
-    tbody.innerHTML = '<tr><td colspan="3" class="nd" style="text-align:center;padding:20px;">Sin datos de obra en remitos para el mes seleccionado</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" class="nd" style="text-align:center;padding:20px;">Sin remitos para el período</td></tr>';
     return;
   }
 
-  const tnTotal = rem.caliente || 0;
+  const esc = v => (v || '').replace(/'/g, "\\'");
+  const tot = { c: 0, f: 0 };
   const filas = Object.entries(rem.porObra)
-    .filter(([, v]) => v.caliente > 0)
-    .sort((a, b) => b[1].caliente - a[1].caliente)
-    .map(([obra, v]) => {
-      const pct = tnTotal > 0 ? ((v.caliente / tnTotal) * 100).toFixed(1) : '—';
-      return `<tr>
-        <td style="font-size:12px;">${obra}</td>
-        <td class="num" style="font-weight:700;">${fmtTn(v.caliente)} tn</td>
-        <td class="num" style="color:var(--muted);font-size:11px;">${pct}%</td>
+    .map(([obra, v]) => ({ obra, c: v.caliente || 0, f: v.frio || 0, t: (v.caliente || 0) + (v.frio || 0) }))
+    .filter(r => r.t > 0)
+    .sort((a, b) => b.t - a.t)
+    .map(r => {
+      tot.c += r.c; tot.f += r.f;
+      return `<tr style="cursor:pointer;" onclick="openSalidasAsfalto(null, '${esc(r.obra)}', '${mesActual}'); _panelBack = null;" title="Ver los remitos">
+        <td style="font-size:12px;">${r.obra}</td>
+        <td class="num" style="${r.c > 0 ? '' : 'color:var(--muted);'}">${r.c > 0 ? fmtTn(r.c) : '—'}</td>
+        <td class="num" style="${r.f > 0 ? '' : 'color:var(--muted);'}">${r.f > 0 ? fmtTn(r.f) : '—'}</td>
+        <td class="num" style="font-weight:700;white-space:nowrap;">${fmtTn(r.t)} tn</td>
       </tr>`;
     });
 
   if (filas.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="3" class="nd" style="text-align:center;padding:20px;">No hay tn caliente con obra asignada</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" class="nd" style="text-align:center;padding:20px;">Sin remitos para el período</td></tr>';
     return;
   }
 
+  // Remitos sin destino cargado: diferencia contra el total del período, para que la tabla cierre con la tarjeta
+  const sinC = Math.max(0, (rem.caliente || 0) - tot.c), sinF = Math.max(0, (rem.frio || 0) - tot.f);
+  if (sinC + sinF > 0.05) {
+    filas.push(`<tr style="color:var(--muted);" title="Remitos sin destino cargado en la planilla de Roberto">
+      <td style="font-size:12px;">Sin destino cargado</td>
+      <td class="num">${sinC > 0.05 ? fmtTn(sinC) : '—'}</td>
+      <td class="num">${sinF > 0.05 ? fmtTn(sinF) : '—'}</td>
+      <td class="num" style="white-space:nowrap;">${fmtTn(sinC + sinF)} tn</td>
+    </tr>`);
+    tot.c += sinC; tot.f += sinF;
+  }
   filas.push(`<tr style="background:#f8fafc;font-weight:700;border-top:2px solid var(--border);">
-    <td>TOTAL caliente</td>
-    <td class="num">${fmtTn(tnTotal)} tn</td>
-    <td class="num" style="color:var(--muted);font-size:11px;">100%</td>
+    <td>TOTAL</td>
+    <td class="num">${fmtTn(tot.c)}</td>
+    <td class="num">${fmtTn(tot.f)}</td>
+    <td class="num" style="white-space:nowrap;">${fmtTn(tot.c + tot.f)} tn</td>
   </tr>`);
   tbody.innerHTML = filas.join('');
 }
@@ -9923,7 +9907,7 @@ function renderPlanta() {
   if (kpiOC) {
     if (ocTotal != null) {
       kpiOC.textContent = fmt(ocTotal); kpiOC.className = 'kpi-value neg-val';
-      if (kpiOCSub) kpiOCSub.textContent = (ocPlanta.nOC || '') + (ocPlanta.nOC ? ' OC del mes' : 'OC planta');
+      if (kpiOCSub) kpiOCSub.textContent = ocPlanta.nOC ? ocPlanta.nOC + ' OC' : 'OC de insumos';
     } else {
       kpiOC.textContent = 'sin dato'; kpiOC.className = 'kpi-value nd';
       if (kpiOCSub) kpiOCSub.textContent = 'Insumos asfalto y planta';
@@ -9935,9 +9919,10 @@ function renderPlanta() {
   if (kpiMOPl) {
     if (moTotal != null) {
       kpiMOPl.textContent = (moEsEstim ? '~' : '') + fmt(moTotal); kpiMOPl.className = 'kpi-value neg-val';
-      if (kpiMOPlSub) kpiMOPlSub.textContent = moEsEstim
-        ? 'Estimado — prorrateo desde ' + (MES[moEstimObj.refMes] || moEstimObj.refMes)
-        : moPlanta.length + ' centros de costo — TANGO';
+      if (kpiMOPlSub) kpiMOPlSub.textContent = moEsEstim ? 'Estimado · TANGO sin cargar' : 'Propia · TANGO';
+      kpiMOPl.parentElement.title = moEsEstim
+        ? 'Sin dato de TANGO para el mes: se estima prorrateando desde ' + (MES[moEstimObj.refMes] || moEstimObj.refMes) + ' por días transcurridos'
+        : moPlanta.length + ' centros de costo cargados en TANGO';
     } else {
       kpiMOPl.textContent = 'sin dato'; kpiMOPl.className = 'kpi-value nd';
       if (kpiMOPlSub) kpiMOPlSub.textContent = 'Mano de obra planta asfalto';
@@ -9958,9 +9943,7 @@ function renderPlanta() {
       const cptn = Math.round(cptnProd + asfPorTn);
       kpiCostoTn.textContent = '$' + cptn.toLocaleString('es-AR') + '/tn';
       kpiCostoTn.className   = 'kpi-value';
-      if (kpiCostoTnSub) kpiCostoTnSub.textContent = precioAsfTn != null
-        ? 'producción + asfalto (÷' + RATIO + ')'
-        : 'OC + MO (falta costo asfalto)';
+      if (kpiCostoTnSub) kpiCostoTnSub.textContent = precioAsfTn != null ? 'Insumos + MO + asfalto' : 'Insumos + MO';
     } else {
       kpiCostoTn.textContent = 'sin dato'; kpiCostoTn.className = 'kpi-value nd';
       if (kpiCostoTnSub) kpiCostoTnSub.textContent = 'requiere TN + costos';
@@ -9975,34 +9958,10 @@ function renderPlanta() {
       const motn = Math.round(moTotal / tnTotal);
       kpiMoTn.textContent = '$' + motn.toLocaleString('es-AR') + '/tn';
       kpiMoTn.className   = 'kpi-value';
-      if (kpiMoTnSub) kpiMoTnSub.textContent = fmt(moTotal) + ' MO (Mauro) / ' + fmtTn(tnTotal) + ' tn';
+      if (kpiMoTnSub) kpiMoTnSub.textContent = (moEsEstim ? '~' : '') + fmt(moTotal) + ' / ' + fmtTn(tnTotal) + ' tn';
     } else {
       kpiMoTn.textContent = 'sin dato'; kpiMoTn.className = 'kpi-value nd';
       if (kpiMoTnSub) kpiMoTnSub.textContent = 'requiere MO Planta + TN';
-    }
-  }
-
-  // Tabla histórica — generada dinámicamente para todos los meses con remitos
-  const tbodyPlanta = document.getElementById('tbody-planta-produccion');
-  if (tbodyPlanta) {
-    const mesesRemitos = MES_ORDER.filter(m => REMITOS_ASFALTO[m]);
-    if (mesesRemitos.length === 0) {
-      tbodyPlanta.innerHTML = '<tr><td colspan="5" class="nd" style="text-align:center;padding:12px;">Sin datos de remitos — actualizá datos</td></tr>';
-    } else {
-      const fmtOC = v => v ? '$' + fmt(v) : '—';
-      tbodyPlanta.innerHTML = mesesRemitos.map(mes => {
-        const r = REMITOS_ASFALTO[mes];
-        const ocMes = OC_INSUMOS[mes];
-        const ocPlanta = ocMes ? ocMes.items.find(it => it.obra && it.obra.toLowerCase().includes('planta')) : null;
-        const ocVal = ocPlanta ? ocPlanta.monto : (ocMes ? null : null);
-        return `<tr>
-          <td>${MES[mes]}</td>
-          <td class="num neg-val">${ocVal ? fmtOC(ocVal) : '—'}</td>
-          <td class="num">${ocMes ? ocMes.nOC + ' OC' : '—'}</td>
-          <td class="${r && r.caliente > 0 ? 'num' : 'nd num'}">${r && r.caliente > 0 ? fmtTn(r.caliente) + ' tn' : '—'}</td>
-          <td class="${r && r.frio > 0 ? 'num' : 'nd num'}">${r && r.frio > 0 ? fmtTn(r.frio) + ' tn' : '—'}</td>
-        </tr>`;
-      }).join('');
     }
   }
 
@@ -10064,11 +10023,11 @@ function renderPlantaCosto() {
             <span style="font-size:15px;font-weight:700;">${tn != null ? fmtTn(tn) + ' tn' : nd}</span>
           </div>
           <div style="${rowStyle}">
-            <span style="${labelStyle}">Insumos (Guillermo)</span>
+            <span style="${labelStyle}">Insumos</span>
             <span style="font-size:15px;font-weight:700;color:#d97706;">${oc != null ? fmt(Math.round(oc)) : nd}</span>
           </div>
           <div style="${rowStyle}">
-            <span style="${labelStyle}">MO (Mauro)</span>
+            <span style="${labelStyle}">MO propia</span>
             <span style="font-size:15px;font-weight:700;color:#ef4444;">${mo != null ? fmt(Math.round(mo)) : nd}</span>
           </div>
           <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;margin-top:2px;">
@@ -10080,7 +10039,6 @@ function renderPlantaCosto() {
   }
 
   container.innerHTML = `
-    <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">Insumos y MO distribuidos proporcionalmente según toneladas de cada proceso</div>
     <div style="display:flex;gap:16px;flex-wrap:wrap;">
       ${col('🔴 MEZCLA CALIENTE', tnCal, ocCal, moCal, cptnCal, '#fca5a5', '#fef2f2')}
       ${col('❄ ASFALTO FRÍO', tnFrio, ocFrio, moFrio, cptnFrio, '#93c5fd', '#eff6ff')}
@@ -10094,7 +10052,7 @@ function renderPlantaCharts() {
   // ── Gráfico 1: Producción mensual (barras apiladas caliente + frío) ──
   const prodEl = document.getElementById('planta-chart-produccion');
   if (prodEl) {
-    const meses = Object.keys(REMITOS_ASFALTO).filter(m => REMITOS_ASFALTO[m] && REMITOS_ASFALTO[m].total > 0);
+    const meses = MES_ORDER.filter(m => REMITOS_ASFALTO[m] && REMITOS_ASFALTO[m].total > 0);
     if (meses.length === 0) {
       prodEl.innerHTML = '<div class="nd" style="text-align:center;padding:24px;font-size:13px;">Actualizá datos para ver el gráfico</div>';
     } else {
@@ -10409,23 +10367,6 @@ function renderMOClasif() {
   }
   renderRepuestosMes();
 
-  const elLabelPlanta = document.getElementById('mes-label-mo-planta');
-  if (elLabelPlanta) elLabelPlanta.textContent = mesLabel;
-  const plantaArr = getMOPlanta(mesActual);
-  const kpiPlanta = document.getElementById('kpi-planta-mo');
-  const kpiPlantaSub = document.getElementById('kpi-planta-mo-sub');
-  if (kpiPlanta) {
-    if (plantaArr.length > 0) {
-      const total = plantaArr.reduce((s, r) => s + r.monto, 0);
-      kpiPlanta.textContent = fmt(total);
-      kpiPlanta.className = 'kpi-value neg-val';
-      if (kpiPlantaSub) kpiPlantaSub.textContent = plantaArr.map(r => r.centro).join(', ');
-    } else {
-      kpiPlanta.textContent = 'sin dato';
-      kpiPlanta.className = 'kpi-value nd';
-      if (kpiPlantaSub) kpiPlantaSub.textContent = 'Actualizá datos para cargar desde TANGO';
-    }
-  }
 }
 
 // ── TOTAL histórico: sintetiza la entrada 'total' de cada store mensual ──
