@@ -6691,6 +6691,7 @@ function _labelCortoAudit(txt, nombreObra) {
 }
 
 function runAuditorias() {
+  if (typeof _normalizarObrasEsteban === 'function') _normalizarObrasEsteban();
   AUDIT_RESULTADOS = [];
   const mesE = _auditMesEsteban();
   const obrasJ = (GENERADO_POR_OBRA && GENERADO_POR_OBRA.obras) || [];
@@ -7075,6 +7076,14 @@ const ALIAS_ESTEBAN = {
   'Canteros Av. Soldati': 'Cantero Soldati',
   'Muni de Tafi viejo': 'Lomas de Tafí',
   'Pérez Palavecino': '9 de Julio y Perez Palavecino',
+  'Pavimentac. Lomas de Tafí': 'Lomas de Tafí',
+  'Desagues Pluviales': 'Country Pilar',            // Country del Pilar es la obra de desagües (mayo-2026)
+  'Obra Corrientes': 'UTE Corrientes',
+  'Obra Licit. Nº 81982': 'Licitación asfalto',
+  'Obra Licit. Nº 81976': 'Licitación hormigon',
+  'Obra Licit.Nº 81841 (Sector 3)': 'Licitación 81841',
+  'Obra Licit.Nº 81844 (Sector 5)': 'Licitación 81844',
+  'Repav. Calle Gerónimo Helguera': 'Geronimo Helguera',
   // En la pestaña de julio los certificados de R357 aparecen como "Ruta 307 - Quilmes"
   'Ruta 307 - Quilmes': 'Ruta 357 - Quilmes',
   // La misma provisión aparece con 3 nombres según el mes (may/jun/jul)
@@ -7091,10 +7100,37 @@ const SEG_CATS = [
   ['menosProbable', 'menosProbable', '#94a3b8'],
 ];
 function _segNorm(o) { return ALIAS_ESTEBAN[o] || o || '(sin obra)'; }
+// Obras que Esteban carga con UN nombre pero Agustín separa en varias: la
+// etapa se deduce del CONCEPTO. Se aplica una vez sobre los datos cargados
+// (it.obra pasa al código del Maestro; el rótulo original queda en obraOriginal).
+const SPLIT_OBRA_ESTEBAN = {
+  'Obra SAT': [
+    [/etapa\s*iii\b|etapa\s*3\b/i, 'SAT Pta. Muñecas Etapa 3'],
+    [/etapa\s*ii\b|etapa\s*2\b/i,  'SAT Pta. Muñecas Etapa 2'],
+    [/etapa\s*i\b|etapa\s*1\b/i,   'SAT Pta. Muñecas Etapa 1'],
+    [/roca/i,                        'SAT Avenida Roca'],
+    [/.*/,                           'SAT Pta. Muñecas Etapa 1'],   // sin etapa en el texto: el primer anticipo fue de la Etapa 1
+  ],
+};
+function _normalizarObrasEsteban() {
+  if (!COBROS_ESTEBAN) return;
+  Object.keys(COBROS_ESTEBAN).forEach(m => {
+    const x = COBROS_ESTEBAN[m]; if (!x || typeof x !== 'object') return;
+    ['cobrados', 'facturados', 'noCobrados', 'sinFecha', 'menosProbable'].forEach(cat => (x[cat] || []).forEach(it => {
+      if (it._norm) return;
+      it._norm = true;
+      const reglas = SPLIT_OBRA_ESTEBAN[(it.obra || '').trim()];
+      if (!reglas) return;
+      const r = reglas.find(([re]) => re.test(it.concepto || ''));
+      if (r) { it.obraOriginal = it.obra; it.obra = r[1]; }
+    }));
+  });
+}
 
 // Reconstruye por obra: cobrado acumulado (todos los meses del archivo,
 // deduplicado) + pendiente según la foto del último mes cargado.
 function _seguimientoCobros() {
+  if (typeof _normalizarObrasEsteban === 'function') _normalizarObrasEsteban();
   const meses = MES_ORDER.filter(m => COBROS_ESTEBAN[m]);
   if (!meses.length) return null;
   const ult = meses[meses.length - 1];
@@ -10675,6 +10711,7 @@ function _ajustarAlquilerTC() {
 
 function renderAll() {
   _ajustarAlquilerTC();
+  _normalizarObrasEsteban();
   _sintetizarTotales();
   _renderMonthButtons();
   renderMargen();
