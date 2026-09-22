@@ -6895,6 +6895,37 @@ function runAuditorias() {
     });
   }
 
+  // ── Chequeo 7: obras con cobros en Esteban que no existen en el archivo de Agustín ──
+  // El chequeo de huérfanas mira solo lo pendiente firme; una obra ya cobrada
+  // (o mapeada como menos probable) que Agustín nunca cargó no aparecía.
+  // Excluye ingresos que no son obras (Taller, Air Liquide), centros internos,
+  // provisiones (las sigue aparte) y fondos/redeterminaciones.
+  if (seg) {
+    const agSet = new Set();
+    ((GENERADO_POR_OBRA && GENERADO_POR_OBRA.obras) || []).concat((GENERADO_POR_OBRA && GENERADO_POR_OBRA.obrasSinPeriodo) || []).forEach(o => {
+      if (o.cod_obra) agSet.add(o.cod_obra.toLowerCase().trim());
+      if (o.nombre)   agSet.add(o.nombre.toLowerCase().trim());
+      (MAPA_OBRAS_AUDIT[o.nombre] || []).forEach(a => { agSet.add((a || '').toLowerCase().trim()); agSet.add((_segNorm(a) || '').toLowerCase().trim()); });
+    });
+    const yaTitulos = new Set(AUDIT_RESULTADOS.map(r => (r.titulo || '').toLowerCase().trim()));
+    Object.entries(seg.obras).forEach(([n, o]) => {
+      const nk = n.toLowerCase().trim();
+      if (agSet.has(nk) || yaTitulos.has(nk)) return;
+      if (ES_INGRESO_NO_OBRA(n) || esCentroInternoConocido(n) || ES_FONDO_REPARO(n) || ES_REDET(n) || /^provisi|^venta de|^obra no disponible|^\(sin obra\)|^sin obra/i.test(n)) return;
+      const total = (o.cob || 0) + (o.pend || 0);
+      if (total <= AUDIT_TOLERANCIA) return;
+      AUDIT_RESULTADOS.push({
+        chequeo: 'Sin cargar en Agustín',
+        titulo: n,
+        monto: total,
+        grave: total >= AUDIT_GRAVE,
+        resumen: `Esteban registra esta obra (${o.cob > 0 ? 'cobrado ' + fmt(o.cob) : ''}${o.cob > 0 && o.pend > 0 ? ' · ' : ''}${o.pend > 0 ? 'pendiente ' + fmt(o.pend) : ''}) y no existe en el archivo de obras de Agustín. Hay que cargarla ahí con el nombre del Maestro para que entre en la contribución marginal.`,
+        responsable: 'Agustín',
+        items: (o.itemsCob || []).concat(o.itemsPend || []).map(i => ({ txt: i.txt, monto: i.monto, cat: 'Esteban · ' + (i.cat || 'cobrado'), fila: i.fila, gid: i.gid, src: 'esteban' })),
+      });
+    });
+  }
+
   // ── Chequeo 6: certificados de Agustín sin programación de cobro en Esteban ──
   // Obras que Agustín tiene "A Cobrar" y que no aparecen en ninguna
   // programación de Esteban (ni mapeadas). Mismo criterio que las filas
