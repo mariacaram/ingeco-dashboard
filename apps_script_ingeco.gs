@@ -1332,40 +1332,41 @@ function leerGeneradoPorObra() {
 // TC: dólar oficial promedio mensual (TC_USD_MENSUAL)
 // ============================================================
 
-// Devuelve el TC mensual desde la tabla hardcodeada o, si no está,
-// lo obtiene automáticamente del promedio diario de estadisticasbcra.site
-// Obtiene el TC USD oficial promedio del mes desde la API del BCRA.
-// Siempre intenta la API primero; usa TC_USD_MENSUAL como fallback si falla.
+// TC USD oficial promedio del mes (compra/venta) desde api.argentinadatos.com.
+// La API anterior (estadisticasbcra.site) dejó de responder y todo caía en el
+// respaldo fijo de 1.400 — julio a septiembre 2026 se valuaron mal (María).
 function fetchTCMensual(mesKey) {
-  const MES_NUM = { ene:'01', feb:'02', mar:'03', abr:'04', may:'05', jun:'06',
-                    jul:'07', ago:'08', sep:'09', oct:'10', nov:'11', dic:'12' };
-  const mesNum = MES_NUM[mesKey];
-  if (!mesNum) return TC_USD_MENSUAL[mesKey] || 1400;
-
-  const year   = String(new Date().getFullYear());
-  const prefix = year + '-' + mesNum + '-';
-
-  try {
-    const url  = 'https://api.estadisticasbcra.site/usd_of';
-    const resp = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
-    if (resp.getResponseCode() === 200) {
-      const data = JSON.parse(resp.getContentText());
-      const dias = data.filter(function(item) { return item.d && item.d.startsWith(prefix); });
-      if (dias.length > 0) {
-        const avg = Math.round(dias.reduce(function(s, i) { return s + i.v; }, 0) / dias.length);
-        Logger.log('TC API ' + mesKey + ' ' + year + ': $' + avg + ' (promedio ' + dias.length + ' días hábiles)');
-        TC_USD_MENSUAL[mesKey] = avg; // actualiza tabla para re-uso en la misma ejecución
-        return avg;
+  const MAP = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  const idx = MAP.indexOf(mesKey);
+  if (idx < 0) return TC_USD_MENSUAL[mesKey] || 1400;
+  // Serie diaria del dólar oficial (misma fuente que usa el tablero para el
+  // precio del asfalto). Se baja una vez por ejecución y se promedia por mes.
+  if (!fetchTCMensual._prom) {
+    fetchTCMensual._prom = {};
+    try {
+      const resp = UrlFetchApp.fetch('https://api.argentinadatos.com/v1/cotizaciones/dolares/oficial', { muteHttpExceptions: true });
+      if (resp.getResponseCode() === 200) {
+        const year = String(new Date().getFullYear());
+        const acc = {};
+        JSON.parse(resp.getContentText()).forEach(function(r) {
+          if (!r || !r.fecha || String(r.fecha).indexOf(year) !== 0) return;
+          const m = parseInt(String(r.fecha).slice(5, 7)); if (!(m >= 1 && m <= 12)) return;
+          const v = ((+r.compra || 0) + (+r.venta || 0)) / 2; if (!(v > 0)) return;
+          const k = MAP[m - 1]; (acc[k] = acc[k] || { s: 0, n: 0 }); acc[k].s += v; acc[k].n++;
+        });
+        Object.keys(acc).forEach(function(k) { fetchTCMensual._prom[k] = Math.round(acc[k].s / acc[k].n * 100) / 100; });
+        Logger.log('TC dólar oficial promedio por mes: ' + JSON.stringify(fetchTCMensual._prom));
+      } else {
+        Logger.log('TC API: error HTTP ' + resp.getResponseCode() + ' — usando respaldo');
       }
-      Logger.log('TC API: sin datos para ' + mesKey + ' ' + year + ' — usando fallback');
-    } else {
-      Logger.log('TC API: error HTTP ' + resp.getResponseCode() + ' — usando fallback');
+    } catch (e) {
+      Logger.log('TC API error: ' + e + ' — usando respaldo');
     }
-  } catch(e) {
-    Logger.log('TC API error (' + mesKey + '): ' + e + ' — usando fallback hardcodeado');
   }
-
-  // Fallback: valor hardcodeado si la API falla o no tiene el mes aún
+  if (fetchTCMensual._prom[mesKey]) return fetchTCMensual._prom[mesKey];
+  // Sin datos del mes (mes futuro o API caída): último mes anterior con dato,
+  // después la tabla de respaldo, después 1400.
+  for (var k = idx - 1; k >= 0; k--) if (fetchTCMensual._prom[MAP[k]]) return fetchTCMensual._prom[MAP[k]];
   return TC_USD_MENSUAL[mesKey] || 1400;
 }
 

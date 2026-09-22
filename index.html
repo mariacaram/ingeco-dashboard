@@ -2454,7 +2454,7 @@ function renderMargen() {
       kpiOC.textContent = fmt(_insObras);
       kpiOC.className   = 'kpi-value neg-val';
       document.getElementById('kpi-oc-insumos-sub').innerHTML = _sinImputar > 1000
-        ? `<span title="OC sin obra cargada en la columna OBRA GENERAL, o de provisiones/alquiler: no se imputan a ninguna obra y no restan del margen. Click en la tarjeta para ver cuáles son">+ <strong style="color:#b45309;">${fmt(_sinImputar)} sin obra asignada</strong></span>`
+        ? `<span title="OC que no van a ninguna obra: sin obra cargada, o imputadas a provisiones / alquiler / placeholders. No restan del margen. Click en la tarjeta para ver cómo se forman">+ <strong style="color:#b45309;">${fmt(_sinImputar)} no imputados a obras</strong></span>`
         : 'Imputados a obras';
     } else {
       kpiOC.textContent = 'sin dato';
@@ -2528,30 +2528,21 @@ function renderMargen() {
     if (totalACobrar != null && totalEgresosConAlq != null) {
       const margenVal = totalACobrar - totalEgresosConAlq;
       const pct = ((margenVal / totalACobrar) * 100).toFixed(1).replace('.', ',');
-      kpiMg.textContent = (moEsEstimado ? '~' : '') + fmtM(margenVal) + ' (' + pct + '% sobre Generado)';
+      kpiMg.textContent = (moEsEstimado ? '~' : '') + fmtM(margenVal);
       kpiMg.className   = 'kpi-value ' + (margenVal >= 0 ? 'pos-val' : 'neg-val');
       if (subEl) {
-        if (moEsEstimado) {
-          subEl.textContent = '⚠️ Incluye MO estimada (' + MES[mesActual] + ' sin cargar)';
-          subEl.style.color = '#b45309';
-        } else {
-          subEl.textContent = 'Generado − Insumos − MO − Asfalto − Alquiler · ' + (MES[mesActual] || mesActual);
-          subEl.style.color = '';
-        }
+        // Una línea: el % y, si corresponde, la marca de MO estimada. El
+        // cálculo completo se ve al abrir el detalle (María, sep-2026).
+        subEl.textContent = pct + '% de lo generado' + (moEsEstimado ? ' · MO estimada' : '');
+        subEl.style.color = moEsEstimado ? '#b45309' : '';
+        subEl.title = moEsEstimado ? 'TANGO de ' + (MES[mesActual] || mesActual) + ' sin cargar: la MO es una estimación y el número cambia cuando se cargue' : '';
       }
-      if (kpiMgFormula) {
-        const partes = [];
-        if (mgInsumos > 0) partes.push('Insumos ' + fmt(mgInsumos));
-        if (mgMO > 0)      partes.push((moEsEstimado ? 'MO propia~ ' : 'MO propia ') + fmt(mgMO));
-        if (mgAsf > 0)     partes.push('Asfalto ' + fmt(mgAsf));
-        if (mgAlq > 0)     partes.push('Alq. ' + fmt(mgAlq));
-        kpiMgFormula.textContent = fmt(totalACobrar) + ' − (' + partes.join(' + ') + ') · coincide con el TOTAL de la tabla';
-      }
+      if (kpiMgFormula) kpiMgFormula.textContent = 'Generado − costos directos · click para ver el cálculo';
     } else {
       kpiMg.textContent = 'sin dato';
       kpiMg.className   = 'kpi-value nd';
       if (subEl) subEl.style.color = '';
-      if (kpiMgFormula) kpiMgFormula.textContent = 'Generado − (Insumos + MO propia + Costo asfalto + Alquiler)';
+      if (kpiMgFormula) kpiMgFormula.textContent = 'Generado − costos directos';
     }
   }
 
@@ -5459,8 +5450,10 @@ function renderAlquilerEquipos() {
   } else {
     if (kpiEl)  { kpiEl.textContent = fmt(_alqObrasTabla != null ? _alqObrasTabla : totalObrasAlq); kpiEl.className = 'kpi-value neg-val'; }
     if (kpiSub) {
-      kpiSub.textContent = datos.tcUsd ? 'TC oficial $' + datos.tcUsd.toLocaleString('es-AR') + '/USD' : 'Equipos propios en obra';
-      kpiSub.title = 'Horas de equipos propios en obra × tarifa en USD.' + (_alqResto > 1000 ? ' Además hay ' + fmt(_alqResto) + ' de horas cargadas sin obra en los partes diarios, que no se imputan.' : '');
+      kpiSub.textContent = datos.tcUsd ? 'TC oficial $' + Math.round(datos.tcUsd).toLocaleString('es-AR') + '/USD' : 'Equipos propios en obra';
+      kpiSub.title = 'Horas de equipos propios en obra × tarifa en USD × ' + (datos.tcFuente || 'TC del mes')
+        + (datos.tcOriginal ? ' (el backend había usado $' + Math.round(datos.tcOriginal).toLocaleString('es-AR') + ', se ajustó al promedio real)' : '')
+        + (_alqResto > 1000 ? '. Además hay ' + fmt(_alqResto) + ' de horas cargadas sin obra en los partes diarios, que no se imputan.' : '');
     }
   }
 
@@ -8815,6 +8808,38 @@ function openOCInsumosPanel() {
   const ocMes = OC_INSUMOS[mesActual];
 
   let html = '';
+  // ── Cómo se forma el "+ $X no imputados a obras" de la tarjeta ──
+  // = OC del mes (no INT) que no caen en ninguna fila de obra de la tabla:
+  // placeholders (Provisión de Pavimax, Alquiler de equipos, Obra no
+  // disponible…) y OC sin obra cargada.
+  let noImputHtml = '';
+  if (ocMes && ocMes.items && ocMes.items.length) {
+    const dNI = mesActual !== 'total' ? computeMargenObrasMes(mesActual) : computeMargenObrasTotal();
+    const keysObra = new Set();
+    ((dNI && dNI.rows) || []).filter(r => !r.otroGasto).forEach(r => {
+      if (r.o.cod_obra) keysObra.add(r.o.cod_obra.toLowerCase().trim());
+      if (r.o.nombre) keysObra.add(r.o.nombre.toLowerCase().trim());
+    });
+    const noImput = ocMes.items.filter(i => !ocEsInt(i) && !keysObra.has((i.codigo || '').toLowerCase().trim()) && !keysObra.has((i.obra || '').toLowerCase().trim()))
+      .sort((a, b) => b.monto - a.monto);
+    const totNI = noImput.reduce((s2, i) => s2 + i.monto, 0);
+    if (totNI > 1000) {
+      noImputHtml = `<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:10px 12px;margin-bottom:14px;">
+        <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:6px;">
+          <strong style="font-size:12.5px;color:#92400e;">No imputados a obras</strong>
+          <span style="font-size:11px;color:#92400e;">OC cargadas a provisiones, alquiler o sin obra: no restan de la contribución marginal</span>
+          <strong style="margin-left:auto;color:#b45309;white-space:nowrap;">${fmt(totNI)}</strong>
+        </div>
+        <table style="width:100%;font-size:11.5px;">
+          ${noImput.map(i => `<tr style="border-top:1px solid #fde68a;">
+            <td style="padding:5px 6px;"><strong>${i.codigo || i.obra || '(sin obra)'}</strong> <span style="color:var(--muted);">· ${i.nOC} OC</span>
+              <div style="font-size:10.5px;color:var(--muted);">${(i.proveedores || []).slice().sort((a, b) => b.monto - a.monto).slice(0, 4).map(p => p.proveedor + ' ' + fmt(p.monto)).join(' · ')}${(i.proveedores || []).length > 4 ? ' · …' : ''}</div></td>
+            <td style="padding:5px 6px;text-align:right;font-weight:700;white-space:nowrap;">${fmt(i.monto)}</td>
+          </tr>`).join('')}
+        </table>
+      </div>`;
+    }
+  }
   // ── OC sin obra asignada: una por una, con link a su fila para corregir ──
   let sinObraHtml = '';
   if (ocMes && ocMes.sinObra && ocMes.sinObra.items && ocMes.sinObra.items.length) {
@@ -8939,7 +8964,7 @@ function openOCInsumosPanel() {
   content.innerHTML = `
     <div class="panel-title">OC Insumos</div>
     <div class="panel-sub">${mesLabel} · Guillermo Konicek</div>
-    ${sinObraHtml}
+    ${noImputHtml}${sinObraHtml}
     <div style="margin-top:14px;">${html}</div>`;
   panel.classList.add('open');
   overlay.classList.add('open');
@@ -10406,7 +10431,30 @@ function openGastoEstructuraPanel(cuentaFull) {
   overlay.classList.add('open');
 }
 
+// El backend valúa el alquiler de equipos en pesos con un TC que puede ser
+// un valor de respaldo (1.400 fijo si su API falla). Como todos los importes
+// son lineales en el TC (pf_usd × tc), acá se reescalan al dólar oficial
+// promedio real del mes (misma fuente que el precio del asfalto). Idempotente.
+function _ajustarAlquilerTC() {
+  if (!ALQUILER_EQUIPOS || !DOLAR_OFICIAL_MES) return;
+  Object.keys(ALQUILER_EQUIPOS).forEach(m => {
+    const a = ALQUILER_EQUIPOS[m], d = DOLAR_OFICIAL_MES[m];
+    if (!a || typeof a !== 'object' || !a.tcUsd || !d || !(d.promedio > 0)) return;
+    const f = d.promedio / a.tcUsd;
+    if (Math.abs(f - 1) < 0.002) { a.tcFuente = a.tcFuente || 'dólar oficial promedio del mes'; return; }
+    if (a.tcOriginal == null) a.tcOriginal = a.tcUsd;
+    ['totalArs', 'totalObras', 'totalPlanta', 'totalPredio'].forEach(k => { if (typeof a[k] === 'number') a[k] = Math.round(a[k] * f); });
+    (a.porObra || []).forEach(o => {
+      if (typeof o.costoArs === 'number') o.costoArs = Math.round(o.costoArs * f);
+      (o.equipos || []).forEach(e => { if (typeof e.costoArs === 'number') e.costoArs = Math.round(e.costoArs * f); });
+    });
+    a.tcUsd = d.promedio;
+    a.tcFuente = 'dólar oficial promedio del mes' + (d.parcial ? ' (parcial, ' + d.dias + ' días)' : '') + ' — api.argentinadatos.com';
+  });
+}
+
 function renderAll() {
+  _ajustarAlquilerTC();
   _sintetizarTotales();
   _renderMonthButtons();
   renderMargen();
