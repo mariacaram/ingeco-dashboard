@@ -2608,8 +2608,8 @@ function renderMargen() {
           : `real ${fmt(totReal)} · teórica ${fmt(totTeo)}`;
         const tipProv = totReal <= 0
           ? 'Certificación teórica (tn × precio de convenio): Esteban todavía no cargó la real'
-          : 'Certificación de provisiones: real cargada por Esteban; entre paréntesis la teórica (tn × precio de convenio)';
-        spans.push(`<span style="white-space:nowrap;" title="${tipProv}">Provisiones: <strong>${fmt(provCert.total)}</strong> <span style="font-size:9px;">(${detLbl})</span></span>`);
+          : `Certificación de provisiones: ${detLbl} (real cargada por Esteban; teórica = tn × precio de convenio)`;
+        spans.push(`<span style="white-space:nowrap;" title="${tipProv}">Provisiones: <strong>${fmt(provCert.total)}</strong></span>`);
       }
       kpiBreak.innerHTML = spans.join('<span style="color:var(--border);">·</span>');
     }
