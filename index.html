@@ -3561,7 +3561,7 @@ function _renderOtrosGastosBlock(otrosGastos) {
         ${th('Insumos')}${th('Alquiler')}${th('TN')}${th('$/tn')}${th('Cert. teórica')}${th('Cert. real')}
       </tr></thead>
       <tbody>
-        ${otrosGastos.map((r, i) => _grupoOtroGastoTR(r, i)).join('')}
+        ${otrosGastos.slice().sort((a, b) => ((b.certTeorica || 0) - (a.certTeorica || 0)) || ((b.tnObraTotal || 0) - (a.tnObraTotal || 0)) || ((b.insumos || 0) - (a.insumos || 0))).map((r, i) => _grupoOtroGastoTR(r, i)).join('')}
         <tr style="background:#f8fafc;font-weight:700;border-top:2px solid var(--border);">
           <td style="font-size:12px;">TOTAL</td>
           ${tdT(totIns > 0 ? fmt(totIns) : '—')}
@@ -3839,8 +3839,11 @@ function renderResumenObra() {
       if (r.tnObraTotal > 0) chartData.tn.push({ label, caliente: r.tnObra, frio: r.tnFrioObra, total: r.tnObraTotal });
     });
 
+    // Orden: contribución marginal TOTAL (acumulada) de mayor a menor; en la
+    // vista TOTAL o sin acumulado, por la del período (María, sep-2026).
+    const _ordenContrib = (a, b) => ((b.margenAcum != null ? b.margenAcum : b.margen) || 0) - ((a.margenAcum != null ? a.margenAcum : a.margen) || 0);
     const filas = rows.filter(r => !r.extra)
-      .sort((a, b) => b.margen - a.margen)
+      .sort(_ordenContrib)
       .map(r => _filaMargenHTML(r, moEsEstim, tnTotalGlobal));
 
     const extras = rows.filter(r => r.extra && !r.otroGasto);
@@ -3848,7 +3851,7 @@ function renderResumenObra() {
       filas.push(`<tr><td colspan="8" style="background:#f8fafc;padding:5px 12px;font-size:11px;color:var(--muted);border-top:2px solid var(--border);font-style:italic;">
         Con gasto/salida del mes · ${extras.length} obra${extras.length !== 1 ? 's' : ''} con OC de insumos o remitos, sin certificado en obras activas
       </td></tr>`);
-      extras.forEach(r => filas.push(_filaMargenHTML(r, moEsEstim, tnTotalGlobal)));
+      extras.slice().sort(_ordenContrib).forEach(r => filas.push(_filaMargenHTML(r, moEsEstim, tnTotalGlobal)));
     }
 
     // "Otros Gastos o salidas": placeholders sin clasificar (Obra no disponible,
@@ -3961,7 +3964,7 @@ function renderResumenTipoContrato() {
   // Un cuadro por tipo: obras ordenadas por margen + fila de subtotal
   const cuadros = lista.map((g, i) => {
     const mgColor = g.tot.margen > 0 ? 'pos-val' : g.tot.margen < 0 ? 'neg-val' : '';
-    const filas = [...g.rows].sort((a, b) => b.margen - a.margen)
+    const filas = [...g.rows].sort((a, b) => ((b.margenAcum != null ? b.margenAcum : b.margen) || 0) - ((a.margenAcum != null ? a.margenAcum : a.margen) || 0))
       .map(r => r.otroGasto ? _filaOtroGastoHTML(r) : _filaMargenHTML(r, moEsEstim, tnTotalGlobal));
     filas.push(`<tr style="background:#f8fafc;font-weight:700;border-top:2px solid var(--border);">
       <td style="font-size:12px;">TOTAL</td>
