@@ -9818,11 +9818,20 @@ function renderEgresosChart() {
   }
 
   const total = (ocMes || 0) + (moMes || 0) + (asfMes || 0) + (alqMes || 0);
+  // Detalle para el tooltip: composición + las 3 obras que más pesan
+  const topObras = f => filasEgr.map(r => ({ n: r.o.cod_obra || r.o.nombre, v: f(r) || 0 })).filter(x => x.v > 0)
+    .sort((a, b) => b.v - a.v).slice(0, 3).map(x => `${x.n}: ${fmt(x.v)}`).join(' · ');
+  const pEgr = mesActual !== 'total' ? _precioAsfaltoObra(mesActual) : null;
+  const tnEgr = sumEgr(r => r.tnObraTotal);
   const items = [
-    { label: 'Insumos' + (mohMes > 0 ? ' (incl. MO tercerizada ' + fmt(mohMes) + ')' : ''), valor: ocMes || 0, color: '#f59e0b' },
-    { label: (moEsEstimEgr ? '~' : '') + 'MO propia', valor: moMes || 0, color: '#ef4444' },
-    { label: 'Costo asfalto',    valor: asfMes || 0, color: '#a855f7' },
-    { label: 'Alquiler equipos', valor: alqMes || 0, color: '#3b82f6' },
+    { label: 'Insumos' + (mohMes > 0 ? ' (incl. MO tercerizada ' + fmt(mohMes) + ')' : ''), valor: ocMes || 0, color: '#f59e0b',
+      det: 'OC de materiales ' + fmt((ocMes || 0) - mohMes) + (mohMes > 0 ? ' + MO tercerizada ' + fmt(mohMes) : ''), top: topObras(r => r.insumos) },
+    { label: (moEsEstimEgr ? '~' : '') + 'MO propia', valor: moMes || 0, color: '#ef4444',
+      det: moEsEstimEgr ? 'Estimada por prorrateo de tn (TANGO del mes sin cargar)' : 'Imputada por obra según TANGO (col. OBRA)', top: topObras(r => r.moObra) },
+    { label: 'Costo asfalto',    valor: asfMes || 0, color: '#a855f7',
+      det: fmtTn(tnEgr) + ' tn' + (pEgr ? ' × $' + (pEgr.caliente || 0).toLocaleString('es-AR') + '/tn (ref. Cartellone)' : ' a precio de referencia de cada mes'), top: topObras(r => r.costoAsfObra) },
+    { label: 'Alquiler equipos', valor: alqMes || 0, color: '#3b82f6',
+      det: 'Horas de equipos propios en obra × tarifa (partes diarios)', top: topObras(r => r.alquiler) },
   ].filter(i => i.valor > 0);
 
   // ── Donut chart SVG ──────────────────────────────────────────
@@ -9832,17 +9841,17 @@ function renderEgresosChart() {
   // Posicionamos cada segmento con rotate() para garantizar que el anillo cierre.
   // Cada círculo empieza en 3 o'clock; rotamos -90 + acumulado para arrancar desde las 12.
   let cumPct = 0;
-  const arcs = items.map(item => {
+  const arcs = items.map((item, idx) => {
     const pct    = item.valor / total;
     const arcLen = pct * C;
     const deg    = cumPct * 360 - 90;
     cumPct += pct;
-    return `<circle cx="${CX}" cy="${CY}" r="${R}" fill="none"
+    return `<circle class="egr-arc" data-idx="${idx}" cx="${CX}" cy="${CY}" r="${R}" fill="none"
       stroke="${item.color}" stroke-width="${SW}"
       stroke-dasharray="${arcLen} ${C - arcLen}"
       stroke-dashoffset="0"
       transform="rotate(${deg} ${CX} ${CY})"
-      stroke-linecap="butt"/>`;
+      stroke-linecap="butt" style="cursor:pointer;transition:stroke-width .15s;"/>`;
   }).join('');
 
   const svg = `
@@ -9854,10 +9863,10 @@ function renderEgresosChart() {
     </svg>`;
 
   // ── Leyenda ──────────────────────────────────────────────────
-  const leyenda = items.map(item => {
+  const leyenda = items.map((item, idx) => {
     const pct = (item.valor / total * 100).toFixed(1);
     return `
-      <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);">
+      <div class="egr-leg" data-idx="${idx}" style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);cursor:default;border-radius:6px;transition:background .15s;">
         <div style="width:14px;height:14px;border-radius:3px;background:${item.color};flex-shrink:0;"></div>
         <div style="flex:1;">
           <div style="font-size:12px;color:var(--muted);font-weight:600;">${item.label}</div>
@@ -9873,7 +9882,32 @@ function renderEgresosChart() {
       <div style="flex:1;min-width:200px;">${leyenda}</div>
     </div>
     <div style="font-size:11px;color:var(--muted);margin-top:8px;">Son los mismos egresos que restan del margen (coinciden con la tarjeta Margen y con el TOTAL de la tabla). La tarjeta OC Insumos muestra además las OC sin obra asignada, que no se imputan a ninguna obra.</div>
+    <div id="egr-tip" style="display:none;position:fixed;z-index:200;pointer-events:none;background:#0f172a;color:#fff;border-radius:8px;padding:9px 12px;font-size:12px;line-height:1.45;max-width:320px;box-shadow:0 6px 20px rgba(0,0,0,.25);"></div>
     `;
+  // Hover: resalta el segmento (en la rosca y en la leyenda) y muestra el detalle
+  const tip = container.querySelector('#egr-tip');
+  const arcsEl = [...container.querySelectorAll('.egr-arc')], legEl = [...container.querySelectorAll('.egr-leg')];
+  const resaltar = idx => {
+    arcsEl.forEach(a => a.setAttribute('stroke-width', +a.dataset.idx === idx ? SW + 8 : SW));
+    legEl.forEach(l => l.style.background = +l.dataset.idx === idx ? '#f8fafc' : '');
+  };
+  const mostrar = (idx, ev) => {
+    const it = items[idx]; if (!it || !tip) return;
+    const pct = (it.valor / total * 100).toFixed(1).replace('.', ',');
+    tip.innerHTML = `<div style="font-weight:700;color:${it.color};margin-bottom:2px;">${it.label}</div>
+      <div style="font-size:15px;font-weight:800;">${fmt(it.valor)} <span style="font-size:11px;font-weight:600;color:#cbd5e1;">· ${pct}% de los egresos</span></div>
+      <div style="color:#cbd5e1;margin-top:4px;">${it.det}</div>
+      ${it.top ? `<div style="color:#e2e8f0;margin-top:4px;font-size:11px;"><span style="color:#94a3b8;">Mayores:</span> ${it.top}</div>` : ''}`;
+    tip.style.display = 'block';
+    const x = Math.min(ev.clientX + 14, window.innerWidth - 340), y = Math.min(ev.clientY + 14, window.innerHeight - 120);
+    tip.style.left = x + 'px'; tip.style.top = y + 'px';
+    resaltar(idx);
+  };
+  const ocultar = () => { if (tip) tip.style.display = 'none'; resaltar(-1); };
+  [...arcsEl, ...legEl].forEach(el => {
+    el.addEventListener('mousemove', ev => mostrar(+el.dataset.idx, ev));
+    el.addEventListener('mouseleave', ocultar);
+  });
 }
 
 function renderMOClasif() {
