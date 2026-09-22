@@ -3440,18 +3440,7 @@ function _filasOtroGastoTR(r) {
       const pendReal = real ? real.total - real.totalFirme : 0;
       const tipReal = real ? real.items.map(i => `${i.concepto}: ${fmt(i.importe)}${i.cat === 'cobrados' || i.cat === 'facturados' ? '' : ' (programado — no suma)'}`).join(' · ') : '';
       const urlReal = (real && typeof _sheetUrlAudit === 'function' && real.items[0]) ? _sheetUrlAudit(real.items[0]) : '';
-      filas.push(`<tr style="${trStyle}background:#fff7ed;">
-        ${tdItem(` <span style="color:#475569;">· Σ certificación${real ? ` — real cargada por Esteban en ${MES[real.mesSig] || real.mesSig}` : ''}</span>`)}
-        ${tdV}${tdV}${tdV}${tdV}
-        ${r.certTeorica > 0
-          ? td(`<strong class="pos-val" ${aj ? `title="Teórica del mes ${fmt(r.certTeorica)} − ${fmt(descuento)} pagados de más en ${MES[aj.mesPrev] || aj.mesPrev}"` : ''}>${aj ? '≈ ' : ''}${fmt(teoAjust)}</strong>`)
-          : tdV}
-        ${real ? td(
-          real.totalFirme > 0
-            ? `<strong class="pos-val" title="${tipReal.replace(/"/g, '&quot;')}" ${urlReal ? `style="cursor:pointer;text-decoration:underline dotted;" onclick="window.open('${urlReal}','_blank')"` : ''}>${fmt(real.totalFirme)}${urlReal ? ' ↗' : ''}</strong>${pendReal > 0 ? `<br><small style="color:#64748b;font-size:10px;" title="Programado sin factura ni cobro — no cuenta como certificación del mes">+${fmt(pendReal)} programado (no suma)</small>` : ''}`
-            : `<span style="color:#64748b;font-size:11px;font-weight:600;" title="${tipReal.replace(/"/g, '&quot;')}" ${urlReal ? `onclick="window.open('${urlReal}','_blank')" style="cursor:pointer;color:#64748b;font-size:11px;font-weight:600;text-decoration:underline dotted;"` : ''}>${fmt(real.total)} programado — sin facturar, no suma</span>`
-        ) : td(`<span style="color:#dc2626;font-size:11px;font-weight:600;" title="No se encontró ningún ítem de esta provisión en la planilla de Esteban del mes siguiente">sin cargar</span>`)}
-      </tr>`);
+      // (La fila Σ se quitó: el encabezado del grupo ya muestra teórica y real.)
       if (aj) {
         filas.push(`<tr><td colspan="7" style="padding:2px 4px 8px;font-size:11px;color:#64748b;">
           ℹ️ Cert. teórica ajustada: a los <strong>${fmt(r.certTeorica)}</strong> del mes se les descuentan <strong>${fmt(descuento)}</strong> pagados de más en ${MES[aj.mesPrev] || aj.mesPrev} (Esteban cargó ${fmt(aj.realPrev)} contra un teórico de ${fmt(aj.teoPrev)}) → queda <strong>${fmt(teoAjust)}</strong>. Ese excedente ya se pagó y no debería volver a pagarse.
@@ -3509,7 +3498,9 @@ function _grupoOtroGastoTR(r, i) {
     ${r.alquiler > 0 ? `<td style="padding:9px 10px;font-size:12px;text-align:right;white-space:nowrap;cursor:pointer;" title="Ver de dónde sale este monto" onclick="event.stopPropagation();openDetalleCelda('alquiler','${(o.cod_obra || '').replace(/'/g, "\\'")}','${(o.nombre || '').replace(/'/g, "\\'")}')"><strong style="text-decoration:underline dotted;">${fmt(r.alquiler)}</strong></td>` : vac}
     ${r.tnObraTotal > 0 ? tdR(`<strong title="${(r.tnObra > 0 ? 'Caliente ' + fmtTn(r.tnObra) + ' tn' : '') + (r.tnObra > 0 && r.tnFrioObra > 0 ? ' · ' : '') + (r.tnFrioObra > 0 ? 'Frío ' + fmtTn(r.tnFrioObra) + ' tn' : '')} — suma de todas las categorías del grupo">${fmtTn(r.tnObraTotal)} tn</strong>`) : vac}${vac}
     ${teo > 0 ? tdR(`<strong class="pos-val">${fmt(teo)}</strong>`) : vac}
-    ${realFirme > 0 ? tdR(`<strong class="pos-val">${fmt(realFirme)}</strong>`) : (real && real.total > 0 ? tdR(`<span style="color:#64748b;font-size:11px;" title="Cargado por Esteban pero sin facturar ni cobrar — no suma">prog.</span>`) : vac)}
+    ${realFirme > 0 ? tdR(`<strong class="pos-val">${fmt(realFirme)}</strong>`)
+      : (real && real.total > 0 ? tdR(`<span style="color:#64748b;font-size:11px;" title="Cargado por Esteban pero sin facturar ni cobrar — no suma">prog.</span>`)
+      : (teo > 0 && mesActual !== 'total' ? tdR(`<span style="color:#94a3b8;font-size:11px;" title="Esteban todavía no cargó en su planilla del mes siguiente el certificado real de esta provisión">sin cargar</span>`) : vac))}
   </tr>`;
   // Detalle existente, oculto/visible según el estado del grupo
   let det = _filasOtroGastoTR(r);
