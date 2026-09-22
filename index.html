@@ -2759,6 +2759,7 @@ function _tnDetCompacto(det, max) {
 }
 
 function computeMargenObrasMes(mes) {
+  if (typeof _ajustarAlquilerTC === 'function') _ajustarAlquilerTC(); // idempotente: el alquiler siempre al TC real
   mes = mes || mesActual;
   // _obrasActuales() ya excluye las obras "Interno" (ver definición más arriba)
   const obras = _obrasActuales(mes);
@@ -2970,10 +2971,16 @@ function computeMargenObrasMes(mes) {
     // la marca "Interno" pero NO es un centro interno real conocido (Predio Warnes
     // / Planta), es un dato sin clasificar (ej. "Obra no disponible", "Provisión
     // de Pavimax") — se muestra igual, marcado, para poder investigarlo.
-    const sinClasificar = esInterno && !esCentroInternoConocido(c.cod) && !esCentroInternoConocido(c.nombre);
-    if (esInterno && !sinClasificar) return;
+    // "Obra no disponible" = OC / horas / remitos cargados sin obra: es costo
+    // real de alguna obra que todavía no se asignó. Va en la tabla de OBRAS
+    // (resta de la contribución marginal), no con las provisiones (María, sep-2026).
+    const esSinAsignar = /^obra no disponible$/i.test((c.cod || c.nombre || '').trim());
+    const sinClasificar = esInterno && !esSinAsignar && !esCentroInternoConocido(c.cod) && !esCentroInternoConocido(c.nombre);
+    if (esInterno && !sinClasificar && !esSinAsignar) return;
     const _lblOrigen = { 'OC': 'Con OC de insumos', 'Remito': 'Con salida en Remitos', 'Alquiler': 'Con alquiler de maquinaria', 'MO': 'Con mano de obra imputada' };
-    const nombreFila = sinClasificar
+    const nombreFila = esSinAsignar
+      ? 'Sin obra asignada — completar en la planilla de origen'
+      : sinClasificar
       ? '⚠ ' + (c.cod || c.nombre) + ' — revisar imputación'
       : (c.nombre || _lblOrigen[c.origen] || 'Con gasto del mes');
     // tipo explícito 'Sin clasificar': evita heredar "Interno" del Maestro (a veces
@@ -2981,6 +2988,7 @@ function computeMargenObrasMes(mes) {
     // obra interna en "Contribución marginal por tipo de contratación".
     const obraExtra = { cod_obra: c.cod || c.nombre, nombre: nombreFila, aCobrar: 0 };
     if (sinClasificar) obraExtra.tipo = 'Sin clasificar';
+    if (esSinAsignar) obraExtra.tipo = 'Sin asignar';
     const r = buildDatosObra(obraExtra, true);
     // "Otros gastos o salidas": placeholders sin clasificar (Obra no disponible,
     // Provisión de Pavimax/asfalto frío/caliente, etc.) — no son un contrato de
@@ -4203,6 +4211,8 @@ function _recolectarDatosObra(codObra, nombreObra, soloMes, hastaMes) {
   const certificados = [];           // { mes, nombre, codigo, monto }
   const provTotales  = {};           // proveedor → { monto, nOC }
   const equipoTotales = {};          // codigo → { codigo, clasificacion, marca, modelo, horas, costo }
+  const provPorMes   = {};           // m → { proveedor → { monto, nOC } }   (apertura mensual del reporte)
+  const equipoPorMes = {};           // m → { codigo → { codigo, clasificacion, horas, costo } }
   const tot = { aCobrar: 0, insumos: 0, mo: 0, moh: 0, asf: 0, alquiler: 0, margen: 0, tnCal: 0, tnFrio: 0 };
   let algunaEstim = false;
   let infoObra = null;               // { nombre, cod_obra, cliente, tipo }
@@ -4250,6 +4260,10 @@ function _recolectarDatosObra(codObra, nombreObra, soloMes, hastaMes) {
           if (!provTotales[key]) provTotales[key] = { monto: 0, nOC: 0 };
           provTotales[key].monto += p.monto || 0;
           provTotales[key].nOC   += p.nOC   || 0;
+          if (!provPorMes[m]) provPorMes[m] = {};
+          if (!provPorMes[m][key]) provPorMes[m][key] = { monto: 0, nOC: 0 };
+          provPorMes[m][key].monto += p.monto || 0;
+          provPorMes[m][key].nOC   += p.nOC   || 0;
         });
       });
     }
@@ -4263,13 +4277,17 @@ function _recolectarDatosObra(codObra, nombreObra, soloMes, hastaMes) {
           if (!equipoTotales[key]) equipoTotales[key] = { codigo: eq.codigo, clasificacion: eq.clasificacion, marca: eq.marca, modelo: eq.modelo, horas: 0, costo: 0 };
           equipoTotales[key].horas += eq.horas || 0;
           equipoTotales[key].costo += eq.costoArs || 0;
+          if (!equipoPorMes[m]) equipoPorMes[m] = {};
+          if (!equipoPorMes[m][key]) equipoPorMes[m][key] = { codigo: eq.codigo, clasificacion: eq.clasificacion, horas: 0, costo: 0 };
+          equipoPorMes[m][key].horas += eq.horas || 0;
+          equipoPorMes[m][key].costo += eq.costoArs || 0;
         });
       }
     }
   });
 
   if (meses.length === 0) return null;
-  return { meses, porMes, certificados, provTotales, equipoTotales, tot, algunaEstim, infoObra: infoObra || { nombre: nombreObra, cod_obra: codObra, cliente: '', tipo: '' } };
+  return { meses, porMes, certificados, provTotales, equipoTotales, provPorMes, equipoPorMes, tot, algunaEstim, infoObra: infoObra || { nombre: nombreObra, cod_obra: codObra, cliente: '', tipo: '' } };
 }
 
 // soloMes (opcional): key de mes (ej. 'jul') para generar el reporte de un
@@ -4345,6 +4363,28 @@ function generarReportePDF(codObra, nombreObra, soloMes, hastaMes) {
       <td style="padding:6px 10px;font-size:12px;text-align:right;border-top:1px solid #e2e8f0;font-weight:600;color:#dc2626;">${pf(restoMonto)}</td>
       <td style="padding:6px 10px;font-size:11px;text-align:right;border-top:1px solid #e2e8f0;color:#94a3b8;">${pct(restoMonto, D.tot.insumos)}</td>
     </tr>`;
+
+  // ── Apertura por mes (solo en el acumulado): mes → proveedores / equipos ──
+  const tdM = (t, a, extra) => `<td style="padding:5px 10px;font-size:11.5px;text-align:${a || 'left'};border-top:1px solid #e2e8f0;${extra || ''}">${t}</td>`;
+  const filaMes = (m, cells) => `<tr style="background:#f8fafc;">${[{ t: '<strong>' + mesLbl(m) + '</strong>' }].concat(cells).map(c => tdM(c.t, c.a, 'font-weight:700;border-top:2px solid #e2e8f0;' + (c.c ? 'color:' + c.c + ';' : ''))).join('')}</tr>`;
+  let provMesFilas = '';
+  if (!esMensual && D.meses.length > 1 && D.provPorMes) {
+    D.meses.filter(m => D.porMes[m].insumos > 0).forEach(m => {
+      const provs = Object.entries(D.provPorMes[m] || {}).map(([prov, v]) => ({ prov, ...v })).sort((a, b) => b.monto - a.monto);
+      const nOCm = provs.reduce((s2, x) => s2 + x.nOC, 0);
+      provMesFilas += filaMes(m, [{ t: nOCm, a: 'center' }, { t: pf(D.porMes[m].insumos), a: 'right', c: '#dc2626' }, { t: pct(D.porMes[m].insumos, D.tot.insumos), a: 'right' }]);
+      provMesFilas += provs.map(x => `<tr>${tdM('<span style="color:#475569;padding-left:14px;">' + esc(x.prov) + '</span>')}${tdM(x.nOC, 'center', 'color:#64748b;')}${tdM(pf(x.monto), 'right', 'color:#64748b;')}${tdM(pct(x.monto, D.porMes[m].insumos), 'right', 'color:#94a3b8;font-size:10.5px;')}</tr>`).join('');
+    });
+  }
+  let eqMesFilas = '';
+  if (!esMensual && D.meses.length > 1 && D.equipoPorMes) {
+    D.meses.filter(m => D.porMes[m].alquiler > 0).forEach(m => {
+      const eqs = Object.values(D.equipoPorMes[m] || {}).sort((a, b) => b.costo - a.costo);
+      const hrs = eqs.reduce((s2, x) => s2 + x.horas, 0);
+      eqMesFilas += filaMes(m, [{ t: fmtTn(hrs) + ' h', a: 'right' }, { t: pf(D.porMes[m].alquiler), a: 'right', c: '#dc2626' }]);
+      eqMesFilas += eqs.map(x => `<tr>${tdM('<span style="color:#475569;padding-left:14px;">' + esc(x.codigo || '—') + (x.clasificacion ? ' · ' + esc(x.clasificacion) : '') + '</span>')}${tdM(fmtTn(x.horas) + ' h', 'right', 'color:#64748b;')}${tdM(pf(x.costo), 'right', 'color:#64748b;')}</tr>`).join('');
+    });
+  }
 
   // ── Sección 2.2: MO por mes ──
   const moFilas = D.meses.filter(m => D.porMes[m].mo > 0).map(m => {
@@ -4494,7 +4534,12 @@ function generarReportePDF(codObra, nombreObra, soloMes, hastaMes) {
       <tbody>${provFilas}
         ${totRow([{ t: 'TOTAL INSUMOS' }, { t: '', a: 'center' }, { t: pf(D.tot.insumos), a: 'right', c: '#dc2626' }, { t: '100%', a: 'right' }])}
       </tbody>
-    </table>`) : ''}
+    </table>
+    ${provMesFilas ? `<div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.03em;margin:14px 0 4px;">Apertura por mes</div>
+    <table class="data">
+      ${th([{ t: 'Mes · proveedor' }, { t: 'Nº OC', a: 'center' }, { t: 'Monto', a: 'right' }, { t: '%', a: 'right' }])}
+      <tbody>${provMesFilas}</tbody>
+    </table>` : ''}`) : ''}
 
   ${(showMO && D.tot.mo > 0) ? seccion('2.2', 'Mano de obra', 'Prorrateada por tn de asfalto despachado · fuente: TANGO (Mauro Orellana)' + (D.algunaEstim ? ' · ~ incluye meses estimados' : ''), `
     <table class="data">
@@ -4518,7 +4563,12 @@ function generarReportePDF(codObra, nombreObra, soloMes, hastaMes) {
       <tbody>${eqFilas}
         ${totRow([{ t: 'TOTAL ALQUILER' }, { t: '', a: 'right' }, { t: pf(D.tot.alquiler), a: 'right', c: '#dc2626' }])}
       </tbody>
-    </table>`) : ''}
+    </table>
+    ${eqMesFilas ? `<div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.03em;margin:14px 0 4px;">Apertura por mes</div>
+    <table class="data">
+      ${th([{ t: 'Mes · equipo' }, { t: 'Horas', a: 'right' }, { t: 'Costo', a: 'right' }])}
+      <tbody>${eqMesFilas}</tbody>
+    </table>` : ''}`) : ''}
 
   ${seccion('3', tituloEvo, subEvo, `
     <table class="data">
