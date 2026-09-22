@@ -6596,6 +6596,10 @@ const ES_FONDO_REPARO = t => /fdo\.?\s*rep|fondo\s+de\s+reparo/i.test(t || '');
 // registra Esteban y NO van en el archivo de obras de Agustín. No se auditan
 // contra Agustín — se muestran en la pestaña Taller (María, sep-2026).
 const ES_OBRA_TALLER = t => /taller|alquiler\s+de\s+equipos/i.test(t || '');
+// Ingresos que NO son obras (servicios que factura INGECO y solo sigue
+// Esteban): Agustín nunca los carga, así que no son diferencias. Agregar
+// acá los que aparezcan (María, sep-2026).
+const ES_INGRESO_NO_OBRA = t => ES_OBRA_TALLER(t) || /air\s*liquide|hidr[oó]xido/i.test(t || '');
 // Cobros de Esteban imputados al Taller: cobrado / facturado / programado
 // del mes (o de todos los meses en TOTAL).
 function _tallerIngresoEsteban(mes) {
@@ -6801,7 +6805,7 @@ function runAuditorias() {
   Object.keys(estPend).forEach(o => {
     if (usadosEsteban.has(o) || estPend[o].compFirme <= AUDIT_TOLERANCIA) return;
     // Taller / centros internos: los sigue solo Esteban, no son obras de Agustín
-    if (ES_OBRA_TALLER(o) || esCentroInternoConocido(o)) return;
+    if (ES_INGRESO_NO_OBRA(o) || esCentroInternoConocido(o)) return;
     AUDIT_RESULTADOS.push({
       chequeo: 'Obra huérfana',
       titulo: o,
@@ -7381,6 +7385,8 @@ function renderSeguimientoCobros() {
     if (o.redetPend > 0) chips.push(`<span title="Redeterminaciones de precio pendientes (las sigue solo Esteban)">📈 ${fmt(o.redetPend)}</span>`);
     const agustin = ES_OBRA_TALLER(n)
       ? `<span style="font-size:11px;color:var(--muted);" title="Ingreso del Taller (alquiler a terceros): lo registra Esteban, no va en el archivo de obras de Agustín. Se ve en la pestaña Taller Mecánico.">Taller</span>`
+      : ES_INGRESO_NO_OBRA(n)
+      ? `<span style="font-size:11px;color:var(--muted);" title="Ingreso por servicios, no es una obra: lo registra solo Esteban, Agustín no lo carga. No es una diferencia.">No es obra</span>`
       : v
       ? (v.tipo === 'ok'
           ? `<span data-restrict="sueldos" style="color:#16a34a;font-weight:700;" title="${v.tip}">✓</span>`
