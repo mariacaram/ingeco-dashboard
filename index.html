@@ -7817,15 +7817,25 @@ function renderCobranzaMargen() {
     const el = document.getElementById(id);
     if (!el) return;
     if (!R) { el.innerHTML = ''; return; }
-    const card = (tipo, icono, nombre, b) => `
-      <div onclick="openFondosRedetsPanel('${tipo}')" style="cursor:pointer;flex:1;min-width:250px;background:#fff;border:1px solid var(--border);border-left:4px solid ${tipo === 'fondo' ? '#f59e0b' : '#7c3aed'};border-radius:10px;padding:12px 16px;" title="Click para ver el detalle por obra">
+    // Fondos: misma fuente y mismos conteos que la sección "Fondos de reparo"
+    // (consolidado por fondo); el click lleva a esa sección.
+    const dF = (typeof _fondosReparoConsolidado === 'function') ? _fondosReparoConsolidado() : null;
+    const card = (tipo, icono, nombre, b) => {
+      const esF = tipo === 'fondo' && dF;
+      const pend = esF ? dF.pendiente + dF.desaparecido : b.pend;
+      const cob  = esF ? dF.cobrado : b.cob;
+      const nPend = esF ? dF.fondos.filter(f => f.estado !== 'cobrado').length : b.items.filter(i => i.estado === 'pendiente').length;
+      const nObras = esF ? new Set(dF.fondos.filter(f => f.estado !== 'cobrado').map(f => f.obra || 'Sin asignar')).size : new Set(b.items.filter(i => i.estado === 'pendiente').map(i => i.obra)).size;
+      const unidad = tipo === 'fondo' ? 'fondo' : 'ítem';
+      return `
+      <div onclick="${esF ? "openTab('fondos')" : `openFondosRedetsPanel('${tipo}')`}" style="cursor:pointer;flex:1;min-width:250px;background:#fff;border:1px solid var(--border);border-left:4px solid ${tipo === 'fondo' ? '#f59e0b' : '#7c3aed'};border-radius:10px;padding:12px 16px;" title="${esF ? 'Click para ir a la sección Fondos de reparo' : 'Click para ver el detalle por obra'}">
         <div style="font-size:12px;font-weight:700;margin-bottom:6px;">${icono} ${nombre}</div>
         <div style="display:flex;gap:18px;flex-wrap:wrap;">
-          <span style="font-size:12px;">Pendiente: <strong style="color:#b45309;">${fmt(b.pend)}</strong></span>
-          <span style="font-size:12px;">Cobrado: <strong class="pos-val">${fmt(b.cob)}</strong></span>
-          <span style="font-size:12px;color:var(--muted);">${new Set(b.items.map(i => i.obra)).size} obra${new Set(b.items.map(i => i.obra)).size !== 1 ? 's' : ''}</span>
+          <span style="font-size:12px;">Pendiente: <strong style="color:#b45309;">${fmt(pend)}</strong> <span style="color:var(--muted);">· ${nPend} ${unidad}${nPend !== 1 ? 's' : ''} en ${nObras} obra${nObras !== 1 ? 's' : ''}</span></span>
+          <span style="font-size:12px;">Cobrado: <strong class="pos-val">${fmt(cob)}</strong></span>
         </div>
       </div>`;
+    };
     el.innerHTML = `
       <div class="section" style="margin-top:16px;">
         <div class="section-title" style="font-size:13px;">Fondos de reparo y redeterminaciones <span style="font-weight:400;font-size:11px;color:var(--muted);">· planilla de Esteban · <span onclick="openTab('cobros');setTimeout(()=>document.getElementById('seguimiento-cobros').scrollIntoView({behavior:'smooth'}),80);" style="cursor:pointer;text-decoration:underline dotted;color:var(--primary);">ver seguimiento completo de cobranza →</span></span></div>
