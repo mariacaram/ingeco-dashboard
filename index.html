@@ -905,11 +905,24 @@
       <div class="kpi-sub" id="kpi-alquiler-sub-t">Actualizá datos para cargar</div>
       <div class="fuente"><a href="https://docs.google.com/spreadsheets/d/1e_emRVEUxTaNtLxeC0wXIWKzcKuoulZkFSS9O1e0XHo/edit?gid=1172883606#gid=1172883606" target="_blank" onclick="event.stopPropagation()">Partes diarios (Nico)</a> · <a href="https://docs.google.com/spreadsheets/d/1PEcPzwrQ8kE2evmUlrFq9wPbgWOR92MPl3LEqcSYbIk/edit?gid=1528087869#gid=1528087869" target="_blank" onclick="event.stopPropagation()">Tarifas equipos</a> · <a href="https://www.bna.com.ar/Personas/TipoCambio" target="_blank" style="color:inherit;text-decoration:underline dotted;" onclick="event.stopPropagation()">TC BNA</a></div>
     </div>
+    <div class="kpi-card neg" style="cursor:pointer;" title="Ver cómo se calcula" id="kpi-asfalto-card-t">
+      <div class="kpi-label">Costo asfalto (teórico)</div>
+      <div class="kpi-value neg-val" id="kpi-asfalto-costo-t">sin dato</div>
+      <div class="kpi-sub" id="kpi-asfalto-sub-t">Actualizá datos para cargar</div>
+      <div class="fuente" id="kpi-asfalto-fuente-t">tn despachadas × precio de referencia Cartellone</div>
+    </div>
     <div class="kpi-card" style="cursor:pointer;" onclick="openMargenPanel()" title="Ver cómo se calcula">
       <div class="kpi-label">Contribución marginal</div>
       <div class="kpi-value nd" id="kpi-margen-est-t">sin dato</div>
       <div class="kpi-sub" id="kpi-margen-sub-t">Pendiente de archivos de costo</div>
-      <div class="fuente" id="kpi-margen-formula-t">Generado − (OC Insumos + MO TANGO + Alquiler Equipos)</div>
+      <div class="fuente" id="kpi-margen-formula-t">Generado − costos directos</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Desglose de Egresos · <span id="mes-label-egr-chart-t"></span></div>
+    <div id="egr-chart-container-t">
+      <div class="nd" style="text-align:center;padding:20px;font-size:13px;">Actualizá datos para ver el gráfico</div>
     </div>
   </div>
 
@@ -2651,6 +2664,7 @@ function _syncKpiCardsTipo() {
     ['kpi-mo-obras', 'kpi-mo-obras-t'], ['kpi-mo-obras-sub', 'kpi-mo-obras-sub-t'],
     ['kpi-alquiler-equipos', 'kpi-alquiler-equipos-t'], ['kpi-alquiler-sub', 'kpi-alquiler-sub-t'],
     ['kpi-margen-est', 'kpi-margen-est-t'], ['kpi-margen-sub', 'kpi-margen-sub-t'], ['kpi-margen-formula', 'kpi-margen-formula-t'],
+    ['kpi-asfalto-costo', 'kpi-asfalto-costo-t'], ['kpi-asfalto-sub', 'kpi-asfalto-sub-t'], ['kpi-asfalto-fuente', 'kpi-asfalto-fuente-t'],
   ];
   pares.forEach(([origId, destId]) => {
     const orig = document.getElementById(origId);
@@ -2659,7 +2673,11 @@ function _syncKpiCardsTipo() {
     dest.innerHTML   = orig.innerHTML;
     dest.className   = orig.className;
     dest.style.color = orig.style.color;
+    dest.title       = orig.title || '';   // los tooltips también
   });
+  // La tarjeta de asfalto abre el mismo panel que en "por obra"
+  const cA = document.getElementById('kpi-asfalto-card'), cAt = document.getElementById('kpi-asfalto-card-t');
+  if (cA && cAt) cAt.onclick = cA.onclick;
 }
 
 // Computa las filas de contribución marginal de un mes (solo datos, sin HTML).
@@ -3922,6 +3940,13 @@ function renderResumenTipoContrato() {
   const { moEsEstim, tnTotalGlobal } = datos;
   const busq = _hayFiltroObra('tipo');
   const rowsConBusq = busq ? datos.rows.filter(r => _obraPasaFiltro('tipo', r.o)) : datos.rows;
+  // Contribución marginal TOTAL (acumulada, meses cerrados) — igual que en "por obra"
+  const esTotal = mesActual === 'total';
+  const _acumMapT = esTotal ? {} : _margenAcumPorObra();
+  rowsConBusq.forEach(r => {
+    const k = ((r.o.cod_obra || r.o.nombre) || '').toLowerCase().trim();
+    r.margenAcum = (!esTotal && k && k in _acumMapT) ? _acumMapT[k] : null;
+  });
 
   // "Otros Gastos o salidas" (placeholders sin clasificar) no entran en ningún
   // tipo de contratación — van en su propio bloque, no como un tipo más.
@@ -3941,18 +3966,20 @@ function renderResumenTipoContrato() {
   const lista = Object.keys(grupos)
     .map(tipo => {
       const rs  = grupos[tipo];
-      const tot = { aCobrar: 0, insumos: 0, mo: 0, moh: 0, tn: 0, alquiler: 0, margen: 0 };
+      const tot = { aCobrar: 0, insumos: 0, mo: 0, moh: 0, tn: 0, asf: 0, alquiler: 0, margen: 0, acum: 0, hayAcum: false };
       rs.forEach(r => {
         tot.aCobrar  += r.aCobrar;
         tot.insumos  += r.insumos;
         tot.mo       += r.moObra || 0;
         tot.moh      += r.moHormigon || 0;
         tot.tn       += r.tnObraTotal;
+        tot.asf      += r.costoAsfObra || 0;
         tot.alquiler += r.alquiler;
         tot.margen   += r.margen;
+        if (r.margenAcum != null) { tot.acum += r.margenAcum; tot.hayAcum = true; }
       });
       return { tipo, rows: rs, tot };
-    }).sort((a, b) => b.tot.margen - a.tot.margen);
+    }).sort((a, b) => ((b.tot.hayAcum ? b.tot.acum : b.tot.margen) - (a.tot.hayAcum ? a.tot.acum : a.tot.margen)));
 
   if (lista.length === 0) {
     cont.innerHTML = busq
@@ -3968,7 +3995,8 @@ function renderResumenTipoContrato() {
     <th class="num">MO (propia)</th>
     <th class="num">Asfalto (tn)</th>
     <th class="num">Alquiler</th>
-    <th class="num" title="Contribución marginal: Generado − costos directos">Contrib. marginal</th>
+    <th class="num" title="Contribución marginal del período: Generado − costos directos">${esTotal ? 'Contribución marginal' : 'Contrib. marginal mensual'}</th>
+    ${esTotal ? '' : '<th class="num" title="Contribución marginal total de la obra — solo meses cerrados, mismo criterio que el historial">Contrib. marginal total</th>'}
   </tr></thead>`;
 
   // Un cuadro por tipo: obras ordenadas por margen + fila de subtotal
@@ -3984,11 +4012,13 @@ function renderResumenTipoContrato() {
       <td class="num">${g.tot.tn > 0 ? `<span style="font-size:12px;color:var(--muted);">${fmtTn(g.tot.tn)} tn</span>` : '<span class="nd">—</span>'}</td>
       <td class="num neg-val">${fmt(g.tot.alquiler)}</td>
       <td class="num ${mgColor}" style="background:${g.tot.margen > 0 ? '#f0fdf4' : g.tot.margen < 0 ? '#fef2f2' : 'transparent'};">${fmt(g.tot.margen)}</td>
+      ${esTotal ? '' : `<td class="num ${g.tot.hayAcum ? (g.tot.acum > 0 ? 'pos-val' : g.tot.acum < 0 ? 'neg-val' : '') : ''}" style="background:${g.tot.hayAcum ? (g.tot.acum > 0 ? '#f0fdf4' : g.tot.acum < 0 ? '#fef2f2' : 'transparent') : 'transparent'};">${g.tot.hayAcum ? fmt(g.tot.acum) : '<span class="nd">—</span>'}</td>`}
     </tr>`);
+    const acColor = g.tot.acum > 0 ? 'pos-val' : g.tot.acum < 0 ? 'neg-val' : '';
     return `<div id="cuadro-tipo-${i}" style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-top:16px;transition:box-shadow .3s;">
-      <div style="font-size:13px;font-weight:700;margin-bottom:10px;">${g.tipo}
+      <div style="font-size:13px;font-weight:700;margin-bottom:10px;display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;">${g.tipo}
         <span style="font-weight:400;color:var(--muted);font-size:12px;">· ${g.rows.length} obra${g.rows.length !== 1 ? 's' : ''}</span>
-        <span style="float:right;" class="${mgColor}">Contrib. marginal: <strong>${fmt(g.tot.margen)}</strong></span>
+        <span style="margin-left:auto;font-size:12px;font-weight:400;color:var(--muted);">${esTotal ? 'Contribución marginal' : 'Mensual'}: <strong class="${mgColor}">${fmt(g.tot.margen)}</strong>${(!esTotal && g.tot.hayAcum) ? ` &nbsp;·&nbsp; Total: <strong class="${acColor}">${fmt(g.tot.acum)}</strong>` : ''}</span>
       </div>
       <div class="table-wrap"><table class="tabla-margen-tipo">${thead}<tbody>${filas.join('')}</tbody></table></div>
     </div>`;
@@ -3996,24 +4026,22 @@ function renderResumenTipoContrato() {
 
   // Total general (suma de los márgenes por obra de todos los tipos + Otros
   // Gastos o salidas) — así coincide con el TOTAL de "Contribución marginal por obra"
-  const totG = { aCobrar: 0, insumos: 0, mo: 0, moh: 0, alquiler: 0, margen: 0 };
+  const totG = { aCobrar: 0, insumos: 0, mo: 0, moh: 0, asf: 0, alquiler: 0, margen: 0, acum: 0, hayAcum: false };
   lista.forEach(g => {
     totG.aCobrar += g.tot.aCobrar; totG.insumos += g.tot.insumos; totG.mo += g.tot.mo; totG.moh += g.tot.moh;
-    totG.alquiler += g.tot.alquiler; totG.margen += g.tot.margen;
-  });
-  otrosGastosTipo.forEach(r => {
-    totG.aCobrar += r.aCobrar; totG.insumos += r.insumos; totG.mo += r.moObra || 0; totG.moh += r.moHormigon || 0;
-    totG.alquiler += r.alquiler; totG.margen += r.margen;
+    totG.asf += g.tot.asf; totG.alquiler += g.tot.alquiler; totG.margen += g.tot.margen;
+    if (g.tot.hayAcum) { totG.acum += g.tot.acum; totG.hayAcum = true; }
   });
   const mgG = totG.margen > 0 ? 'pos-val' : totG.margen < 0 ? 'neg-val' : '';
   const footer = `<div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-top:16px;font-size:13px;display:flex;flex-wrap:wrap;gap:8px 24px;">
     <span><strong>TOTAL GENERAL</strong></span>
     <span>Generado: <strong class="pos-val">${fmt(totG.aCobrar)}</strong></span>
     <span>Insumos: <strong class="neg-val">${fmt(totG.insumos)}</strong></span>
-    <span data-restrict="sueldos">MO Asfalto: <strong class="neg-val">${moEsEstim ? '~' : ''}${fmt(totG.mo)}</strong></span>
-    
+    <span data-restrict="sueldos">MO propia: <strong class="neg-val">${moEsEstim ? '~' : ''}${fmt(totG.mo)}</strong></span>
+    <span>Asfalto: <strong class="neg-val">${fmt(totG.asf)}</strong></span>
     <span>Alquiler: <strong class="neg-val">${fmt(totG.alquiler)}</strong></span>
-    <span>Contrib. marginal: <strong class="${mgG}">${fmt(totG.margen)}</strong></span>
+    <span>${esTotal ? 'Contribución marginal' : 'Contrib. marginal mensual'}: <strong class="${mgG}">${fmt(totG.margen)}</strong></span>
+    ${(!esTotal && totG.hayAcum) ? `<span>Contrib. marginal total: <strong class="${totG.acum > 0 ? 'pos-val' : totG.acum < 0 ? 'neg-val' : ''}">${fmt(totG.acum)}</strong></span>` : ''}
   </div>`;
 
   cont.innerHTML = cuadros + footer;
@@ -9960,8 +9988,13 @@ function openEgresoDetalle(idx) {
 }
 
 function renderEgresosChart() {
-  const container = document.getElementById('egr-chart-container');
-  const mesLbl    = document.getElementById('mes-label-egr-chart');
+  // Misma rosca en "por obra" y en "por tipo de contratación"
+  _renderEgresosChartEn('egr-chart-container', 'mes-label-egr-chart');
+  _renderEgresosChartEn('egr-chart-container-t', 'mes-label-egr-chart-t');
+}
+function _renderEgresosChartEn(containerId, labelId) {
+  const container = document.getElementById(containerId);
+  const mesLbl    = document.getElementById(labelId);
   if (!container) return;
   if (mesLbl) mesLbl.textContent = MES[mesActual] || mesActual;
 
