@@ -7236,6 +7236,8 @@ function renderSeguimientoCobros() {
   const jp = _juliaPendPorCanon(obras);
 
   // ── Tabla: una fila por obra, una columna por estado (María, sep-2026) ──
+  // La columna Nota de crédito solo aparece si hay alguna (si no, es ruido)
+  const hayNC = Object.values(obras).some(o => ((o.cats || {}).noCobrados || 0) > 0);
   const num = (v, cls, tip) => `<td class="num" style="white-space:nowrap;" ${tip ? `title="${tip}"` : ''}>${v > 0 ? `<span class="${cls || ''}">${fmt(v)}</span>` : '<span class="nd">—</span>'}</td>`;
   const fila = n => {
     const o = obras[n];
@@ -7258,7 +7260,7 @@ function renderSeguimientoCobros() {
       ${num(c.facturados, '', 'Comprobante emitido, en espera de cobro')}
       ${num(c.sinFecha, '', 'Previsto por Esteban, todavía sin factura')}
       ${num(c.menosProbable, 'nd', 'Esteban lo registra como de cobro poco probable')}
-      ${num(c.noCobrados, 'neg-val', 'Nota de crédito')}
+      ${hayNC ? num(c.noCobrados, 'neg-val', 'Nota de crédito') : ''}
       <td class="num" style="white-space:nowrap;font-weight:700;">${o.pend > 0 ? fmt(o.pend) : '<span class="nd">—</span>'}</td>
       <td class="num" style="white-space:nowrap;"><strong style="color:${pctColor};">${pct}%</strong></td>
       <td style="text-align:center;">${agustin}</td>
@@ -7270,7 +7272,7 @@ function renderSeguimientoCobros() {
   const soloFilas = soloJulia.map(s => `
     <tr style="background:#fff7ed;">
       <td><strong>${s.nombre}</strong><div style="font-size:10.5px;color:#9a3412;margin-top:2px;">Cargada por Agustín, sin programación de cobro en Esteban</div></td>
-      <td class="num"><span class="nd">—</span></td><td class="num"><span class="nd">—</span></td><td class="num"><span class="nd">—</span></td><td class="num"><span class="nd">—</span></td><td class="num"><span class="nd">—</span></td>
+      ${'<td class="num"><span class="nd">—</span></td>'.repeat(hayNC ? 5 : 4)}
       <td class="num" style="white-space:nowrap;font-weight:700;color:#ea580c;">${fmt(s.monto)}</td>
       <td class="num"><span class="nd">—</span></td>
       <td style="text-align:center;"><span data-restrict="sueldos" style="color:#b45309;font-weight:700;cursor:pointer;" title="Falta en la planilla de Esteban — click para ir a Auditorías" onclick="openTab('auditorias')">⚠ ver</span></td>
@@ -7288,14 +7290,14 @@ function renderSeguimientoCobros() {
     <th class="num" title="Comprobante emitido, en espera de cobro">Facturado</th>
     <th class="num" title="Previsto por Esteban, todavía sin factura">Programado</th>
     <th class="num" title="Cobro poco probable según Esteban">Menos probable</th>
-    <th class="num" title="Notas de crédito">Nota de crédito</th>
-    <th class="num" title="Facturado + Programado + Menos probable + N/C">Pendiente</th>
+    ${hayNC ? '<th class="num" title="Notas de crédito">Nota de crédito</th>' : ''}
+    <th class="num" title="Facturado + Programado + Menos probable${hayNC ? ' + N/C' : ''}">Pendiente</th>
     <th class="num" title="Cobrado sobre cobrado + pendiente">% cobrado</th>
     <th style="text-align:center;" title="Cruce contra los certificados del archivo de Agustín">Agustín</th>
   </tr></thead>`;
   const totRow = `<tr style="background:#f8fafc;font-weight:700;border-top:2px solid var(--border);">
     <td style="font-size:12px;">TOTAL</td>
-    <td class="num pos-val">${fmt(tot.cob)}</td><td class="num">${fmt(tot.fac)}</td><td class="num">${fmt(tot.prog)}</td><td class="num" style="color:var(--muted);">${fmt(tot.menos)}</td><td class="num">${tot.nc > 0 ? fmt(tot.nc) : '—'}</td>
+    <td class="num pos-val">${fmt(tot.cob)}</td><td class="num">${fmt(tot.fac)}</td><td class="num">${fmt(tot.prog)}</td><td class="num" style="color:var(--muted);">${fmt(tot.menos)}</td>${hayNC ? `<td class="num">${fmt(tot.nc)}</td>` : ''}
     <td class="num">${fmt(tot.pend)}</td><td class="num">${pctTot}%</td><td></td>
   </tr>`;
 
