@@ -2574,9 +2574,13 @@ function renderMargen() {
       kpiGen.textContent = totalGen > 0 ? fmt(totalGen) : '—';
       kpiGen.className   = totalGen > 0 ? 'kpi-value pos-val' : 'kpi-value nd';
     }
-    const descPeriodo = _sinP.length > 0 ? ` · ${_sinP.length} sin período` : '';
+    // Subtítulo corto: solo obras + provisiones. Las obras sin período no van
+    // acá (ya tienen su bloque aparte); queda como tooltip.
     const descProv = provCert.total > 0 ? ` + ${provCert.items.length} ${provCert.items.length !== 1 ? 'provisiones' : 'provisión'}` : '';
-    if (kpiGenSub) kpiGenSub.textContent = _obrasMes.length + ' obras en ' + (MES[mesActual] || mesActual) + descProv + descPeriodo;
+    if (kpiGenSub) {
+      kpiGenSub.textContent = _obrasMes.length + ' obra' + (_obrasMes.length !== 1 ? 's' : '') + descProv;
+      kpiGenSub.title = _sinP.length > 0 ? `${_sinP.length} obra${_sinP.length !== 1 ? 's' : ''} sin período de realización cargado — no entran en ningún mes` : '';
+    }
     if (badge)     badge.textContent = (_obrasMes.length + _sinP.length) + ' obras · Generado — archivo de Agustín';
 
     // Desglose por pestaña de origen + provisiones
