@@ -3355,10 +3355,10 @@ function _filasOtroGastoTR(r) {
   const o = r.o;
   const codEsc2 = (o.cod_obra || '').replace(/'/g, "\\'");
   const nomEsc  = (o.nombre  || '').replace(/'/g, "\\'");
-  const nombreLink = `<span style="cursor:pointer;font-weight:600;color:#92400e;text-decoration:underline dotted;" title="Ver historial de todos los meses" onclick="openHistorialObra('${codEsc2}','${nomEsc}')">${o.cod_obra}</span>`;
+  const nombreLink = `<span style="cursor:pointer;font-weight:600;color:#1e3a5f;text-decoration:underline dotted;" title="Ver historial de todos los meses" onclick="openHistorialObra('${codEsc2}','${nomEsc}')">${o.cod_obra}</span>`;
   const td = html => `<td style="padding:8px 10px;font-size:12px;text-align:right;white-space:nowrap;">${html}</td>`;
-  const tdV = td('<span style="color:#fca5a5;">—</span>');
-  const trStyle = 'border-top:1px dashed #fca5a5;';
+  const tdV = td('<span style="color:#cbd5e1;">—</span>');
+  const trStyle = 'border-top:1px dashed #cbd5e1;';
   const tdItem = extra => `<td style="padding:8px 4px;font-size:12.5px;">${nombreLink}${extra || ''}</td>`;
   const filas = [];
 
@@ -3387,9 +3387,9 @@ function _filasOtroGastoTR(r) {
       const pTn = _precioProvision(e, mesActual);
       const eEnc = encodeURIComponent(JSON.stringify({ ds: e.ds, tp: e.tp, s: e.s, d: e.d, u: e.u })).replace(/'/g, '%27');
       const unidad = e.u === 'M3' ? 'm3' : e.u === 'Viaje' ? 'viaje(s)' : 'tn';
-      const precioCell = td(`<span onclick="event.stopPropagation();editarPrecioProvisionE('${eEnc}')" style="cursor:pointer;text-decoration:underline dotted;" title="Click para actualizar el precio de esta combinación — rige desde el mes visible en adelante">${pTn ? '$' + pTn.toLocaleString('es-AR') : '<span style="color:#9a3412;">poner precio</span>'} ✎</span>`);
+      const precioCell = td(`<span onclick="event.stopPropagation();editarPrecioProvisionE('${eEnc}')" style="cursor:pointer;text-decoration:underline dotted;" title="Click para actualizar el precio de esta combinación — rige desde el mes visible en adelante">${pTn ? '$' + pTn.toLocaleString('es-AR') : '<span style="color:#475569;">poner precio</span>'} ✎</span>`);
       filas.push(`<tr style="${trStyle}">
-        ${tdItem(` <span style="color:#9a3412;">· ${_tnDetLabel(e)}</span>`)}
+        ${tdItem(` <span style="color:#475569;">· ${_tnDetLabel(e)}</span>`)}
         ${tdV}${tdV}
         ${mesActual === 'total'
           ? `<td style="padding:8px 10px;font-size:12px;text-align:right;white-space:nowrap;cursor:pointer;" title="Click para ver cuánto es de cada mes" onclick="event.stopPropagation();openTnPorMesProvision('${codEsc2}','${nomEsc}','${eEnc}')"><strong style="text-decoration:underline dotted;">${fmtTn(e.t)} ${unidad}${(!e.ds && e.s === 'frio') ? ' frío' : ''}</strong></td>`
@@ -3399,7 +3399,7 @@ function _filasOtroGastoTR(r) {
         ${tdV}
       </tr>`);
       // La nota del corte va pegada a la fila que modifica
-      if (e.nota) filas.push(`<tr><td colspan="7" style="padding:2px 4px 8px;font-size:11px;color:#b45309;">✂️ ${e.nota}</td></tr>`);
+      if (e.nota) filas.push(`<tr><td colspan="7" style="padding:2px 4px 8px;font-size:11px;color:#64748b;">✂️ ${e.nota}</td></tr>`);
     });
 
     // Fila agrupada "Frío → Otros" (todo el frío que no es Muni SMT)
@@ -3412,7 +3412,7 @@ function _filasOtroGastoTR(r) {
       _PROV_OTROS[o.cod_obra || o.nombre] = { obra: o.cod_obra || o.nombre, mes: mesActual, entries: otrosFrio };
       const codKey = (o.cod_obra || o.nombre || '').replace(/'/g, "\\'");
       filas.push(`<tr style="${trStyle}cursor:pointer;" title="Click para ver el detalle por destino" onclick="openProvisionFrioOtros('${codKey}')">
-        ${tdItem(` <span style="color:#9a3412;">· Frío → Otros <span style="font-weight:400;">(${otrosFrio.length} destino${otrosFrio.length !== 1 ? 's' : ''} — ver detalle ▸)</span></span>`)}
+        ${tdItem(` <span style="color:#475569;">· Frío → Otros <span style="font-weight:400;">(${otrosFrio.length} destino${otrosFrio.length !== 1 ? 's' : ''} — ver detalle ▸)</span></span>`)}
         ${tdV}${tdV}
         ${td(`<strong>${fmtTn(tnOtros)} tn frío</strong>`)}
         ${tdV}
@@ -3434,24 +3434,24 @@ function _filasOtroGastoTR(r) {
       const tipReal = real ? real.items.map(i => `${i.concepto}: ${fmt(i.importe)}${i.cat === 'cobrados' || i.cat === 'facturados' ? '' : ' (programado — no suma)'}`).join(' · ') : '';
       const urlReal = (real && typeof _sheetUrlAudit === 'function' && real.items[0]) ? _sheetUrlAudit(real.items[0]) : '';
       filas.push(`<tr style="${trStyle}background:#fff7ed;">
-        ${tdItem(` <span style="color:#9a3412;">· Σ certificación${real ? ` — real cargada por Esteban en ${MES[real.mesSig] || real.mesSig}` : ''}</span>`)}
+        ${tdItem(` <span style="color:#475569;">· Σ certificación${real ? ` — real cargada por Esteban en ${MES[real.mesSig] || real.mesSig}` : ''}</span>`)}
         ${tdV}${tdV}${tdV}${tdV}
         ${r.certTeorica > 0
           ? td(`<strong class="pos-val" ${aj ? `title="Teórica del mes ${fmt(r.certTeorica)} − ${fmt(descuento)} pagados de más en ${MES[aj.mesPrev] || aj.mesPrev}"` : ''}>${aj ? '≈ ' : ''}${fmt(teoAjust)}</strong>`)
           : tdV}
         ${real ? td(
           real.totalFirme > 0
-            ? `<strong class="pos-val" title="${tipReal.replace(/"/g, '&quot;')}" ${urlReal ? `style="cursor:pointer;text-decoration:underline dotted;" onclick="window.open('${urlReal}','_blank')"` : ''}>${fmt(real.totalFirme)}${urlReal ? ' ↗' : ''}</strong>${pendReal > 0 ? `<br><small style="color:#b45309;font-size:10px;" title="Programado sin factura ni cobro — no cuenta como certificación del mes">+${fmt(pendReal)} programado (no suma)</small>` : ''}`
-            : `<span style="color:#b45309;font-size:11px;font-weight:600;" title="${tipReal.replace(/"/g, '&quot;')}" ${urlReal ? `onclick="window.open('${urlReal}','_blank')" style="cursor:pointer;color:#b45309;font-size:11px;font-weight:600;text-decoration:underline dotted;"` : ''}>${fmt(real.total)} programado — sin facturar, no suma</span>`
+            ? `<strong class="pos-val" title="${tipReal.replace(/"/g, '&quot;')}" ${urlReal ? `style="cursor:pointer;text-decoration:underline dotted;" onclick="window.open('${urlReal}','_blank')"` : ''}>${fmt(real.totalFirme)}${urlReal ? ' ↗' : ''}</strong>${pendReal > 0 ? `<br><small style="color:#64748b;font-size:10px;" title="Programado sin factura ni cobro — no cuenta como certificación del mes">+${fmt(pendReal)} programado (no suma)</small>` : ''}`
+            : `<span style="color:#64748b;font-size:11px;font-weight:600;" title="${tipReal.replace(/"/g, '&quot;')}" ${urlReal ? `onclick="window.open('${urlReal}','_blank')" style="cursor:pointer;color:#64748b;font-size:11px;font-weight:600;text-decoration:underline dotted;"` : ''}>${fmt(real.total)} programado — sin facturar, no suma</span>`
         ) : td(`<span style="color:#dc2626;font-size:11px;font-weight:600;" title="No se encontró ningún ítem de esta provisión en la planilla de Esteban del mes siguiente">sin cargar</span>`)}
       </tr>`);
       if (aj) {
-        filas.push(`<tr><td colspan="7" style="padding:2px 4px 8px;font-size:11px;color:#b45309;">
+        filas.push(`<tr><td colspan="7" style="padding:2px 4px 8px;font-size:11px;color:#64748b;">
           ℹ️ Cert. teórica ajustada: a los <strong>${fmt(r.certTeorica)}</strong> del mes se les descuentan <strong>${fmt(descuento)}</strong> pagados de más en ${MES[aj.mesPrev] || aj.mesPrev} (Esteban cargó ${fmt(aj.realPrev)} contra un teórico de ${fmt(aj.teoPrev)}) → queda <strong>${fmt(teoAjust)}</strong>. Ese excedente ya se pagó y no debería volver a pagarse.
         </td></tr>`);
       }
       if (real && Math.abs(dif) > AUDIT_TOLERANCIA) {
-        filas.push(`<tr><td colspan="7" style="padding:2px 4px 8px;font-size:11px;color:#b45309;">
+        filas.push(`<tr><td colspan="7" style="padding:2px 4px 8px;font-size:11px;color:#64748b;">
           ⚠ Diferencia de <strong>${fmt(Math.abs(dif))}</strong> entre la certificación teórica${aj ? ' ajustada' : ''} y lo cargado por Esteban (${dif > 0 ? 'real por encima' : 'real por debajo'} del teórico) — consultar con Adrián el motivo.
         </td></tr>`);
       }
@@ -3495,14 +3495,14 @@ function _grupoOtroGastoTR(r, i) {
   const realFirme = real ? real.totalFirme : 0;
   const abierto = !!_OG_ABIERTOS[i];
   const tdR = h => `<td style="padding:9px 10px;font-size:12px;text-align:right;white-space:nowrap;">${h}</td>`;
-  const vac = tdR('<span style="color:#fca5a5;">—</span>');
-  const resumen = `<tr style="border-top:2px solid #fca5a5;cursor:pointer;background:#fffbf5;" onclick="toggleOtroGasto(${i})" title="Click para ver/plegar el detalle por categoría">
-    <td style="padding:9px 4px;font-size:12.5px;"><span id="og-flecha-${i}" style="display:inline-block;width:14px;color:#9a3412;font-weight:700;">${abierto ? '▾' : '▸'}</span><strong style="color:#92400e;">${o.cod_obra}</strong> <span style="font-size:11px;color:var(--muted);">· ${combos > 0 ? combos + ' ítem' + (combos !== 1 ? 's' : '') : 'sin remitos'}${r.tnObraTotal > 0 ? ' · ' + fmtTn(r.tnObraTotal) + ' tn' : ''}</span></td>
+  const vac = tdR('<span style="color:#cbd5e1;">—</span>');
+  const resumen = `<tr style="border-top:2px solid #cbd5e1;cursor:pointer;background:#f8fafc;" onclick="toggleOtroGasto(${i})" title="Click para ver/plegar el detalle por categoría">
+    <td style="padding:9px 4px;font-size:12.5px;"><span id="og-flecha-${i}" style="display:inline-block;width:14px;color:#475569;font-weight:700;">${abierto ? '▾' : '▸'}</span><strong style="color:#1e3a5f;">${o.cod_obra}</strong> <span style="font-size:11px;color:var(--muted);">· ${combos > 0 ? combos + ' ítem' + (combos !== 1 ? 's' : '') : 'sin remitos'}${r.tnObraTotal > 0 ? ' · ' + fmtTn(r.tnObraTotal) + ' tn' : ''}</span></td>
     ${r.insumos  > 0 ? `<td style="padding:9px 10px;font-size:12px;text-align:right;white-space:nowrap;cursor:pointer;" title="Ver de dónde sale este monto" onclick="event.stopPropagation();openDetalleCelda('insumos','${(o.cod_obra || '').replace(/'/g, "\\'")}','${(o.nombre || '').replace(/'/g, "\\'")}')"><strong style="text-decoration:underline dotted;">${fmt(r.insumos)}</strong></td>`  : vac}
     ${r.alquiler > 0 ? `<td style="padding:9px 10px;font-size:12px;text-align:right;white-space:nowrap;cursor:pointer;" title="Ver de dónde sale este monto" onclick="event.stopPropagation();openDetalleCelda('alquiler','${(o.cod_obra || '').replace(/'/g, "\\'")}','${(o.nombre || '').replace(/'/g, "\\'")}')"><strong style="text-decoration:underline dotted;">${fmt(r.alquiler)}</strong></td>` : vac}
     ${r.tnObraTotal > 0 ? tdR(`<strong title="${(r.tnObra > 0 ? 'Caliente ' + fmtTn(r.tnObra) + ' tn' : '') + (r.tnObra > 0 && r.tnFrioObra > 0 ? ' · ' : '') + (r.tnFrioObra > 0 ? 'Frío ' + fmtTn(r.tnFrioObra) + ' tn' : '')} — suma de todas las categorías del grupo">${fmtTn(r.tnObraTotal)} tn</strong>`) : vac}${vac}
     ${teo > 0 ? tdR(`<strong class="pos-val">${fmt(teo)}</strong>`) : vac}
-    ${realFirme > 0 ? tdR(`<strong class="pos-val">${fmt(realFirme)}</strong>`) : (real && real.total > 0 ? tdR(`<span style="color:#b45309;font-size:11px;" title="Cargado por Esteban pero sin facturar ni cobrar — no suma">prog.</span>`) : vac)}
+    ${realFirme > 0 ? tdR(`<strong class="pos-val">${fmt(realFirme)}</strong>`) : (real && real.total > 0 ? tdR(`<span style="color:#64748b;font-size:11px;" title="Cargado por Esteban pero sin facturar ni cobrar — no suma">prog.</span>`) : vac)}
   </tr>`;
   // Detalle existente, oculto/visible según el estado del grupo
   let det = _filasOtroGastoTR(r);
@@ -3546,19 +3546,19 @@ function _renderOtrosGastosBlock(otrosGastos) {
   const _tnTot = [];
   if (totTnCal > 0)  _tnTot.push(fmtTn(totTnCal) + ' tn');
   if (totTnFrio > 0) _tnTot.push(fmtTn(totTnFrio) + ' frío');
-  const th = t => `<th style="text-align:right;padding:6px 10px;font-size:10px;font-weight:700;color:#9a3412;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;">${t}</th>`;
+  const th = t => `<th style="text-align:right;padding:6px 10px;font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;">${t}</th>`;
   const tdT = html => `<td style="padding:9px 10px;font-size:12.5px;text-align:right;font-weight:700;white-space:nowrap;">${html}</td>`;
-  return `<div style="margin-top:16px;background:#fef2f2;border:1.5px dashed #fca5a5;border-radius:10px;padding:12px 16px;">
-    <div style="font-size:12px;font-weight:700;color:#92400e;margin-bottom:2px;">⚠ Otros Gastos o salidas <span style="font-weight:400;">· ${otrosGastos.length} ítem${otrosGastos.length !== 1 ? 's' : ''} sin clasificar — no son obras, revisar a qué imputar</span></div>
+  return `<div style="margin-top:16px;background:#f8fafc;border:1.5px dashed #cbd5e1;border-radius:10px;padding:12px 16px;">
+    <div style="font-size:12px;font-weight:700;color:#1e3a5f;margin-bottom:2px;">Provisiones y otras salidas <span style="font-weight:400;color:#64748b;">· ${otrosGastos.length} ítem${otrosGastos.length !== 1 ? 's' : ''} — no son obras: se muestran aparte y no entran en la contribución marginal</span></div>
     <div class="table-wrap"><table style="width:100%;border-collapse:collapse;">
       <thead><tr>
-        <th style="text-align:left;padding:6px 4px;font-size:10px;font-weight:700;color:#9a3412;text-transform:uppercase;letter-spacing:.04em;">Ítem</th>
+        <th style="text-align:left;padding:6px 4px;font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.04em;">Ítem</th>
         ${th('Insumos')}${th('Alquiler')}${th('TN')}${th('$/tn')}${th('Cert. teórica')}${th('Cert. real')}
       </tr></thead>
       <tbody>
         ${otrosGastos.map((r, i) => _grupoOtroGastoTR(r, i)).join('')}
-        <tr style="border-top:2px solid #fca5a5;background:#fee2e2;">
-          <td style="padding:9px 4px;font-size:12px;font-weight:700;color:#92400e;">TOTAL</td>
+        <tr style="border-top:2px solid #cbd5e1;background:#e2e8f0;">
+          <td style="padding:9px 4px;font-size:12px;font-weight:700;color:#1e3a5f;">TOTAL</td>
           ${tdT(totIns > 0 ? fmt(totIns) : '—')}
           ${tdT(totAlq > 0 ? fmt(totAlq) : '—')}
           ${tdT(_tnTot.length ? _tnTot.join(' + ') : '—')}
@@ -3568,7 +3568,7 @@ function _renderOtrosGastosBlock(otrosGastos) {
         </tr>
       </tbody>
     </table></div>
-    <div style="font-size:10.5px;color:#b45309;margin-top:6px;">Cert. teórica = tn × precio de convenio por cliente ($/tn — click en el precio para actualizarlo; el precio nuevo rige desde el mes visible en adelante y los meses anteriores conservan el suyo)${hayAjuste ? ', neta del excedente que Esteban pagó de más el mes anterior (ya pagado, no debe volver a pagarse)' : ''}. Cert. real = certificados de la provisión cargados por Esteban en su planilla del mes siguiente (las provisiones se pagan hasta el día 10). Valores informativos: no suman al margen.</div>
+    <div style="font-size:10.5px;color:#64748b;margin-top:6px;">Cert. teórica = tn × precio de convenio por cliente ($/tn — click en el precio para actualizarlo; el precio nuevo rige desde el mes visible en adelante y los meses anteriores conservan el suyo)${hayAjuste ? ', neta del excedente que Esteban pagó de más el mes anterior (ya pagado, no debe volver a pagarse)' : ''}. Cert. real = certificados de la provisión cargados por Esteban en su planilla del mes siguiente (las provisiones se pagan hasta el día 10). Valores informativos: no suman al margen.</div>
   </div>`;
 }
 
@@ -9868,11 +9868,13 @@ function renderEgresosChart() {
   const items = [
     { label: 'Insumos' + (mohMes > 0 ? ' (incl. MO tercerizada ' + fmt(mohMes) + ')' : ''), valor: ocMes || 0, color: '#f59e0b',
       det: 'OC de materiales ' + fmt((ocMes || 0) - mohMes) + (mohMes > 0 ? ' + MO tercerizada ' + fmt(mohMes) : ''), top: topObras(r => r.insumos),
+      breve: 'OC del mes imputadas a cada obra (col. OBRA GENERAL), por su monto total; incluye la MO contratada a terceros.',
       como: 'Suma de las órdenes de compra del mes imputadas a cada obra (columna OBRA GENERAL de la planilla de Guillermo), por su monto total. Incluye la mano de obra contratada a terceros porque es un servicio comprado, no personal propio. Las OC sin obra cargada no entran.',
       formula: `OC de materiales ${fmt((ocMes || 0) - mohMes)}${mohMes > 0 ? ' + MO tercerizada ' + fmt(mohMes) : ''} = ${fmt(ocMes || 0)}`,
       fuente: { txt: 'OC Insumos (Guillermo Konicek)', url: SHEET_URLS_AUDIT.ocInsumos }, lista: porObraLista(r => r.insumos), tipoCelda: 'insumos' },
     { label: (moEsEstimEgr ? '~' : '') + 'MO propia', valor: moMes || 0, color: '#ef4444',
       det: moEsEstimEgr ? 'Estimada por prorrateo de tn (TANGO del mes sin cargar)' : 'Imputada por obra según TANGO (col. OBRA)', top: topObras(r => r.moObra),
+      breve: moEsEstimEgr ? 'TANGO sin cargar: MO del último mes, prorrateada por días y repartida por tn de asfalto (~).' : 'Sueldos de TANGO cuya col. OBRA es la obra, ambas quincenas. Solo personal propio de obra.',
       como: moEsEstimEgr
         ? 'TANGO de este mes todavía no está cargado: se toma la MO del último mes con datos, se prorratea por los días transcurridos y se reparte entre las obras según las toneladas de asfalto que recibió cada una. Es una aproximación (~) hasta que Mauro cargue las quincenas.'
         : 'Sueldos de ambas quincenas de TANGO cuya columna OBRA es la obra (imputación directa desde julio). Solo personal propio de obra: los centros internos, el Taller y las provisiones no entran.',
@@ -9880,6 +9882,7 @@ function renderEgresosChart() {
       fuente: { txt: 'TANGO (Mauro Orellana)', url: 'https://drive.google.com/drive/u/0/folders/1hQZoJovbFDHNsJhNiGMEueH1bLfXuuCP' }, lista: porObraLista(r => r.moObra), tipoCelda: 'mo' },
     { label: 'Costo asfalto',    valor: asfMes || 0, color: '#a855f7',
       det: fmtTn(tnEgr) + ' tn' + (pEgr ? ' × $' + (pEgr.caliente || 0).toLocaleString('es-AR') + '/tn (ref. Cartellone)' : ' a precio de referencia de cada mes'), top: topObras(r => r.costoAsfObra),
+      breve: 'tn despachadas × USD ' + _usdAsfaltoNeto() + ' + IVA (ref. Cartellone) al dólar oficial promedio del mes. Teórico: valor de mercado, no costo de producción.',
       como: 'Toneladas despachadas a cada obra (remitos de Roberto, y planilla de Amaicha para Ruta 357) valuadas a un precio de referencia: USD ' + _usdAsfaltoNeto() + '/tn neto + IVA 21% = USD ' + _usdAsfaltoConIva().toLocaleString('es-AR', {minimumFractionDigits: 2}) + '/tn (valor comercial según empresa Cartellone), convertido al dólar oficial promedio del mes. Mismo precio para caliente y frío. Es un costo teórico: lo que valdría ese asfalto a precio de mercado, no lo que costó producirlo.',
       formula: pEgr
         ? `${fmtTn(tnEgr)} tn × (USD ${_usdAsfaltoConIva().toLocaleString('es-AR', {minimumFractionDigits: 2})} × $${pEgr.dolar ? pEgr.dolar.toLocaleString('es-AR') : '—'}${pEgr.dolarParcial ? ' parcial' : ''} = $${(pEgr.caliente || 0).toLocaleString('es-AR')}/tn) = ${fmt(asfMes || 0)}`
@@ -9887,6 +9890,7 @@ function renderEgresosChart() {
       fuente: { txt: 'Remitos de asfalto (Roberto)', url: SHEET_URLS_AUDIT.remitos }, lista: porObraLista(r => r.costoAsfObra, r => fmtTn(r.tnObraTotal) + ' tn'), tipoCelda: 'tn' },
     { label: 'Alquiler equipos', valor: alqMes || 0, color: '#3b82f6',
       det: 'Horas de equipos propios en obra × tarifa (partes diarios)', top: topObras(r => r.alquiler),
+      breve: 'Horas de equipos propios en obra (partes diarios) × tarifa en USD al dólar oficial. Costo de oportunidad de usar máquina propia.',
       como: 'Horas que los equipos propios de INGECO trabajaron en cada obra (partes diarios de Nico) multiplicadas por la tarifa de alquiler de cada equipo (planilla de Adrián, en USD al dólar oficial del mes). Es el costo de oportunidad de usar máquina propia: lo que se le cobraría a un tercero.',
       formula: `Σ horas por equipo × tarifa USD/h × TC oficial = ${fmt(alqMes || 0)}`,
       fuente: { txt: 'Partes diarios (Nico) · Tarifas (Adrián)', url: SHEET_URLS_AUDIT.partes }, lista: porObraLista(r => r.alquiler), tipoCelda: 'alquiler' },
@@ -9941,7 +9945,7 @@ function renderEgresosChart() {
       <div style="flex:1;min-width:200px;">${leyenda}</div>
     </div>
     <div style="font-size:11px;color:var(--muted);margin-top:8px;">Son los mismos egresos que restan del margen (coinciden con la tarjeta Margen y con el TOTAL de la tabla). La tarjeta OC Insumos muestra además las OC sin obra asignada, que no se imputan a ninguna obra.</div>
-    <div id="egr-tip" style="display:none;position:fixed;z-index:200;pointer-events:none;background:#0f172a;color:#fff;border-radius:8px;padding:9px 12px;font-size:12px;line-height:1.45;max-width:320px;box-shadow:0 6px 20px rgba(0,0,0,.25);"></div>
+    <div id="egr-tip" style="display:none;position:fixed;z-index:200;pointer-events:none;background:#0f172a;color:#fff;border-radius:8px;padding:10px 13px;font-size:12px;line-height:1.45;max-width:380px;box-shadow:0 6px 20px rgba(0,0,0,.25);"></div>
     `;
   // Hover: resalta el segmento (en la rosca y en la leyenda) y muestra el detalle
   const tip = container.querySelector('#egr-tip');
@@ -9953,13 +9957,16 @@ function renderEgresosChart() {
   const mostrar = (idx, ev) => {
     const it = items[idx]; if (!it || !tip) return;
     const pct = (it.valor / total * 100).toFixed(1).replace('.', ',');
+    const pctG = generadoEgr > 0 ? (it.valor / generadoEgr * 100).toFixed(1).replace('.', ',') : null;
     tip.innerHTML = `<div style="font-weight:700;color:${it.color};margin-bottom:2px;">${it.label}</div>
-      <div style="font-size:15px;font-weight:800;">${fmt(it.valor)} <span style="font-size:11px;font-weight:600;color:#cbd5e1;">· ${pct}% de los egresos</span></div>
-      <div style="color:#cbd5e1;margin-top:4px;">${it.det}</div>
-      ${it.top ? `<div style="color:#e2e8f0;margin-top:4px;font-size:11px;"><span style="color:#94a3b8;">Mayores:</span> ${it.top}</div>` : ''}
-      <div style="color:#94a3b8;margin-top:6px;font-size:10.5px;">Click: cómo se calcula y desglose por obra</div>`;
+      <div style="font-size:15px;font-weight:800;">${fmt(it.valor)}</div>
+      <div style="font-size:11px;color:#cbd5e1;margin-top:1px;"><strong style="color:#fff;">${pct}%</strong> de los egresos${pctG != null ? ` · <strong style="color:#fff;">${pctG}%</strong> de lo generado` : ''}</div>
+      <div style="color:#e2e8f0;margin-top:6px;font-size:11.5px;line-height:1.4;">${it.breve}</div>
+      <div style="color:#cbd5e1;margin-top:5px;font-family:ui-monospace,Menlo,monospace;font-size:11px;">${it.formula}</div>
+      ${it.top ? `<div style="color:#e2e8f0;margin-top:5px;font-size:11px;"><span style="color:#94a3b8;">Mayores:</span> ${it.top}</div>` : ''}
+      <div style="color:#94a3b8;margin-top:6px;font-size:10.5px;">Click: desglose completo por obra</div>`;
     tip.style.display = 'block';
-    const x = Math.min(ev.clientX + 14, window.innerWidth - 340), y = Math.min(ev.clientY + 14, window.innerHeight - 120);
+    const x = Math.min(ev.clientX + 14, window.innerWidth - 400), y = Math.min(ev.clientY + 14, window.innerHeight - 200);
     tip.style.left = x + 'px'; tip.style.top = y + 'px';
     resaltar(idx);
   };
