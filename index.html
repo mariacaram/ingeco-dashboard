@@ -7332,7 +7332,7 @@ function renderFondosReparo() {
     card('Pendientes de cobro', fmt(d.pendiente + d.desaparecido), (nPend + nDes) + ' fondo' + ((nPend + nDes) !== 1 ? 's' : ''), '#b45309', 'pendiente');
   // Avisos discretos, solo si corresponde
   const avisos = [];
-  if (nSin) avisos.push(`<span onclick="setFondosFiltro('sinAsignar')" style="cursor:pointer;font-size:12px;background:#f5f3ff;border:1px solid #ddd6fe;color:#5b21b6;border-radius:12px;padding:4px 12px;">${nSin} fondo${nSin !== 1 ? 's' : ''} por ${fmt(d.sinAsignar)} sin obra asignada</span>`);
+  if (nSin) avisos.push(`<span onclick="setFondosFiltro('sinAsignar')" style="cursor:pointer;font-size:12px;font-weight:700;background:#7c3aed;color:#fff;border-radius:12px;padding:4px 12px;">SIN ASIGNAR · ${nSin} fondo${nSin !== 1 ? 's' : ''} · ${fmt(d.sinAsignar)}</span>`);
   if (nDes) avisos.push(`<span onclick="setFondosFiltro('desaparecido')" style="cursor:pointer;font-size:12px;background:#fff7ed;border:1px solid #fdba74;color:#9a3412;border-radius:12px;padding:4px 12px;" title="Figuraban en la programación de un mes y en las siguientes ya no, sin cobro registrado">${nDes} fondo${nDes !== 1 ? 's' : ''} por ${fmt(d.desaparecido)} sin seguimiento — consultar a Esteban</span>`);
   const chips = [['todos', 'Todos'], ['pendiente', 'Pendientes'], ['cobrado', 'Cobrados']];
   fl.innerHTML = chips.map(([k, l]) => `<button onclick="setFondosFiltro('${k}')" style="font-size:12px;padding:5px 12px;border-radius:14px;border:1px solid ${_FONDOS_FILTRO === k ? 'var(--primary)' : 'var(--border)'};background:${_FONDOS_FILTRO === k ? 'var(--primary)' : '#fff'};color:${_FONDOS_FILTRO === k ? '#fff' : 'inherit'};cursor:pointer;font-weight:600;">${l}</button>`).join('')
@@ -7369,7 +7369,7 @@ function renderFondosReparo() {
     const sin = g === '__sin__';
     return `<div style="background:#fff;border:1px solid ${sin ? '#ddd6fe' : 'var(--border)'};border-left:4px solid ${sin ? '#7c3aed' : '#f59e0b'};border-radius:10px;padding:10px 14px;margin-bottom:10px;">
       <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:6px;">
-        ${sin ? `<strong style="font-size:13px;color:#5b21b6;">Sin obra asignada</strong><span style="font-size:11px;color:#5b21b6;" title="En la planilla de Esteban la columna Obra dice solo 'Fondo de reparo'">completar la columna Obra en la planilla</span>`
+        ${sin ? `<span style="font-size:12px;font-weight:800;letter-spacing:.3px;background:#7c3aed;color:#fff;border-radius:6px;padding:4px 12px;">SIN ASIGNAR</span><span style="font-size:11.5px;color:#5b21b6;" title="En la planilla de Esteban la columna Obra dice solo 'Fondo de reparo'">Esteban debe completar la columna Obra en la planilla</span>`
              : `<strong style="font-size:13px;" ${conocidas.size && !conocidas.has(g.toLowerCase().trim()) ? 'title="Nombre tal como lo escribió Esteban (no coincide con el Maestro de obras)" style="font-size:13px;text-decoration:underline dotted;text-decoration-color:#cbd5e1;"' : ''}>${g}</strong>`}
         <span style="margin-left:auto;font-size:12px;white-space:nowrap;">${pend > 0 ? `Pendiente <strong style="color:#b45309;">${fmt(pend)}</strong>` : ''}${cobr > 0 ? ` <span style="color:var(--muted);">${pend > 0 ? '· ' : ''}cobrado ${fmt(cobr)}</span>` : ''}</span>
       </div>
