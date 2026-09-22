@@ -3816,7 +3816,8 @@ function renderResumenObra() {
     });
 
     let sumaCobrar = 0, sumaInsumos = 0, sumaAlquiler = 0, sumaTn = 0, sumaMO = 0, sumaMOH = 0, sumaAsf = 0, sumaAcum = 0, hayAcum = false;
-    const chartData = { insumos: [], mo: [], alquiler: [], tn: [] };
+    const chartData = { insumos: [], mo: [], alquiler: [], tn: [], tnProv: { caliente: 0, frio: 0 } };
+    rows.filter(r => r.otroGasto).forEach(r => { chartData.tnProv.caliente += r.tnObra || 0; chartData.tnProv.frio += r.tnFrioObra || 0; });
     // El TOTAL suma SOLO las filas visibles de la tabla: los "Otros gastos o
     // salidas" tienen su propio bloque y no deben entrar acá (María, sep-2026)
     rows.filter(r => !r.otroGasto).forEach(r => {
@@ -4628,8 +4629,12 @@ function renderChartsObra(data) {
       </div>`;
   };
 
-  const makeTnChart = items => {
+  const makeTnChart = (items, prov) => {
     if (!items || items.length === 0) return '';
+    const provTot = prov ? (prov.caliente || 0) + (prov.frio || 0) : 0;
+    const provTxt = provTot > 0
+      ? `<div style="font-size:11px;color:var(--muted);margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">Además, provisiones (no son obras): ${[prov.caliente > 0 ? fmtTn(prov.caliente) + ' tn caliente' : '', prov.frio > 0 ? fmtTn(prov.frio) + ' tn frío' : ''].filter(Boolean).join(' + ')} — ver "Provisiones y otras salidas"</div>`
+      : '';
     const sorted = [...items].sort((a, b) => b.total - a.total);
     const max = sorted[0].total;
     const bars = sorted.map(item => {
@@ -4652,19 +4657,19 @@ function renderChartsObra(data) {
     }).join('');
     return `
       <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;">
-        <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px;">Asfalto (tn)</div>
+        <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px;">Asfalto despachado a obras (tn)</div>
         <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">
           <span style="display:inline-block;width:10px;height:10px;background:#f59e0b;border-radius:2px;margin-right:4px;"></span>Caliente
           <span style="display:inline-block;width:10px;height:10px;background:#60a5fa;border-radius:2px;margin:0 4px 0 10px;"></span>Frío
         </div>
-        ${bars}
+        ${bars}${provTxt}
       </div>`;
   };
 
   container.innerHTML = [
     makeBarChart('OC Insumos', data.insumos, '#f59e0b', fmtM),
     makeBarChart('Alquiler de Equipos', data.alquiler, '#3b82f6', fmtM),
-    makeTnChart(data.tn),
+    makeTnChart(data.tn, data.tnProv),
   ].filter(Boolean).join('');
 }
 
