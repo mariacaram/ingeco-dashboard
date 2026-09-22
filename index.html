@@ -233,6 +233,9 @@
   .tabla-rotulo { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin: 18px 0 6px 2px; display: flex; align-items: baseline; gap: 8px; }
   .tabla-rotulo:first-of-type { margin-top: 4px; }
   .tabla-rotulo span { font-weight: 500; text-transform: none; letter-spacing: 0; }
+  /* Auditoría señalada desde otra pestaña ("⚠ ver" en el seguimiento de cobros) */
+  .audit-hl { outline: 3px solid #f59e0b !important; box-shadow: 0 0 0 6px rgba(245,158,11,.22) !important; animation: auditPulse 1.2s ease-in-out 3; }
+  @keyframes auditPulse { 0%,100% { box-shadow: 0 0 0 6px rgba(245,158,11,.22); } 50% { box-shadow: 0 0 0 12px rgba(245,158,11,.10); } }
   table { width: 100%; border-collapse: collapse; }
   th { background: #f8fafc; font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
   td { padding: 9px 12px; border-bottom: 1px solid #f0f4f8; font-size: 13px; }
@@ -6850,6 +6853,27 @@ function runAuditorias() {
     });
   }
 
+  // ── Chequeo 6: certificados de Agustín sin programación de cobro en Esteban ──
+  // Obras que Agustín tiene "A Cobrar" y que no aparecen en ninguna
+  // programación de Esteban (ni mapeadas). Mismo criterio que las filas
+  // naranjas del seguimiento de cobros, así "⚠ ver" siempre tiene destino.
+  if (seg) {
+    const jpSeg = _juliaPendPorCanon(seg.obras);
+    const yaCubiertas = new Set(AUDIT_RESULTADOS.map(r => (r.titulo || '').toLowerCase().trim()));
+    (jpSeg.solo || []).filter(x => x.monto > AUDIT_TOLERANCIA && !yaCubiertas.has((x.nombre || '').toLowerCase().trim())).forEach(x => {
+      AUDIT_RESULTADOS.push({
+        chequeo: 'Sin programar en Esteban',
+        titulo: x.nombre,
+        monto: x.monto,
+        grave: x.monto >= AUDIT_GRAVE,
+        resumen: `Agustín cargó ${fmt(x.monto)} "A Cobrar" para esta obra y no figura en ninguna programación de cobranza de Esteban. O falta cargarla en su planilla, o está con otro nombre (y hay que unificarlo).`,
+        responsable: 'Esteban',
+        items: [],
+        link: 'julia',
+      });
+    });
+  }
+
   // ── Conciliaciones automáticas: informativa, para que Agustín confirme ──
   if (concAuto.lista.length) {
     const totC = concAuto.lista.reduce((s, l) => s + l.monto, 0);
@@ -6865,6 +6889,36 @@ function runAuditorias() {
   }
 
   AUDIT_RESULTADOS.sort((a, b) => (b.grave - a.grave) || (b.monto - a.monto));
+}
+
+// Desde "Seguimiento de cobros" (⚠ ver): abre Auditorías, despliega y
+// resalta las inconsistencias de esa obra, y hace scroll hasta la primera.
+function irAAuditoriaObra(nombre) {
+  openTab('auditorias');
+  const nk = (nombre || '').toLowerCase().trim();
+  const norm = t => (_segNorm(t) || t || '').toLowerCase().trim();
+  const cards = [...document.querySelectorAll('#audit-list details[data-audit-titulo]')];
+  cards.forEach(d => d.classList.remove('audit-hl'));
+  const match = cards.filter(d => {
+    const t = d.dataset.auditTitulo || '';
+    if (t.toLowerCase().trim() === nk || norm(t) === nk) return true;
+    const al = MAPA_OBRAS_AUDIT[t];
+    if (al && al.some(x => (x || '').toLowerCase().trim() === nk || norm(x) === nk)) return true;
+    // huérfanas: el título puede ser el nombre de Esteban cuyo canónico es la obra
+    return Object.keys(MAPA_OBRAS_AUDIT).some(k => k.toLowerCase().trim() === nk && (MAPA_OBRAS_AUDIT[k] || []).some(x => (x || '').toLowerCase().trim() === t.toLowerCase().trim()));
+  });
+  if (!match.length) {
+    const res = document.getElementById('audit-resumen');
+    if (res) {
+      const av = document.createElement('div');
+      av.style.cssText = 'flex-basis:100%;font-size:12px;color:#9a3412;background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:8px 12px;';
+      av.textContent = 'No hay ninguna inconsistencia abierta para "' + nombre + '" — puede haberse corregido ya o el nombre difiere entre planillas.';
+      res.appendChild(av); setTimeout(() => av.remove(), 6000);
+    }
+    return;
+  }
+  match.forEach(d => { d.open = true; d.classList.add('audit-hl'); });
+  setTimeout(() => match[0].scrollIntoView({ behavior: 'smooth', block: 'start' }), 120);
 }
 
 function renderAuditorias() {
@@ -7252,7 +7306,7 @@ function renderSeguimientoCobros() {
     const agustin = v
       ? (v.tipo === 'ok'
           ? `<span data-restrict="sueldos" style="color:#16a34a;font-weight:700;" title="${v.tip}">✓</span>`
-          : `<span data-restrict="sueldos" style="color:#b45309;font-weight:700;cursor:pointer;" title="${v.tip} — click para ir a Auditorías" onclick="event.stopPropagation();openTab('auditorias')">⚠ ver</span>`)
+          : `<span data-restrict="sueldos" style="color:#b45309;font-weight:700;cursor:pointer;" title="${v.tip} — click para ver la inconsistencia en Auditorías" onclick="event.stopPropagation();irAAuditoriaObra('${n.replace(/'/g, "\\'")}')">⚠ ver</span>`)
       : '<span class="nd">—</span>';
     return `<tr data-obra="${n.replace(/"/g, '&quot;')}" style="cursor:pointer;" title="Click para ver el detalle certificado por certificado" onclick="openSeguimientoPanel('${n.replace(/'/g, "\\'")}')">
       <td><strong>${n}</strong>${chips.length ? `<div style="font-size:10.5px;color:var(--muted);margin-top:2px;">${chips.join(' · ')}</div>` : ''}</td>
@@ -7275,7 +7329,7 @@ function renderSeguimientoCobros() {
       ${'<td class="num"><span class="nd">—</span></td>'.repeat(hayNC ? 5 : 4)}
       <td class="num" style="white-space:nowrap;font-weight:700;color:#ea580c;">${fmt(s.monto)}</td>
       <td class="num"><span class="nd">—</span></td>
-      <td style="text-align:center;"><span data-restrict="sueldos" style="color:#b45309;font-weight:700;cursor:pointer;" title="Falta en la planilla de Esteban — click para ir a Auditorías" onclick="openTab('auditorias')">⚠ ver</span></td>
+      <td style="text-align:center;"><span data-restrict="sueldos" style="color:#b45309;font-weight:700;cursor:pointer;" title="Falta en la planilla de Esteban — click para ver la inconsistencia en Auditorías" onclick="event.stopPropagation();irAAuditoriaObra('${(s.nombre || '').replace(/'/g, "\\'")}')">⚠ ver</span></td>
     </tr>`).join('');
 
   // Totales (obras activas + solo Agustín)
