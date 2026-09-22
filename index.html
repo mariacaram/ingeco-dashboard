@@ -1327,7 +1327,7 @@
       <div class="kpi-label">Alquiler equipos a externos</div>
       <div class="kpi-value pos-val" id="kpi-taller-alq-externo">sin dato</div>
       <div class="kpi-sub" id="kpi-taller-alq-externo-sub">Período seleccionado</div>
-      <div class="fuente">Máquinas prestadas a otras empresas (Partes diarios, col. OBRA GENERAL = "Alquiler de equipos") — a tarifa de flota; el ingreso facturado real lo carga Agustín</div>
+      <div class="fuente">Máquinas prestadas a otras empresas (Partes diarios, col. OBRA GENERAL = "Alquiler de equipos") a tarifa de flota · lo facturado y cobrado real lo registra Esteban bajo "Taller Mecánico"</div>
     </div>
     <div class="kpi-card accent" style="cursor:pointer;" onclick="openRepuestosPanel()" title="Click para ver detalle">
       <div class="kpi-label">Repuestos · <span id="mes-label-repuestos-kpi"></span></div>
@@ -5579,9 +5579,17 @@ function renderAlquilerEquipos() {
   const tallerKpiExt    = document.getElementById('kpi-taller-alq-externo');
   const tallerKpiExtSub = document.getElementById('kpi-taller-alq-externo-sub');
   if (tallerKpiExt) {
+    // Lo que Esteban registró como ingreso del Taller (cobrado / facturado)
+    const estT = _tallerIngresoEsteban(mesActual);
+    const estTxt = (estT.cobrado + estT.facturado + estT.programado) > 0
+      ? ' · Esteban: ' + [estT.cobrado > 0 ? 'cobrado ' + fmt(estT.cobrado) : '', estT.facturado > 0 ? 'facturado ' + fmt(estT.facturado) : '', estT.programado > 0 ? 'programado ' + fmt(estT.programado) : ''].filter(Boolean).join(' · ')
+      : '';
     if (alqExterno > 0) {
       tallerKpiExt.textContent = fmt(alqExterno); tallerKpiExt.className = 'kpi-value pos-val';
-      if (tallerKpiExtSub) tallerKpiExtSub.textContent = (extEntry.equipos || []).length + ' equipo' + ((extEntry.equipos || []).length !== 1 ? 's' : '') + ' · ' + (extEntry.horasTot || 0) + ' hs · ' + (MES[mesActual] || mesActual);
+      if (tallerKpiExtSub) tallerKpiExtSub.textContent = (extEntry.equipos || []).length + ' equipo' + ((extEntry.equipos || []).length !== 1 ? 's' : '') + ' · ' + (extEntry.horasTot || 0) + ' hs a tarifa' + estTxt;
+    } else if (estT.cobrado + estT.facturado > 0) {
+      tallerKpiExt.textContent = fmt(estT.cobrado + estT.facturado); tallerKpiExt.className = 'kpi-value pos-val';
+      if (tallerKpiExtSub) tallerKpiExtSub.textContent = 'Según Esteban' + estTxt.replace(' · Esteban:', ':');
     } else {
       tallerKpiExt.textContent = alqIngeco > 0 ? '—' : 'sin dato'; tallerKpiExt.className = 'kpi-value nd';
       if (tallerKpiExtSub) tallerKpiExtSub.textContent = alqIngeco > 0 ? 'Sin equipos prestados a externos en ' + (MES[mesActual] || mesActual) : 'Actualizá datos para cargar';
@@ -6584,6 +6592,33 @@ const AUDIT_TOLERANCIA = 5e6; // diferencias menores a $5M no se reportan
 const AUDIT_GRAVE = 100e6;    // monto en juego a partir del cual es "grave"
 const AUDIT_CATS_PEND = ['facturados', 'noCobrados', 'sinFecha', 'menosProbable'];
 const ES_FONDO_REPARO = t => /fdo\.?\s*rep|fondo\s+de\s+reparo/i.test(t || '');
+// Ingresos del Taller (alquiler de equipos a terceros): por convención los
+// registra Esteban y NO van en el archivo de obras de Agustín. No se auditan
+// contra Agustín — se muestran en la pestaña Taller (María, sep-2026).
+const ES_OBRA_TALLER = t => /taller|alquiler\s+de\s+equipos/i.test(t || '');
+// Cobros de Esteban imputados al Taller: cobrado / facturado / programado
+// del mes (o de todos los meses en TOTAL).
+function _tallerIngresoEsteban(mes) {
+  const out = { cobrado: 0, facturado: 0, programado: 0, items: [] };
+  const meses = mes === 'total' ? MES_ORDER.filter(m => COBROS_ESTEBAN[m]) : [mes];
+  const ult = meses[meses.length - 1];
+  const vistos = new Set(); // un cobro repetido en dos pestañas cuenta una vez
+  meses.forEach(m => {
+    const x = COBROS_ESTEBAN[m]; if (!x || typeof x !== 'object') return;
+    const add = (cat, k) => (x[cat] || []).forEach(it => {
+      if (!ES_OBRA_TALLER(it.obra)) return;
+      const key = cat + '|' + (it.concepto || '') + '|' + Math.round(it.importe || 0) + '|' + (it.fechaReal || '');
+      if (vistos.has(key)) return; vistos.add(key);
+      out[k] += it.importe || 0;
+      out.items.push({ mes: m, cat, concepto: it.concepto, importe: it.importe, fecha: it.fechaReal || it.fechaProb || '', fila: it.fila, gid: it.gid });
+    });
+    add('cobrados', 'cobrado');
+    // Lo pendiente (facturado / programado) se arrastra de mes en mes: en TOTAL
+    // vale solo la última programación, igual que en el seguimiento de cobros
+    if (m === ult) { add('facturados', 'facturado'); add('sinFecha', 'programado'); }
+  });
+  return out;
+}
 // Redeterminaciones de precio: por convención SOLO las sigue Esteban
 // (financiero) — Agustín no las carga en su archivo, así que no se le
 // reclaman en la auditoría ni entran en la comparación de pendientes.
@@ -6764,6 +6799,8 @@ function runAuditorias() {
   // ── Chequeo 2: obras huérfanas (en un archivo y no en el otro) ──
   Object.keys(estPend).forEach(o => {
     if (usadosEsteban.has(o) || estPend[o].compFirme <= AUDIT_TOLERANCIA) return;
+    // Taller / centros internos: los sigue solo Esteban, no son obras de Agustín
+    if (ES_OBRA_TALLER(o) || esCentroInternoConocido(o)) return;
     AUDIT_RESULTADOS.push({
       chequeo: 'Obra huérfana',
       titulo: o,
@@ -7303,7 +7340,9 @@ function renderSeguimientoCobros() {
     const chips = [];
     if (o.fondoPend > 0) chips.push(`<span title="Fondo de reparo pendiente (retención de garantía)">🔒 ${fmt(o.fondoPend)}</span>`);
     if (o.redetPend > 0) chips.push(`<span title="Redeterminaciones de precio pendientes (las sigue solo Esteban)">📈 ${fmt(o.redetPend)}</span>`);
-    const agustin = v
+    const agustin = ES_OBRA_TALLER(n)
+      ? `<span style="font-size:11px;color:var(--muted);" title="Ingreso del Taller (alquiler a terceros): lo registra Esteban, no va en el archivo de obras de Agustín. Se ve en la pestaña Taller Mecánico.">Taller</span>`
+      : v
       ? (v.tipo === 'ok'
           ? `<span data-restrict="sueldos" style="color:#16a34a;font-weight:700;" title="${v.tip}">✓</span>`
           : `<span data-restrict="sueldos" style="color:#b45309;font-weight:700;cursor:pointer;" title="${v.tip} — click para ver la inconsistencia en Auditorías" onclick="event.stopPropagation();irAAuditoriaObra('${n.replace(/'/g, "\\'")}')">⚠ ver</span>`)
