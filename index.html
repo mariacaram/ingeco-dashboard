@@ -793,6 +793,12 @@
       <div class="kpi-sub" id="kpi-alquiler-sub">Actualizá datos para cargar</div>
       <div class="fuente"><a href="https://docs.google.com/spreadsheets/d/1e_emRVEUxTaNtLxeC0wXIWKzcKuoulZkFSS9O1e0XHo/edit?gid=1172883606#gid=1172883606" target="_blank" onclick="event.stopPropagation()">Partes diarios (Nico)</a> · <a href="https://docs.google.com/spreadsheets/d/1PEcPzwrQ8kE2evmUlrFq9wPbgWOR92MPl3LEqcSYbIk/edit?gid=1528087869#gid=1528087869" target="_blank" onclick="event.stopPropagation()">Tarifas equipos</a> · <a href="https://www.bna.com.ar/Personas/TipoCambio" target="_blank" style="color:inherit;text-decoration:underline dotted;" onclick="event.stopPropagation()">TC BNA</a></div>
     </div>
+    <div class="kpi-card neg" style="cursor:pointer;" onclick="openDetalleCelda('tn', '', '')" title="Ver cómo se calcula" id="kpi-asfalto-card">
+      <div class="kpi-label">Costo asfalto (teórico)</div>
+      <div class="kpi-value neg-val" id="kpi-asfalto-costo">sin dato</div>
+      <div class="kpi-sub" id="kpi-asfalto-sub">Actualizá datos para cargar</div>
+      <div class="fuente" id="kpi-asfalto-fuente">tn despachadas × precio de referencia Cartellone</div>
+    </div>
     <div class="kpi-card" style="cursor:pointer;" onclick="openMargenPanel()" title="Ver cómo se calcula">
       <div class="kpi-label">Margen estimado</div>
       <div class="kpi-value nd" id="kpi-margen-est">sin dato</div>
@@ -2439,18 +2445,18 @@ function renderMargen() {
   const kpiOC = document.getElementById('kpi-oc-insumos');
   if (kpiOC) {
     if (ocMes != null) {
-      kpiOC.textContent = fmt(ocMes);
+      // El número grande es el MISMO que la tabla y la rosca: insumos
+      // imputados a obras (incl. MO tercerizada). Las OC sin obra cargada
+      // (o de provisiones/alquiler) no restan del margen y van al subtítulo
+      // para que la tarjeta no diga un número distinto (María, sep-2026).
+      const _insObras = _filasMg.length ? mgInsumos : ocMes;
+      const _sinImputar = Math.max(0, ocMes - _insObras);
+      kpiOC.textContent = fmt(_insObras);
       kpiOC.className   = 'kpi-value neg-val';
-      // El total de la tarjeta incluye OC que NO están imputadas a una obra
-      // (col OBRA GENERAL vacía, provisiones, alquiler) y por eso no aparecen
-      // en la tabla de contribución marginal. Se aclara el desglose para que
-      // se entienda la diferencia con el TOTAL de la tabla (María, sep-2026).
-      const _insObras = _filasMg.length ? mgInsumos : null;
-      const _sinImputar = (_insObras != null && ocMes != null) ? Math.max(0, ocMes - _insObras) : 0;
       document.getElementById('kpi-oc-insumos-sub').innerHTML =
-        (ocPlantaObj ? ocPlantaObj.nOC + ' OC del mes' : 'Real — del mes')
-        + (_sinImputar > 1000 && _insObras != null
-            ? ` · <span title="Estas OC entran en el total pero no en la tabla de obras: o no tienen obra cargada, o son provisiones/alquiler">${fmt(_insObras)} en obras + <strong style="color:#b45309;">${fmt(_sinImputar)} sin imputar</strong></span>`
+        (ocPlantaObj ? ocPlantaObj.nOC + ' OC del mes' : 'Real — del mes') + ' · imputados a obras'
+        + (_sinImputar > 1000
+            ? ` · <span title="OC sin obra cargada en la columna OBRA GENERAL, o de provisiones/alquiler: no se imputan a ninguna obra y no restan del margen">+ <strong style="color:#b45309;">${fmt(_sinImputar)} sin obra asignada</strong> (no restan del margen)</span>`
             : '');
     } else {
       kpiOC.textContent = 'sin dato';
@@ -2463,20 +2469,31 @@ function renderMargen() {
   const kpiMO = document.getElementById('kpi-mo-obras');
   if (kpiMO) {
     const moEst = moEstObj;
+    // Mismo criterio que OC: el número grande es la MO propia imputada a
+    // obras (lo que resta del margen, igual que tabla y rosca); el total del
+    // mes (con internos, taller, provisiones) va al subtítulo.
+    const _moObras = _filasMg.length ? mgMO : null;
+    const _moTotalMes = moMensual != null ? moMensual : (moEst ? moEst.monto : null);
+    const _moResto = (_moObras != null && _moTotalMes != null) ? Math.max(0, _moTotalMes - _moObras) : 0;
+    const _restoTxt = _moResto > 1000 ? ` · <span title="MO del mes que no se imputa a obras: centros internos (Predio, Planta, Administración), Taller, o prorrateo a provisiones">+ ${fmt(_moResto)} fuera de obras</span>` : '';
     if (moMensual != null) {
       // En TOTAL las filas sintetizadas pueden incluir MO estimada de meses sin dato
       const tieneEstim = moArr.some(r => r.estimado);
-      kpiMO.textContent = (tieneEstim ? '~' : '') + fmt(moMensual);
+      kpiMO.textContent = (tieneEstim ? '~' : '') + fmt(_moObras != null ? _moObras : moMensual);
       kpiMO.className   = 'kpi-value neg-val';
-      document.getElementById('kpi-mo-obras-sub').textContent =
-        (tieneEstim ? 'Real + estimado — ' : 'Real — ') + moArr.length + ' centros de costo';
+      document.getElementById('kpi-mo-obras-sub').innerHTML =
+        (tieneEstim ? 'Real + estimado — ' : 'Real — ') + 'propia, imputada a obras' + _restoTxt;
     } else if (moEst) {
-      kpiMO.textContent = '~' + fmt(moEst.monto);
+      kpiMO.textContent = '~' + fmt(_moObras != null ? _moObras : moEst.monto);
       kpiMO.className   = 'kpi-value neg-val';
-      document.getElementById('kpi-mo-obras-sub').textContent =
+      document.getElementById('kpi-mo-obras-sub').innerHTML =
         'Estimado — ' + MES[mesActual] + ' sin cargar · ' +
         (moEst.esMesActualCalendario ? moEst.diasTranscurridos + '/' + moEst.diasMes + ' días · ' : '') +
-        'base ' + (MES[moEst.refMes] || moEst.refMes);
+        'base ' + (MES[moEst.refMes] || moEst.refMes) + _restoTxt;
+    } else if (_moObras != null && _moObras > 0) {
+      kpiMO.textContent = (_filasMg.some(r => r.moObra != null && !r.moImputada) ? '~' : '') + fmt(_moObras);
+      kpiMO.className   = 'kpi-value neg-val';
+      document.getElementById('kpi-mo-obras-sub').textContent = 'MO propia imputada a obras · suma de los meses';
     } else {
       kpiMO.textContent = 'sin dato';
       kpiMO.className   = 'kpi-value nd';
@@ -2484,6 +2501,26 @@ function renderMargen() {
     }
   }
 
+
+  // Card Costo asfalto (teórico): mismo número que la tabla y la rosca
+  const kpiAsf = document.getElementById('kpi-asfalto-costo');
+  if (kpiAsf) {
+    const subA = document.getElementById('kpi-asfalto-sub'), fteA = document.getElementById('kpi-asfalto-fuente'), cardA = document.getElementById('kpi-asfalto-card');
+    const tnA = _sumMg(r => r.tnObraTotal);
+    const pA = mesActual !== 'total' ? _precioAsfaltoObra(mesActual) : null;
+    if (_filasMg.length && (mgAsf > 0 || tnA > 0)) {
+      kpiAsf.textContent = (pA && pA.fuente === 'usd' && pA.dolarParcial ? '~' : '') + fmt(mgAsf);
+      kpiAsf.className = 'kpi-value neg-val';
+      if (subA) subA.innerHTML = fmtTn(tnA) + ' tn a obras' + (pA ? ' × $' + (pA.caliente || 0).toLocaleString('es-AR') + '/tn' : '');
+      if (fteA) fteA.innerHTML = pA && pA.fuente === 'usd'
+        ? `Teórico: USD ${pA.usdNeto} + IVA = USD ${pA.usd.toLocaleString('es-AR', {minimumFractionDigits: 2})}/tn × dólar oficial promedio $${pA.dolar.toLocaleString('es-AR')}${pA.dolarParcial ? ' (parcial)' : ''} — valor comercial según empresa Cartellone`
+        : (mesActual === 'total' ? 'Suma de los meses, cada uno a su precio de referencia' : 'Precio de referencia Cartellone (USD ' + _usdAsfaltoNeto() + ' + IVA × dólar oficial del mes)');
+      if (cardA) cardA.onclick = () => { const r0 = _filasMg.filter(r => r.tnObraTotal > 0).sort((a, b) => b.tnObraTotal - a.tnObraTotal)[0]; if (r0) openDetalleCelda('tn', r0.o.cod_obra || r0.o.nombre, r0.o.nombre || r0.o.cod_obra); };
+    } else {
+      kpiAsf.textContent = 'sin dato'; kpiAsf.className = 'kpi-value nd';
+      if (subA) subA.textContent = 'Sin toneladas despachadas a obras';
+    }
+  }
 
   const kpiMg  = document.getElementById('kpi-margen-est');
   const kpiMgFormula = document.getElementById('kpi-margen-formula');
@@ -5411,14 +5448,23 @@ function renderAlquilerEquipos() {
   const totalObrasAlq = _alqTotalObras(datos);
   const porObraFiltrado = datos && datos.porObra ? datos.porObra.filter(it => !esAlquilerNoObra(it.obra)) : [];
 
-  if (!datos || !totalObrasAlq) {
+  // El número grande coincide con la tabla y la rosca (alquiler imputado a
+  // obras); lo que va a placeholders sin obra queda en el subtítulo.
+  const _dAlq = mesActual !== 'total' ? computeMargenObrasMes(mesActual) : computeMargenObrasTotal();
+  const _alqObrasTabla = (_dAlq && _dAlq.rows) ? _dAlq.rows.filter(r => !r.otroGasto).reduce((a, r) => a + (r.alquiler || 0), 0) : null;
+  const _alqResto = (_alqObrasTabla != null && totalObrasAlq) ? Math.max(0, totalObrasAlq - _alqObrasTabla) : 0;
+  if ((!datos || !totalObrasAlq) && _alqObrasTabla > 0) {
+    if (kpiEl)  { kpiEl.textContent = fmt(_alqObrasTabla); kpiEl.className = 'kpi-value neg-val'; }
+    if (kpiSub) kpiSub.textContent = 'Imputado a obras · suma de los meses';
+  } else if (!datos || !totalObrasAlq) {
     if (kpiEl)  { kpiEl.textContent = 'sin dato'; kpiEl.className = 'kpi-value nd'; }
     if (kpiSub) kpiSub.textContent = 'Actualizá datos para cargar';
   } else {
-    if (kpiEl)  { kpiEl.textContent = fmt(totalObrasAlq); kpiEl.className = 'kpi-value neg-val'; }
-    if (kpiSub) kpiSub.textContent = datos.tcUsd
+    if (kpiEl)  { kpiEl.textContent = fmt(_alqObrasTabla != null ? _alqObrasTabla : totalObrasAlq); kpiEl.className = 'kpi-value neg-val'; }
+    if (kpiSub) kpiSub.innerHTML = (datos.tcUsd
       ? 'TC USD oficial: $' + datos.tcUsd.toLocaleString('es-AR') + '/USD · ' + (MES[mesActual] || mesActual)
-      : MES[mesActual] || mesActual;
+      : MES[mesActual] || mesActual)
+      + (_alqResto > 1000 ? ` · <span title="Horas de equipos cargadas sin obra en los partes diarios: no se imputan a ninguna obra y no restan del margen">+ ${fmt(_alqResto)} sin obra asignada</span>` : '');
   }
 
   // KPIs del Taller: alquiler INGECO (uso interno: obras + áreas internas,
