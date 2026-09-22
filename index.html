@@ -9792,6 +9792,46 @@ function renderPlantaCharts() {
   }
 }
 
+let _EGR_ITEMS = null;
+// Click en una porción de la rosca (o en la leyenda): panel con cómo se
+// calcula, qué % representa y el desglose completo por obra.
+function openEgresoDetalle(idx) {
+  if (!_EGR_ITEMS || !_EGR_ITEMS.items[idx]) return;
+  const { items, total, generado, mes } = _EGR_ITEMS;
+  const it = items[idx];
+  const pctEgr = total > 0 ? (it.valor / total * 100) : 0;
+  const pctGen = generado > 0 ? (it.valor / generado * 100) : 0;
+  const mesLbl = mes === 'total' ? 'Total 2026' : (MES[mes] || mes);
+  const codEsc = v => (v || '').replace(/'/g, "\\'");
+  const html = `<div class="panel-title" style="color:${it.color};">${it.label}</div>
+    <div class="panel-sub">${mesLbl} · egresos que restan del margen</div>
+    <div class="panel-kpi">
+      <div class="panel-kpi-item"><div class="panel-kpi-label">Monto</div><div class="panel-kpi-val" style="color:${it.color};">${fmt(it.valor)}</div></div>
+      <div class="panel-kpi-item"><div class="panel-kpi-label">De los egresos</div><div class="panel-kpi-val">${pctEgr.toFixed(1).replace('.', ',')}%</div></div>
+      <div class="panel-kpi-item"><div class="panel-kpi-label">Sobre lo generado</div><div class="panel-kpi-val">${pctGen.toFixed(1).replace('.', ',')}%</div></div>
+    </div>
+    <div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin:12px 0;">
+      <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px;">CÓMO SE CALCULA</div>
+      <div style="font-size:12.5px;line-height:1.55;">${it.como}</div>
+      <div style="font-size:12px;margin-top:8px;font-family:ui-monospace,Menlo,monospace;color:#334155;">${it.formula}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px;">Fuente: <a href="${it.fuente.url}" target="_blank">${it.fuente.txt} ↗</a></div>
+    </div>
+    <div style="font-size:11px;font-weight:700;color:var(--muted);margin:6px 0 4px;">POR OBRA · click para ver el detalle</div>
+    <table style="width:100%;font-size:12px;">
+      ${it.lista.map(x => `<tr style="border-top:1px solid var(--border);cursor:pointer;" onclick="openDetalleCelda('${it.tipoCelda}','${codEsc(x.n)}','${codEsc(x.n)}'${mes !== 'total' ? ",'" + mes + "'" : ''})">
+        <td style="padding:7px 8px;text-decoration:underline dotted;">${x.n}</td>
+        <td style="padding:7px 8px;text-align:right;color:var(--muted);white-space:nowrap;">${x.x || ''}</td>
+        <td style="padding:7px 8px;text-align:right;font-weight:700;white-space:nowrap;">${fmt(x.v)}</td>
+        <td style="padding:7px 8px;text-align:right;color:var(--muted);white-space:nowrap;">${it.valor > 0 ? (x.v / it.valor * 100).toFixed(0) + '%' : ''}</td>
+      </tr>`).join('')}
+      <tr style="border-top:2px solid var(--border);font-weight:700;background:#f8fafc;"><td style="padding:7px 8px;">TOTAL</td><td></td><td style="padding:7px 8px;text-align:right;">${fmt(it.valor)}</td><td style="padding:7px 8px;text-align:right;">100%</td></tr>
+    </table>`;
+  const panel = document.getElementById('sidePanel'), overlay = document.getElementById('overlay');
+  document.getElementById('panelContent').innerHTML = html;
+  _panelBack = null;
+  panel.classList.add('open'); overlay.classList.add('open');
+}
+
 function renderEgresosChart() {
   const container = document.getElementById('egr-chart-container');
   const mesLbl    = document.getElementById('mes-label-egr-chart');
@@ -9823,16 +9863,35 @@ function renderEgresosChart() {
     .sort((a, b) => b.v - a.v).slice(0, 3).map(x => `${x.n}: ${fmt(x.v)}`).join(' · ');
   const pEgr = mesActual !== 'total' ? _precioAsfaltoObra(mesActual) : null;
   const tnEgr = sumEgr(r => r.tnObraTotal);
+  const generadoEgr = sumEgr(r => r.aCobrar);
+  const porObraLista = (f, extra) => filasEgr.map(r => ({ n: r.o.cod_obra || r.o.nombre, v: f(r) || 0, x: extra ? extra(r) : '' })).filter(x => x.v > 0).sort((a, b) => b.v - a.v);
   const items = [
     { label: 'Insumos' + (mohMes > 0 ? ' (incl. MO tercerizada ' + fmt(mohMes) + ')' : ''), valor: ocMes || 0, color: '#f59e0b',
-      det: 'OC de materiales ' + fmt((ocMes || 0) - mohMes) + (mohMes > 0 ? ' + MO tercerizada ' + fmt(mohMes) : ''), top: topObras(r => r.insumos) },
+      det: 'OC de materiales ' + fmt((ocMes || 0) - mohMes) + (mohMes > 0 ? ' + MO tercerizada ' + fmt(mohMes) : ''), top: topObras(r => r.insumos),
+      como: 'Suma de las órdenes de compra del mes imputadas a cada obra (columna OBRA GENERAL de la planilla de Guillermo), por su monto total. Incluye la mano de obra contratada a terceros porque es un servicio comprado, no personal propio. Las OC sin obra cargada no entran.',
+      formula: `OC de materiales ${fmt((ocMes || 0) - mohMes)}${mohMes > 0 ? ' + MO tercerizada ' + fmt(mohMes) : ''} = ${fmt(ocMes || 0)}`,
+      fuente: { txt: 'OC Insumos (Guillermo Konicek)', url: SHEET_URLS_AUDIT.ocInsumos }, lista: porObraLista(r => r.insumos), tipoCelda: 'insumos' },
     { label: (moEsEstimEgr ? '~' : '') + 'MO propia', valor: moMes || 0, color: '#ef4444',
-      det: moEsEstimEgr ? 'Estimada por prorrateo de tn (TANGO del mes sin cargar)' : 'Imputada por obra según TANGO (col. OBRA)', top: topObras(r => r.moObra) },
+      det: moEsEstimEgr ? 'Estimada por prorrateo de tn (TANGO del mes sin cargar)' : 'Imputada por obra según TANGO (col. OBRA)', top: topObras(r => r.moObra),
+      como: moEsEstimEgr
+        ? 'TANGO de este mes todavía no está cargado: se toma la MO del último mes con datos, se prorratea por los días transcurridos y se reparte entre las obras según las toneladas de asfalto que recibió cada una. Es una aproximación (~) hasta que Mauro cargue las quincenas.'
+        : 'Sueldos de ambas quincenas de TANGO cuya columna OBRA es la obra (imputación directa desde julio). Solo personal propio de obra: los centros internos, el Taller y las provisiones no entran.',
+      formula: moEsEstimEgr ? `Estimación del mes repartida por tn = ${fmt(moMes || 0)}` : `Σ sueldos con col. OBRA = obra, ambas quincenas = ${fmt(moMes || 0)}`,
+      fuente: { txt: 'TANGO (Mauro Orellana)', url: 'https://drive.google.com/drive/u/0/folders/1hQZoJovbFDHNsJhNiGMEueH1bLfXuuCP' }, lista: porObraLista(r => r.moObra), tipoCelda: 'mo' },
     { label: 'Costo asfalto',    valor: asfMes || 0, color: '#a855f7',
-      det: fmtTn(tnEgr) + ' tn' + (pEgr ? ' × $' + (pEgr.caliente || 0).toLocaleString('es-AR') + '/tn (ref. Cartellone)' : ' a precio de referencia de cada mes'), top: topObras(r => r.costoAsfObra) },
+      det: fmtTn(tnEgr) + ' tn' + (pEgr ? ' × $' + (pEgr.caliente || 0).toLocaleString('es-AR') + '/tn (ref. Cartellone)' : ' a precio de referencia de cada mes'), top: topObras(r => r.costoAsfObra),
+      como: 'Toneladas despachadas a cada obra (remitos de Roberto, y planilla de Amaicha para Ruta 357) valuadas a un precio de referencia: USD ' + _usdAsfaltoNeto() + '/tn neto + IVA 21% = USD ' + _usdAsfaltoConIva().toLocaleString('es-AR', {minimumFractionDigits: 2}) + '/tn (valor comercial según empresa Cartellone), convertido al dólar oficial promedio del mes. Mismo precio para caliente y frío. Es un costo teórico: lo que valdría ese asfalto a precio de mercado, no lo que costó producirlo.',
+      formula: pEgr
+        ? `${fmtTn(tnEgr)} tn × (USD ${_usdAsfaltoConIva().toLocaleString('es-AR', {minimumFractionDigits: 2})} × $${pEgr.dolar ? pEgr.dolar.toLocaleString('es-AR') : '—'}${pEgr.dolarParcial ? ' parcial' : ''} = $${(pEgr.caliente || 0).toLocaleString('es-AR')}/tn) = ${fmt(asfMes || 0)}`
+        : `${fmtTn(tnEgr)} tn, cada mes a su precio de referencia = ${fmt(asfMes || 0)}`,
+      fuente: { txt: 'Remitos de asfalto (Roberto)', url: SHEET_URLS_AUDIT.remitos }, lista: porObraLista(r => r.costoAsfObra, r => fmtTn(r.tnObraTotal) + ' tn'), tipoCelda: 'tn' },
     { label: 'Alquiler equipos', valor: alqMes || 0, color: '#3b82f6',
-      det: 'Horas de equipos propios en obra × tarifa (partes diarios)', top: topObras(r => r.alquiler) },
+      det: 'Horas de equipos propios en obra × tarifa (partes diarios)', top: topObras(r => r.alquiler),
+      como: 'Horas que los equipos propios de INGECO trabajaron en cada obra (partes diarios de Nico) multiplicadas por la tarifa de alquiler de cada equipo (planilla de Adrián, en USD al dólar oficial del mes). Es el costo de oportunidad de usar máquina propia: lo que se le cobraría a un tercero.',
+      formula: `Σ horas por equipo × tarifa USD/h × TC oficial = ${fmt(alqMes || 0)}`,
+      fuente: { txt: 'Partes diarios (Nico) · Tarifas (Adrián)', url: SHEET_URLS_AUDIT.partes }, lista: porObraLista(r => r.alquiler), tipoCelda: 'alquiler' },
   ].filter(i => i.valor > 0);
+  _EGR_ITEMS = { items, total, generado: generadoEgr, mes: mesActual };
 
   // ── Donut chart SVG ──────────────────────────────────────────
   const SIZE = 200, CX = 100, CY = 100, R = 72, SW = 32;
@@ -9897,7 +9956,8 @@ function renderEgresosChart() {
     tip.innerHTML = `<div style="font-weight:700;color:${it.color};margin-bottom:2px;">${it.label}</div>
       <div style="font-size:15px;font-weight:800;">${fmt(it.valor)} <span style="font-size:11px;font-weight:600;color:#cbd5e1;">· ${pct}% de los egresos</span></div>
       <div style="color:#cbd5e1;margin-top:4px;">${it.det}</div>
-      ${it.top ? `<div style="color:#e2e8f0;margin-top:4px;font-size:11px;"><span style="color:#94a3b8;">Mayores:</span> ${it.top}</div>` : ''}`;
+      ${it.top ? `<div style="color:#e2e8f0;margin-top:4px;font-size:11px;"><span style="color:#94a3b8;">Mayores:</span> ${it.top}</div>` : ''}
+      <div style="color:#94a3b8;margin-top:6px;font-size:10.5px;">Click: cómo se calcula y desglose por obra</div>`;
     tip.style.display = 'block';
     const x = Math.min(ev.clientX + 14, window.innerWidth - 340), y = Math.min(ev.clientY + 14, window.innerHeight - 120);
     tip.style.left = x + 'px'; tip.style.top = y + 'px';
@@ -9905,8 +9965,10 @@ function renderEgresosChart() {
   };
   const ocultar = () => { if (tip) tip.style.display = 'none'; resaltar(-1); };
   [...arcsEl, ...legEl].forEach(el => {
+    el.style.cursor = 'pointer';
     el.addEventListener('mousemove', ev => mostrar(+el.dataset.idx, ev));
     el.addEventListener('mouseleave', ocultar);
+    el.addEventListener('click', () => { ocultar(); openEgresoDetalle(+el.dataset.idx); });
   });
 }
 
