@@ -3516,6 +3516,16 @@ function _grupoOtroGastoTR(r, i) {
   return resumen + det;
 }
 
+// Cert. teórica neta del excedente del mes anterior — la misma que muestra
+// el encabezado del grupo; se usa para ordenar las provisiones.
+function _teoNetaOG(r) {
+  let teo = r.certTeorica || 0;
+  if (mesActual !== 'total' && teo > 0) {
+    const aj = _certExcedentePrev(mesActual, r.o.cod_obra || r.o.nombre);
+    if (aj) teo = Math.max(0, teo - Math.min(aj.excedente, teo));
+  }
+  return teo;
+}
 function _renderOtrosGastosBlock(otrosGastos) {
   if (!otrosGastos || otrosGastos.length === 0) return '';
   // Totales del bloque
@@ -3561,7 +3571,7 @@ function _renderOtrosGastosBlock(otrosGastos) {
         ${th('Insumos')}${th('Alquiler')}${th('TN')}${th('$/tn')}${th('Cert. teórica')}${th('Cert. real')}
       </tr></thead>
       <tbody>
-        ${otrosGastos.slice().sort((a, b) => ((b.certTeorica || 0) - (a.certTeorica || 0)) || ((b.tnObraTotal || 0) - (a.tnObraTotal || 0)) || ((b.insumos || 0) - (a.insumos || 0))).map((r, i) => _grupoOtroGastoTR(r, i)).join('')}
+        ${otrosGastos.slice().sort((a, b) => (_teoNetaOG(b) - _teoNetaOG(a)) || ((b.tnObraTotal || 0) - (a.tnObraTotal || 0)) || ((b.insumos || 0) - (a.insumos || 0))).map((r, i) => _grupoOtroGastoTR(r, i)).join('')}
         <tr style="background:#f8fafc;font-weight:700;border-top:2px solid var(--border);">
           <td style="font-size:12px;">TOTAL</td>
           ${tdT(totIns > 0 ? fmt(totIns) : '—')}
