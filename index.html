@@ -10003,10 +10003,16 @@ function renderEgresosChart() {
       <div style="flex:1;min-width:200px;">${leyenda}</div>
     </div>
     <div style="font-size:11px;color:var(--muted);margin-top:8px;">Son los mismos egresos que restan del margen (coinciden con la tarjeta Margen y con el TOTAL de la tabla). La tarjeta OC Insumos muestra además las OC sin obra asignada, que no se imputan a ninguna obra.</div>
-    <div id="egr-tip" style="display:none;position:fixed;z-index:200;pointer-events:none;background:#0f172a;color:#fff;border-radius:8px;padding:10px 13px;font-size:12px;line-height:1.45;max-width:380px;box-shadow:0 6px 20px rgba(0,0,0,.25);"></div>
     `;
-  // Hover: resalta el segmento (en la rosca y en la leyenda) y muestra el detalle
-  const tip = container.querySelector('#egr-tip');
+  // Hover: resalta el segmento (en la rosca y en la leyenda) y muestra el detalle.
+  // El tooltip vive en <body>: dentro de la sección (que tiene transform por la
+  // animación de aparición) el position:fixed se rompe y queda pegado al borde.
+  let tip = document.getElementById('egr-tip');
+  if (!tip) {
+    tip = document.createElement('div'); tip.id = 'egr-tip';
+    tip.style.cssText = 'display:none;position:fixed;z-index:1000;pointer-events:none;background:#0f172a;color:#fff;border-radius:8px;padding:10px 13px;font-size:12px;line-height:1.45;width:max-content;max-width:380px;box-shadow:0 6px 20px rgba(0,0,0,.25);';
+    document.body.appendChild(tip);
+  }
   const arcsEl = [...container.querySelectorAll('.egr-arc')], legEl = [...container.querySelectorAll('.egr-leg')];
   const resaltar = idx => {
     arcsEl.forEach(a => a.setAttribute('stroke-width', +a.dataset.idx === idx ? SW + 8 : SW));
@@ -10024,7 +10030,11 @@ function renderEgresosChart() {
       ${it.top ? `<div style="color:#e2e8f0;margin-top:5px;font-size:11px;"><span style="color:#94a3b8;">Mayores:</span> ${it.top}</div>` : ''}
       <div style="color:#94a3b8;margin-top:6px;font-size:10.5px;">Click: desglose completo por obra</div>`;
     tip.style.display = 'block';
-    const x = Math.min(ev.clientX + 14, window.innerWidth - 400), y = Math.min(ev.clientY + 14, window.innerHeight - 200);
+    // Cerca del mouse, sin salirse de la ventana (se mide el cartel real)
+    const w = Math.min(tip.offsetWidth || 380, 380), h = tip.offsetHeight || 160;
+    let x = ev.clientX + 14, y = ev.clientY + 14;
+    if (x + w > window.innerWidth - 8) x = Math.max(8, ev.clientX - w - 14);
+    if (y + h > window.innerHeight - 8) y = Math.max(8, ev.clientY - h - 14);
     tip.style.left = x + 'px'; tip.style.top = y + 'px';
     resaltar(idx);
   };
