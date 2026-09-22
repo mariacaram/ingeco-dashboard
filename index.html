@@ -7140,6 +7140,7 @@ function _segNorm(o) { return ALIAS_ESTEBAN[o] || o || '(sin obra)'; }
 // (it.obra pasa al código del Maestro; el rótulo original queda en obraOriginal).
 const SPLIT_OBRA_ESTEBAN = {
   'Obra SAT': [
+    [/anclaje/i,                     'SAT anclaje'],                  // código que usa Agustín
     [/etapa\s*iii\b|etapa\s*3\b/i, 'SAT Pta. Muñecas Etapa 3'],
     [/etapa\s*ii\b|etapa\s*2\b/i,  'SAT Pta. Muñecas Etapa 2'],
     [/etapa\s*i\b|etapa\s*1\b/i,   'SAT Pta. Muñecas Etapa 1'],
