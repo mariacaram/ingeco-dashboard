@@ -683,6 +683,9 @@ function leerOCInsumos() {
     const COL_OBRA   = _findCol(headers, ['obra general', 'obra']) ?? 5;
     const COL_ESTADO = _findCol(headers, ['estado', 'status']) ?? 6;
     const COL_DESC   = _findCol(headers, ['descripción', 'descripcion', 'detalle']) ?? 3;
+    const COL_ORDEN  = _findCol(headers, ['n° orden', 'nº orden', 'n orden', 'orden']) ?? 0;
+    const COL_PART   = _findCol(headers, ['obra particular 1', 'obra particular']);
+    const gidOC = sheet.getSheetId();
 
     Logger.log('OC Insumos — cols: fecha=' + COL_FECHA + ' monto=' + COL_MONTO + ' obra=' + COL_OBRA + ' cod=' + COL_COD + ' prov=' + COL_PROV + ' estado=' + COL_ESTADO);
 
@@ -710,7 +713,27 @@ function leerOCInsumos() {
       const esAceptada = estadoRaw.toLowerCase().includes('acept');
       const esPendiente = estadoRaw.toLowerCase().includes('pend');
 
-      if (!acum[mes]) acum[mes] = { items: {}, total: 0, nOC: 0, moh: {}, mohTotal: 0, mohN: 0 };
+      if (!acum[mes]) acum[mes] = { items: {}, total: 0, nOC: 0, moh: {}, mohTotal: 0, mohN: 0, sinObra: [] };
+
+      // OC sin obra asignada (OBRA GENERAL vacía o "Obra no disponible"): se
+      // guardan una por una con su fila para que desde el tablero se pueda ir
+      // directo a corregirlas en la planilla (María, sep-2026).
+      if (!obraNom || /^obra no disponible$/i.test(obraNom)) {
+        let fechaStr = '';
+        const fr = row[COL_FECHA];
+        if (fr instanceof Date && !isNaN(fr.getTime())) fechaStr = Utilities.formatDate(fr, 'America/Argentina/Buenos_Aires', 'dd/MM');
+        else { const mF = String(fr || '').match(/^(\d{1,2})\/(\d{1,2})/); if (mF) fechaStr = ('0' + mF[1]).slice(-2) + '/' + ('0' + mF[2]).slice(-2); }
+        if (acum[mes].sinObra.length < 300) acum[mes].sinObra.push({
+          fila: i + 1, gid: gidOC,
+          orden: String(row[COL_ORDEN] || '').trim(),
+          fecha: fechaStr,
+          proveedor: proveedor,
+          desc: String(row[COL_DESC] || '').trim().slice(0, 80),
+          particular: COL_PART != null ? String(row[COL_PART] || '').trim() : '',
+          obra: obraNom || '',
+          monto: Math.round(monto),
+        });
+      }
 
       // MO de hormigón tercerizada: Guillermo la marca en DESCRIPCIÓN como
       // "Mano de obra" (o similar). No es un insumo — se acumula aparte para
@@ -747,6 +770,7 @@ function leerOCInsumos() {
       resultado[mes] = {
         total: Math.round(data.total),
         nOC:   data.nOC,
+        sinObra: { n: (data.sinObra || []).length, total: (data.sinObra || []).reduce((s2, x) => s2 + x.monto, 0), items: (data.sinObra || []).sort((a, b) => b.monto - a.monto) },
         items: Object.entries(data.items)
           .map(([key, v]) => ({
             obra: v.obra,

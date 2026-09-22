@@ -2453,11 +2453,9 @@ function renderMargen() {
       const _sinImputar = Math.max(0, ocMes - _insObras);
       kpiOC.textContent = fmt(_insObras);
       kpiOC.className   = 'kpi-value neg-val';
-      document.getElementById('kpi-oc-insumos-sub').innerHTML =
-        (ocPlantaObj ? ocPlantaObj.nOC + ' OC del mes' : 'Real — del mes') + ' · imputados a obras'
-        + (_sinImputar > 1000
-            ? ` · <span title="OC sin obra cargada en la columna OBRA GENERAL, o de provisiones/alquiler: no se imputan a ninguna obra y no restan del margen">+ <strong style="color:#b45309;">${fmt(_sinImputar)} sin obra asignada</strong> (no restan del margen)</span>`
-            : '');
+      document.getElementById('kpi-oc-insumos-sub').innerHTML = _sinImputar > 1000
+        ? `<span title="OC sin obra cargada en la columna OBRA GENERAL, o de provisiones/alquiler: no se imputan a ninguna obra y no restan del margen. Click en la tarjeta para ver cuáles son">+ <strong style="color:#b45309;">${fmt(_sinImputar)} sin obra asignada</strong></span>`
+        : 'Imputados a obras';
     } else {
       kpiOC.textContent = 'sin dato';
       kpiOC.className   = 'kpi-value nd';
@@ -2475,29 +2473,30 @@ function renderMargen() {
     const _moObras = _filasMg.length ? mgMO : null;
     const _moTotalMes = moMensual != null ? moMensual : (moEst ? moEst.monto : null);
     const _moResto = (_moObras != null && _moTotalMes != null) ? Math.max(0, _moTotalMes - _moObras) : 0;
-    const _restoTxt = _moResto > 1000 ? ` · <span title="MO del mes que no se imputa a obras: centros internos (Predio, Planta, Administración), Taller, o prorrateo a provisiones">+ ${fmt(_moResto)} fuera de obras</span>` : '';
+    const _restoTip = _moResto > 1000 ? ` Además hay ${fmt(_moResto)} de MO del mes que no se imputa a obras (centros internos, Taller, provisiones).` : '';
+    const _subMO = document.getElementById('kpi-mo-obras-sub');
     if (moMensual != null) {
       // En TOTAL las filas sintetizadas pueden incluir MO estimada de meses sin dato
       const tieneEstim = moArr.some(r => r.estimado);
       kpiMO.textContent = (tieneEstim ? '~' : '') + fmt(_moObras != null ? _moObras : moMensual);
       kpiMO.className   = 'kpi-value neg-val';
-      document.getElementById('kpi-mo-obras-sub').innerHTML =
-        (tieneEstim ? 'Real + estimado — ' : 'Real — ') + 'propia, imputada a obras' + _restoTxt;
+      _subMO.textContent = tieneEstim ? 'Propia · parte estimada' : 'Propia · TANGO';
+      _subMO.title = 'Sueldos de TANGO imputados a obras (columna OBRA), ambas quincenas.' + _restoTip;
     } else if (moEst) {
       kpiMO.textContent = '~' + fmt(_moObras != null ? _moObras : moEst.monto);
       kpiMO.className   = 'kpi-value neg-val';
-      document.getElementById('kpi-mo-obras-sub').innerHTML =
-        'Estimado — ' + MES[mesActual] + ' sin cargar · ' +
-        (moEst.esMesActualCalendario ? moEst.diasTranscurridos + '/' + moEst.diasMes + ' días · ' : '') +
-        'base ' + (MES[moEst.refMes] || moEst.refMes) + _restoTxt;
+      _subMO.textContent = 'Estimado · TANGO sin cargar';
+      _subMO.title = 'Estimación: base ' + (MES[moEst.refMes] || moEst.refMes) +
+        (moEst.esMesActualCalendario ? ', prorrateada a ' + moEst.diasTranscurridos + ' de ' + moEst.diasMes + ' días' : '') +
+        ', repartida entre obras por tn de asfalto. Se reemplaza por el dato real cuando Mauro cargue las quincenas.' + _restoTip;
     } else if (_moObras != null && _moObras > 0) {
       kpiMO.textContent = (_filasMg.some(r => r.moObra != null && !r.moImputada) ? '~' : '') + fmt(_moObras);
       kpiMO.className   = 'kpi-value neg-val';
-      document.getElementById('kpi-mo-obras-sub').textContent = 'MO propia imputada a obras · suma de los meses';
+      _subMO.textContent = 'Propia · suma de los meses';
     } else {
       kpiMO.textContent = 'sin dato';
       kpiMO.className   = 'kpi-value nd';
-      document.getElementById('kpi-mo-obras-sub').textContent = 'Requiere TANGO (Mauro)';
+      _subMO.textContent = 'Requiere TANGO (Mauro)'; _subMO.title = '';
     }
   }
 
@@ -5459,10 +5458,10 @@ function renderAlquilerEquipos() {
     if (kpiSub) kpiSub.textContent = 'Actualizá datos para cargar';
   } else {
     if (kpiEl)  { kpiEl.textContent = fmt(_alqObrasTabla != null ? _alqObrasTabla : totalObrasAlq); kpiEl.className = 'kpi-value neg-val'; }
-    if (kpiSub) kpiSub.innerHTML = (datos.tcUsd
-      ? 'TC USD oficial: $' + datos.tcUsd.toLocaleString('es-AR') + '/USD · ' + (MES[mesActual] || mesActual)
-      : MES[mesActual] || mesActual)
-      + (_alqResto > 1000 ? ` · <span title="Horas de equipos cargadas sin obra en los partes diarios: no se imputan a ninguna obra y no restan del margen">+ ${fmt(_alqResto)} sin obra asignada</span>` : '');
+    if (kpiSub) {
+      kpiSub.textContent = datos.tcUsd ? 'TC oficial $' + datos.tcUsd.toLocaleString('es-AR') + '/USD' : 'Equipos propios en obra';
+      kpiSub.title = 'Horas de equipos propios en obra × tarifa en USD.' + (_alqResto > 1000 ? ' Además hay ' + fmt(_alqResto) + ' de horas cargadas sin obra en los partes diarios, que no se imputan.' : '');
+    }
   }
 
   // KPIs del Taller: alquiler INGECO (uso interno: obras + áreas internas,
@@ -8816,6 +8815,32 @@ function openOCInsumosPanel() {
   const ocMes = OC_INSUMOS[mesActual];
 
   let html = '';
+  // ── OC sin obra asignada: una por una, con link a su fila para corregir ──
+  let sinObraHtml = '';
+  if (ocMes && ocMes.sinObra && ocMes.sinObra.items && ocMes.sinObra.items.length) {
+    const so = ocMes.sinObra;
+    const base = SHEET_URLS_AUDIT.ocInsumos;
+    sinObraHtml = `<div style="background:#fff7ed;border:1px solid #fdba74;border-left:4px solid #ea580c;border-radius:10px;padding:10px 12px;margin-bottom:14px;">
+      <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:6px;">
+        <strong style="font-size:12.5px;color:#9a3412;">OC sin obra asignada</strong>
+        <span style="font-size:11px;color:#9a3412;">${so.n} OC · columna OBRA GENERAL vacía o "Obra no disponible" — click en la fila para corregirla en la planilla</span>
+        <strong style="margin-left:auto;color:#ea580c;white-space:nowrap;">${fmt(so.total)}</strong>
+      </div>
+      <table style="width:100%;font-size:11.5px;">
+        ${so.items.map(x => `<tr style="border-top:1px solid #fed7aa;cursor:pointer;" onclick="window.open('${base}#gid=${x.gid != null ? x.gid : 0}&range=A${x.fila}','_blank')" title="Abrir la fila ${x.fila} en la planilla de Guillermo">
+          <td style="padding:5px 6px;white-space:nowrap;color:var(--muted);">${x.fecha || ''}</td>
+          <td style="padding:5px 6px;"><strong>${x.proveedor}</strong>${x.desc ? `<div style="font-size:10.5px;color:var(--muted);">${x.desc}</div>` : ''}${x.particular ? `<div style="font-size:10.5px;color:#9a3412;">obra particular: ${x.particular}</div>` : ''}</td>
+          <td style="padding:5px 6px;text-align:right;font-weight:700;white-space:nowrap;">${fmt(x.monto)}</td>
+          <td style="padding:5px 6px;text-align:right;white-space:nowrap;font-size:11px;color:var(--primary);">fila ${x.fila} ↗</td>
+        </tr>`).join('')}
+      </table>
+    </div>`;
+  } else if (ocMes && ocMes.items) {
+    // Backend viejo (sin detalle por fila): al menos decir cuánto hay sin obra
+    const _soTot = ocMes.items.filter(i => !i.obra || /^obra no disponible$|^sin clasificar$/i.test(i.obra)).reduce((s2, i) => s2 + i.monto, 0);
+    if (_soTot > 0) sinObraHtml = `<div style="background:#fff7ed;border:1px solid #fdba74;border-left:4px solid #ea580c;border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#9a3412;">
+      <strong>OC sin obra asignada: ${fmt(_soTot)}</strong> · para verlas una por una con link a la fila hay que actualizar el Apps Script. <a href="${SHEET_URLS_AUDIT.ocInsumos}" target="_blank" style="color:#9a3412;">Abrir planilla ↗</a></div>`;
+  }
   if (!ocMes || !ocMes.items || ocMes.items.length === 0) {
     html = `<p class="nd" style="padding:16px;">Sin órdenes de compra para ${mesLabel}</p>`;
   } else {
@@ -8914,6 +8939,7 @@ function openOCInsumosPanel() {
   content.innerHTML = `
     <div class="panel-title">OC Insumos</div>
     <div class="panel-sub">${mesLabel} · Guillermo Konicek</div>
+    ${sinObraHtml}
     <div style="margin-top:14px;">${html}</div>`;
   panel.classList.add('open');
   overlay.classList.add('open');
