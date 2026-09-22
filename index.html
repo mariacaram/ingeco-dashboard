@@ -2515,10 +2515,13 @@ function renderMargen() {
     if (_filasMg.length && (mgAsf > 0 || tnA > 0)) {
       kpiAsf.textContent = (pA && pA.fuente === 'usd' && pA.dolarParcial ? '~' : '') + fmt(mgAsf);
       kpiAsf.className = 'kpi-value neg-val';
-      if (subA) subA.innerHTML = fmtTn(tnA) + ' tn a obras' + (pA ? ' × $' + (pA.caliente || 0).toLocaleString('es-AR') + '/tn' : '');
-      if (fteA) fteA.innerHTML = pA && pA.fuente === 'usd'
-        ? `Teórico: USD ${pA.usdNeto} + IVA = USD ${pA.usd.toLocaleString('es-AR', {minimumFractionDigits: 2})}/tn × dólar oficial promedio $${pA.dolar.toLocaleString('es-AR')}${pA.dolarParcial ? ' (parcial)' : ''} — valor comercial según empresa Cartellone`
-        : (mesActual === 'total' ? 'Suma de los meses, cada uno a su precio de referencia' : 'Precio de referencia Cartellone (USD ' + _usdAsfaltoNeto() + ' + IVA × dólar oficial del mes)');
+      if (subA) {
+        subA.textContent = fmtTn(tnA) + ' tn a obras';
+        subA.title = pA && pA.fuente === 'usd'
+          ? `Precio de referencia: USD ${pA.usdNeto} + IVA = USD ${pA.usd.toLocaleString('es-AR', {minimumFractionDigits: 2})}/tn × dólar oficial promedio $${pA.dolar.toLocaleString('es-AR')}${pA.dolarParcial ? ' (parcial)' : ''} = $${(pA.caliente || 0).toLocaleString('es-AR')}/tn — valor comercial según empresa Cartellone`
+          : '';
+      }
+      if (fteA) fteA.textContent = 'Precio de referencia Cartellone · click para ver el cálculo';
       if (cardA) cardA.onclick = () => { const r0 = _filasMg.filter(r => r.tnObraTotal > 0).sort((a, b) => b.tnObraTotal - a.tnObraTotal)[0]; if (r0) openDetalleCelda('tn', r0.o.cod_obra || r0.o.nombre, r0.o.nombre || r0.o.cod_obra); };
     } else {
       kpiAsf.textContent = 'sin dato'; kpiAsf.className = 'kpi-value nd';
