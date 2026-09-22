@@ -1104,13 +1104,6 @@
     <div class="section-title">Seguimiento de cobros por obra</div>
     <div id="seg-cobros-sub" style="font-size:12px;color:var(--muted);margin:-4px 0 14px;"></div>
     <div id="seg-fondos-card"></div>
-    <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:11px;margin-bottom:12px;">
-      <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#16a34a;margin-right:5px;"></span>Cobrado</span>
-      <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#2563eb;margin-right:5px;"></span>Facturado</span>
-      <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#dc2626;margin-right:5px;"></span>No cobrado</span>
-      <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#f59e0b;margin-right:5px;"></span>Programado</span>
-      <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#94a3b8;margin-right:5px;"></span>Menos probable</span>
-    </div>
     <div id="seg-cobros-list"></div>
   </div>
 </div>
@@ -7216,10 +7209,7 @@ function renderSeguimientoCobros() {
     return;
   }
   const { meses, ult, obras } = data;
-  sub.innerHTML = `<strong>Cobrado</strong>: suma de todos los cobros percibidos desde ${MES[meses[0]] || meses[0]}. ` +
-    `<strong>Pendiente</strong>: última programación de cobranza (${MES[ult] || ult}). ` +
-    `El <strong>%</strong> es cobrado sobre el total registrado en esta planilla — no sobre el monto de contrato. ` +
-    `<span style="color:var(--muted);">Fuente: planilla de Esteban, contrastada contra los certificados del archivo de Agustín. No depende del mes seleccionado arriba.</span>`;
+  sub.innerHTML = `Cobrado acumulado desde ${MES[meses[0]] || meses[0]} · pendiente según la programación de ${MES[ult] || ult} · fuente: planilla de Esteban. <span title="El % es cobrado sobre el total registrado en la planilla (cobrado + pendiente), no sobre el monto de contrato. No depende del mes seleccionado arriba.">ⓘ</span>`;
 
   const nombres = Object.keys(obras).filter(n => obras[n].cob + obras[n].pend > 1e6);
   const activas = nombres.filter(n => obras[n].pend > 0).sort((a, b) => obras[b].pend - obras[a].pend);
@@ -7245,8 +7235,8 @@ function renderSeguimientoCobros() {
   // Solo si el archivo de Julia ya trae estados cargados.
   const jp = _juliaPendPorCanon(obras);
 
-  // Fila legible para directorio: los números en palabras, sin depender de
-  // los colores de la barra ni de íconos (María, sep-2026)
+  // ── Tabla: una fila por obra, una columna por estado (María, sep-2026) ──
+  const num = (v, cls, tip) => `<td class="num" style="white-space:nowrap;" ${tip ? `title="${tip}"` : ''}>${v > 0 ? `<span class="${cls || ''}">${fmt(v)}</span>` : '<span class="nd">—</span>'}</td>`;
   const fila = n => {
     const o = obras[n];
     const total = o.cob + o.pend;
@@ -7254,57 +7244,68 @@ function renderSeguimientoCobros() {
     const v = _segVeredictoJulia(n, o, jp);
     const c = o.cats || {};
     const pctColor = pct >= 80 ? '#16a34a' : pct >= 40 ? '#b45309' : '#dc2626';
-    // Composición de lo pendiente, de más firme a menos firme
-    const partesPend = [];
-    if (c.facturados > 0)    partesPend.push(`<span title="Comprobante emitido, en espera de cobro"><strong>${fmt(c.facturados)}</strong> facturado</span>`);
-    if (c.noCobrados > 0)    partesPend.push(`<span title="Nota de crédito"><strong>${fmt(c.noCobrados)}</strong> nota de crédito</span>`);
-    if (c.sinFecha > 0)      partesPend.push(`<span title="Previsto por Esteban, todavía sin factura"><strong>${fmt(c.sinFecha)}</strong> previsto sin facturar</span>`);
-    if (c.menosProbable > 0) partesPend.push(`<span style="color:#64748b;" title="Esteban lo registra como de cobro poco probable"><strong>${fmt(c.menosProbable)}</strong> baja probabilidad</span>`);
-    // Alertas en texto
-    const alertas = [];
-    if (o.fondoPend > 0) alertas.push(`<span style="background:#fffbeb;border:1px solid #fcd34d;color:#92400e;border-radius:12px;padding:2px 8px;" title="Retención de garantía reclamable — ver detalle">🔒 Fondo de reparo ${fmt(o.fondoPend)}</span>`);
-    if (o.redetPend > 0) alertas.push(`<span style="background:#f5f3ff;border:1px solid #ddd6fe;color:#5b21b6;border-radius:12px;padding:2px 8px;" title="Redeterminaciones de precio pendientes (las sigue solo Esteban)">📈 Redeterminaciones ${fmt(o.redetPend)}</span>`);
-    if (v) alertas.push(v.tipo === 'ok'
-      ? `<span data-restrict="sueldos" style="color:#16a34a;" title="${v.tip}">✓ coincide con Agustín</span>`
-      : `<span data-restrict="sueldos" style="background:#fff7ed;border:1px solid #fdba74;color:#9a3412;border-radius:12px;padding:2px 8px;" title="${v.tip}">⚠ difiere de Agustín — ver Auditorías</span>`);
-    return `
-    <div data-obra="${n.replace(/"/g, '&quot;')}" title="Click para ver el detalle certificado por certificado" style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:8px;cursor:pointer;" onclick="openSeguimientoPanel('${n.replace(/'/g, "\\'")}')">
-      <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:6px;">
-        <strong style="font-size:13px;flex:1 1 auto;">${n}</strong>
-        <span style="font-size:12px;white-space:nowrap;">Cobrado <strong style="color:${pctColor};font-size:14px;">${fmt(o.cob)}</strong> <span style="color:${pctColor};font-weight:700;">(${pct}%)</span> <span style="color:var(--muted);">de ${fmt(total)}</span></span>
-        <span style="font-size:12px;white-space:nowrap;">Pendiente <strong style="color:#0f172a;font-size:14px;">${fmt(o.pend)}</strong></span>
-      </div>
-      <div>${_segBarra(o, total)}</div>
-      <div style="display:flex;gap:6px 14px;flex-wrap:wrap;align-items:center;margin-top:6px;font-size:11px;color:var(--muted);">
-        ${partesPend.length ? `<span>Pendiente = ${partesPend.join(' <span style="color:#cbd5e1;">+</span> ')}</span>` : ''}
-        ${alertas.length ? `<span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;">${alertas.join('')}</span>` : ''}
-      </div>
-    </div>`;
+    const chips = [];
+    if (o.fondoPend > 0) chips.push(`<span title="Fondo de reparo pendiente (retención de garantía)">🔒 ${fmt(o.fondoPend)}</span>`);
+    if (o.redetPend > 0) chips.push(`<span title="Redeterminaciones de precio pendientes (las sigue solo Esteban)">📈 ${fmt(o.redetPend)}</span>`);
+    const agustin = v
+      ? (v.tipo === 'ok'
+          ? `<span data-restrict="sueldos" style="color:#16a34a;font-weight:700;" title="${v.tip}">✓</span>`
+          : `<span data-restrict="sueldos" style="color:#b45309;font-weight:700;cursor:pointer;" title="${v.tip} — click para ir a Auditorías" onclick="event.stopPropagation();openTab('auditorias')">⚠ ver</span>`)
+      : '<span class="nd">—</span>';
+    return `<tr data-obra="${n.replace(/"/g, '&quot;')}" style="cursor:pointer;" title="Click para ver el detalle certificado por certificado" onclick="openSeguimientoPanel('${n.replace(/'/g, "\\'")}')">
+      <td><strong>${n}</strong>${chips.length ? `<div style="font-size:10.5px;color:var(--muted);margin-top:2px;">${chips.join(' · ')}</div>` : ''}</td>
+      ${num(o.cob, 'pos-val')}
+      ${num(c.facturados, '', 'Comprobante emitido, en espera de cobro')}
+      ${num(c.sinFecha, '', 'Previsto por Esteban, todavía sin factura')}
+      ${num(c.menosProbable, 'nd', 'Esteban lo registra como de cobro poco probable')}
+      ${num(c.noCobrados, 'neg-val', 'Nota de crédito')}
+      <td class="num" style="white-space:nowrap;font-weight:700;">${o.pend > 0 ? fmt(o.pend) : '<span class="nd">—</span>'}</td>
+      <td class="num" style="white-space:nowrap;"><strong style="color:${pctColor};">${pct}%</strong></td>
+      <td style="text-align:center;">${agustin}</td>
+    </tr>`;
   };
 
   // Obras que Julia certificó (A Cobrar) pero Esteban no tiene en su programación
   const soloJulia = jp.solo.filter(s => s.monto > AUDIT_TOLERANCIA).sort((a, b) => b.monto - a.monto);
-  const soloHtml = soloJulia.map(s => `
-    <div style="background:#fff7ed;border:1px solid #fdba74;border-left:4px solid #ea580c;border-radius:10px;padding:9px 14px;margin-bottom:7px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-      <strong style="font-size:12.5px;">${s.nombre}</strong>
-      <span style="font-size:11px;color:#9a3412;font-weight:600;">⚠️ cargada por Agustín, sin programación de cobro en Esteban</span>
-      <span style="margin-left:auto;font-weight:800;font-size:13px;color:#ea580c;">${fmt(s.monto)}</span>
-    </div>`).join('');
+  const soloFilas = soloJulia.map(s => `
+    <tr style="background:#fff7ed;">
+      <td><strong>${s.nombre}</strong><div style="font-size:10.5px;color:#9a3412;margin-top:2px;">Cargada por Agustín, sin programación de cobro en Esteban</div></td>
+      <td class="num"><span class="nd">—</span></td><td class="num"><span class="nd">—</span></td><td class="num"><span class="nd">—</span></td><td class="num"><span class="nd">—</span></td><td class="num"><span class="nd">—</span></td>
+      <td class="num" style="white-space:nowrap;font-weight:700;color:#ea580c;">${fmt(s.monto)}</td>
+      <td class="num"><span class="nd">—</span></td>
+      <td style="text-align:center;"><span data-restrict="sueldos" style="color:#b45309;font-weight:700;cursor:pointer;" title="Falta en la planilla de Esteban — click para ir a Auditorías" onclick="openTab('auditorias')">⚠ ver</span></td>
+    </tr>`).join('');
 
-  // Las 10 con más pendiente a la vista; el resto colapsado (igual que Completadas)
-  const TOP = 10;
-  const activasTop = activas.slice(0, TOP);
-  const activasResto = activas.slice(TOP);
-  list.innerHTML = soloHtml + activasTop.map(fila).join('')
-    + (activasResto.length ? `
-    <details style="margin-top:10px;">
-      <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--muted);">Ver las ${activasResto.length} obras restantes con pendiente ▾</summary>
-      <div style="margin-top:10px;">${activasResto.map(fila).join('')}</div>
-    </details>` : '')
+  // Totales (obras activas + solo Agustín)
+  const tot = { cob: 0, fac: 0, prog: 0, menos: 0, nc: 0, pend: 0 };
+  activas.forEach(n => { const o = obras[n], c = o.cats || {}; tot.cob += o.cob; tot.fac += c.facturados || 0; tot.prog += c.sinFecha || 0; tot.menos += c.menosProbable || 0; tot.nc += c.noCobrados || 0; tot.pend += o.pend; });
+  soloJulia.forEach(s => { tot.pend += s.monto; });
+  const pctTot = (tot.cob + tot.pend) > 0 ? Math.round(tot.cob / (tot.cob + tot.pend) * 100) : 0;
+
+  const thead = `<thead><tr>
+    <th>Obra</th>
+    <th class="num" title="Cobros percibidos, acumulado">Cobrado</th>
+    <th class="num" title="Comprobante emitido, en espera de cobro">Facturado</th>
+    <th class="num" title="Previsto por Esteban, todavía sin factura">Programado</th>
+    <th class="num" title="Cobro poco probable según Esteban">Menos probable</th>
+    <th class="num" title="Notas de crédito">Nota de crédito</th>
+    <th class="num" title="Facturado + Programado + Menos probable + N/C">Pendiente</th>
+    <th class="num" title="Cobrado sobre cobrado + pendiente">% cobrado</th>
+    <th style="text-align:center;" title="Cruce contra los certificados del archivo de Agustín">Agustín</th>
+  </tr></thead>`;
+  const totRow = `<tr style="background:#f8fafc;font-weight:700;border-top:2px solid var(--border);">
+    <td style="font-size:12px;">TOTAL</td>
+    <td class="num pos-val">${fmt(tot.cob)}</td><td class="num">${fmt(tot.fac)}</td><td class="num">${fmt(tot.prog)}</td><td class="num" style="color:var(--muted);">${fmt(tot.menos)}</td><td class="num">${tot.nc > 0 ? fmt(tot.nc) : '—'}</td>
+    <td class="num">${fmt(tot.pend)}</td><td class="num">${pctTot}%</td><td></td>
+  </tr>`;
+
+  list.innerHTML = `<div class="table-wrap"><table id="tabla-seguimiento-cobros">${thead}<tbody>
+      ${soloFilas}${activas.map(fila).join('')}${totRow}
+    </tbody></table></div>`
     + (completas.length ? `
     <details style="margin-top:10px;">
-      <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--muted);">✓ Completadas — sin pendiente (${completas.length})</summary>
-      <div style="margin-top:10px;">${completas.map(fila).join('')}</div>
+      <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--muted);">✓ Cobradas al 100% — sin pendiente (${completas.length})</summary>
+      <div class="table-wrap" style="margin-top:8px;"><table>${thead}<tbody>${completas.map(fila).join('')}</tbody></table></div>
     </details>` : '');
 }
 
