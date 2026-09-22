@@ -742,6 +742,7 @@
     <button class="tab-btn sidebar-sub" onclick="openTab('margen-tipo')"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="12"/></svg>Por tipo de contratación</button>
   </div>
   <button class="tab-btn" onclick="openTab('cobros')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6" width="19" height="13" rx="2.5"/><path d="M2.5 10h19"/><path d="M6 15h4"/></svg>Estado financiero</button>
+  <button class="tab-btn" onclick="openTab('fondos')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><path d="M12 15v2"/></svg>Fondos de reparo<span id="fondos-nav-badge" style="display:none;margin-left:auto;background:#dc2626;color:#fff;font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;"></span></button>
   <button class="tab-btn" onclick="openTab('planta')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20V10l5 3V10l5 3V9l5 3v8z"/><path d="M3 20h18"/><path d="M6 7V4"/></svg>Planta de Asfalto</button>
   <button class="tab-btn" data-restrict="sueldos" onclick="openTab('taller')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.2 5.2L4 17l3 3 5.5-5.5a4 4 0 0 0 5.2-5.2l-2.6 2.6-2.2-.4-.4-2.2z"/></svg>Taller Mecánico</button>
   <button class="tab-btn" onclick="openTab('gastos-estructura')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16"/><path d="M16 8h2a2 2 0 0 1 2 2v11"/><path d="M2 21h20"/><path d="M8 7h2M8 11h2M8 15h2"/></svg>Gastos de Estructura</button>
@@ -1630,6 +1631,30 @@
 <!-- ================================================================ -->
 <!-- TAB: AUDITORÍAS (solo directorio) -->
 <!-- ================================================================ -->
+<!-- ================================================================ -->
+<!-- TAB: FONDOS DE REPARO — consolidado de todas las pestañas de Esteban -->
+<!-- ================================================================ -->
+<div class="tab-panel" id="tab-fondos">
+  <div class="section">
+    <div class="section-title" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      🔒 Fondos de reparo
+      <a href="https://docs.google.com/spreadsheets/d/1EwrHdUkCBER10vBZyrQBodJOrfEr2p94QlfYZ7ewSmY/edit" target="_blank" style="margin-left:auto;font-size:12px;font-weight:600;">Planilla de Esteban ↗</a>
+    </div>
+    <div style="font-size:12.5px;color:var(--muted);margin:-4px 0 14px;line-height:1.55;">
+      El cliente retiene un porcentaje de cada certificado como garantía y lo devuelve al cerrar la obra. <strong>Es plata ya ganada que falta cobrar.</strong>
+      Acá se juntan todos los fondos que aparecen en cualquier pestaña de la planilla de Esteban (col. Obra o Concepto con "Fdo. Rep." / "Fondo de reparo"), sin repetir los que se arrastran de un mes al otro, y se muestra su estado real.
+    </div>
+    <div id="fondos-kpis" class="kpi-grid" style="margin-bottom:14px;"></div>
+    <div id="fondos-filtros" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;"></div>
+    <div id="fondos-list"></div>
+    <div style="font-size:11px;color:var(--muted);margin-top:14px;line-height:1.55;">
+      <strong>Estados:</strong> ✅ Cobrado = tiene fecha real de cobro · 🧾 Facturado = comprobante emitido, en espera · ⏳ Programado = previsto sin factura · 🔻 Menos probable = Esteban lo mapea después del TOTAL ·
+      ⚠️ Desaparecido = estaba en una pestaña y en las siguientes ya no figura, sin cobro registrado (preguntar a Esteban).<br>
+      <strong>Sin asignar</strong> = en la planilla la columna Obra dice solo "Fondo de reparo" o "Redeterminación": para que quede en su obra, poner ahí el nombre del Maestro.
+    </div>
+  </div>
+</div>
+
 <div class="tab-panel" id="tab-auditorias" data-restrict="sueldos">
   <div class="section">
     <div class="section-title" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
@@ -7072,11 +7097,11 @@ function renderSeguimientoCobros() {
     const fondos = _fondosReparoPendientes();
     const totF = fondos.reduce((s, f) => s + f.monto, 0);
     cardFondos.innerHTML = fondos.length ? `
-      <div onclick="openFondosReparoPanel()" style="cursor:pointer;background:#fffbeb;border:1px solid #fcd34d;border-left:4px solid #f59e0b;border-radius:10px;padding:13px 16px;margin-bottom:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <div onclick="openTab('fondos')" style="cursor:pointer;background:#fffbeb;border:1px solid #fcd34d;border-left:4px solid #f59e0b;border-radius:10px;padding:13px 16px;margin-bottom:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
         <span style="font-size:20px;">🔒</span>
         <div>
           <div style="font-size:13px;font-weight:700;color:#92400e;">Fondos de reparo pendientes de cobro</div>
-          <div style="font-size:11px;color:#b45309;">${fondos.length} ítem(s) retenidos en ${new Set(fondos.map(f => f.obra)).size} obra(s) — click para ver el detalle y reclamar</div>
+          <div style="font-size:11px;color:#b45309;">${fondos.length} ítem(s) retenidos en ${new Set(fondos.map(f => f.obra)).size} obra(s) — click para ver la sección Fondos de reparo</div>
         </div>
         <span style="margin-left:auto;font-size:20px;font-weight:800;color:#92400e;">${fmt(totF)}</span>
       </div>` : '';
@@ -7231,6 +7256,136 @@ function openSeguimientoPanel(nombre) {
 }
 
 // Lista plana de todos los fondos de reparo pendientes (todas las obras)
+// ── FONDOS DE REPARO — consolidado de todas las pestañas de Esteban ──────
+// Un fondo se arrastra de mes en mes hasta que se cobra, y a veces cambia de
+// nombre o de obra entre pestañas. Se identifica por su IMPORTE (al peso) y
+// se juntan todas sus apariciones para saber: en qué obra está, si ya se
+// cobró, si sigue pendiente en la última programación, o si desapareció de
+// las pestañas sin cobro registrado (María, sep-2026).
+const _FONDO_OBRA_GENERICA = t => !t || /^\s*(fondo\s+de\s+reparo|redeterminaci[oó]n|fdo\.?\s*rep\.?)\s*$/i.test(t);
+function _fondosReparoConsolidado() {
+  const meses = MES_ORDER.filter(m => COBROS_ESTEBAN[m] && typeof COBROS_ESTEBAN[m] === 'object');
+  if (!meses.length) return null;
+  const ult = meses[meses.length - 1];
+  const porClave = {};
+  const CATS = ['cobrados', 'facturados', 'noCobrados', 'sinFecha', 'menosProbable'];
+  meses.forEach((m, mi) => {
+    const x = COBROS_ESTEBAN[m];
+    CATS.forEach(cat => (x[cat] || []).forEach(it => {
+      if (!(ES_FONDO_REPARO(it.obra) || ES_FONDO_REPARO(it.concepto))) return;
+      const imp = Math.round(it.importe || 0);
+      if (imp <= 0) return;
+      const k = String(imp);
+      const f = porClave[k] = porClave[k] || { importe: imp, apariciones: [], obrasRaw: [], conceptos: [] };
+      f.apariciones.push({ mes: m, mi, cat, obra: it.obra || '', concepto: it.concepto || '', fechaReal: it.fechaReal || '', fechaProb: it.fechaProb || '', fila: it.fila, gid: it.gid });
+      if (it.obra && !f.obrasRaw.includes(it.obra)) f.obrasRaw.push(it.obra);
+      if (it.concepto && !f.conceptos.includes(it.concepto)) f.conceptos.push(it.concepto);
+    }));
+  });
+  const fondos = Object.values(porClave).map(f => {
+    const cob = f.apariciones.find(a => a.cat === 'cobrados');
+    const enUlt = f.apariciones.filter(a => a.mes === ult && a.cat !== 'cobrados').sort((a, b) => b.mi - a.mi)[0];
+    const ultimaAp = f.apariciones.slice().sort((a, b) => b.mi - a.mi)[0];
+    let estado, sub = '', fecha = '';
+    if (cob) { estado = 'cobrado'; fecha = cob.fechaReal; }
+    else if (enUlt) { estado = 'pendiente'; sub = enUlt.cat; fecha = enUlt.fechaProb; }
+    else { estado = 'desaparecido'; sub = ultimaAp.cat; fecha = ultimaAp.fechaProb; }
+    // Obra: la primera aparición con un nombre real (no el genérico "Fondo de reparo")
+    const obraRaw = f.obrasRaw.find(o => !_FONDO_OBRA_GENERICA(o)) || '';
+    const obra = obraRaw ? _segNorm(obraRaw) : null;
+    // Concepto más descriptivo (el más largo) para mostrar
+    const concepto = f.conceptos.slice().sort((a, b) => b.length - a.length)[0] || '(sin concepto)';
+    const ref = cob || enUlt || ultimaAp;
+    return { importe: f.importe, obra, obraRaw, sinAsignar: !obra, concepto, conceptos: f.conceptos, estado, sub, fecha,
+             mesVisto: ultimaAp.mes, mesPrimero: f.apariciones.slice().sort((a, b) => a.mi - b.mi)[0].mes,
+             fila: ref.fila, gid: ref.gid, src: 'esteban', apariciones: f.apariciones };
+  });
+  const sum = arr => arr.reduce((s2, f) => s2 + f.importe, 0);
+  return {
+    meses, ult, fondos,
+    total:        sum(fondos),
+    cobrado:      sum(fondos.filter(f => f.estado === 'cobrado')),
+    pendiente:    sum(fondos.filter(f => f.estado === 'pendiente')),
+    desaparecido: sum(fondos.filter(f => f.estado === 'desaparecido')),
+    sinAsignar:   sum(fondos.filter(f => f.sinAsignar && f.estado !== 'cobrado')),
+  };
+}
+let _FONDOS_FILTRO = 'todos';
+function setFondosFiltro(f) { _FONDOS_FILTRO = f; renderFondosReparo(); }
+function renderFondosReparo() {
+  const kp = document.getElementById('fondos-kpis'), fl = document.getElementById('fondos-filtros'), list = document.getElementById('fondos-list');
+  const badge = document.getElementById('fondos-nav-badge');
+  if (!list) return;
+  const d = _fondosReparoConsolidado();
+  if (!d) {
+    kp.innerHTML = ''; fl.innerHTML = '';
+    list.innerHTML = '<div class="nd" style="text-align:center;padding:20px;font-size:13px;">Presioná "Actualizar datos" para cargar la planilla de Esteban</div>';
+    if (badge) badge.style.display = 'none';
+    return;
+  }
+  const nSin = d.fondos.filter(f => f.sinAsignar && f.estado !== 'cobrado').length;
+  const nDes = d.fondos.filter(f => f.estado === 'desaparecido').length;
+  if (badge) { const n = nSin + nDes; badge.style.display = n ? '' : 'none'; badge.textContent = n; }
+  const card = (lbl, val, sub, color, filtro) => `
+    <div class="kpi-card" style="cursor:pointer;border-left-color:${color};" onclick="setFondosFiltro('${filtro}')" title="Click para filtrar">
+      <div class="kpi-label">${lbl}</div>
+      <div class="kpi-value" style="color:${color};">${val}</div>
+      <div class="kpi-sub">${sub}</div>
+    </div>`;
+  kp.innerHTML =
+    card('🔒 Retenido total', fmt(d.total), d.fondos.length + ' fondos en ' + d.meses.length + ' pestañas', '#0f172a', 'todos') +
+    card('✅ Cobrado', fmt(d.cobrado), d.fondos.filter(f => f.estado === 'cobrado').length + ' ya devueltos', '#16a34a', 'cobrado') +
+    card('⏳ Pendiente', fmt(d.pendiente), 'según programación de ' + (MES[d.ult] || d.ult), '#b45309', 'pendiente') +
+    card('⚠️ Desaparecidos', fmt(d.desaparecido), nDes + ' sin cobro registrado — preguntar a Esteban', '#dc2626', 'desaparecido') +
+    card('❓ Sin asignar', fmt(d.sinAsignar), nSin + ' sin obra en la columna Obra', '#7c3aed', 'sinAsignar');
+  const chips = [['todos', 'Todos'], ['pendiente', 'Pendientes'], ['cobrado', 'Cobrados'], ['desaparecido', 'Desaparecidos'], ['sinAsignar', 'Sin asignar']];
+  fl.innerHTML = chips.map(([k, l]) => `<button onclick="setFondosFiltro('${k}')" style="font-size:12px;padding:5px 12px;border-radius:14px;border:1px solid ${_FONDOS_FILTRO === k ? 'var(--primary)' : 'var(--border)'};background:${_FONDOS_FILTRO === k ? 'var(--primary)' : '#fff'};color:${_FONDOS_FILTRO === k ? '#fff' : 'inherit'};cursor:pointer;font-weight:600;">${l}</button>`).join('');
+  const filtrados = d.fondos.filter(f => _FONDOS_FILTRO === 'todos' ? true
+    : _FONDOS_FILTRO === 'sinAsignar' ? (f.sinAsignar && f.estado !== 'cobrado') : f.estado === _FONDOS_FILTRO);
+  // Agrupar por obra; "Sin asignar" siempre al final
+  const grupos = {};
+  filtrados.forEach(f => { const g = f.sinAsignar ? '__sin__' : f.obra; (grupos[g] = grupos[g] || []).push(f); });
+  const ordenG = Object.keys(grupos).sort((a, b) => {
+    if (a === '__sin__') return 1; if (b === '__sin__') return -1;
+    const pa = grupos[a].filter(f => f.estado !== 'cobrado').reduce((s2, f) => s2 + f.importe, 0);
+    const pb = grupos[b].filter(f => f.estado !== 'cobrado').reduce((s2, f) => s2 + f.importe, 0);
+    return pb - pa;
+  });
+  const estadoHTML = f => {
+    if (f.estado === 'cobrado') return `<span style="color:#16a34a;font-weight:700;">✅ Cobrado</span> <span style="color:var(--muted);">${f.fecha}</span>`;
+    const lbl = { facturados: '🧾 Facturado', sinFecha: '⏳ Programado', menosProbable: '🔻 Menos probable', noCobrados: '📝 Nota de crédito' }[f.sub] || '⏳ Pendiente';
+    if (f.estado === 'pendiente') return `<span style="font-weight:700;color:#b45309;">${lbl}</span> <span style="color:var(--muted);">${f.fecha ? 'prob. ' + f.fecha : 'sin fecha'}</span>`;
+    return `<span style="font-weight:700;color:#dc2626;">⚠️ Desaparecido</span> <span style="color:var(--muted);">visto hasta ${MES[f.mesVisto] || f.mesVisto} como ${lbl.replace(/^\S+\s/, '').toLowerCase()}</span>`;
+  };
+  if (!filtrados.length) { list.innerHTML = '<div class="nd" style="padding:16px;font-size:13px;">Nada en este filtro.</div>'; return; }
+  // Obras conocidas por el tablero (Maestro vía archivo de Agustín): si el
+  // nombre que puso Esteban no coincide, se avisa para que lo estandarice.
+  const conocidas = new Set();
+  ((GENERADO_POR_OBRA && GENERADO_POR_OBRA.obras) || []).forEach(o => { if (o.cod_obra) conocidas.add(o.cod_obra.toLowerCase().trim()); });
+  ((GENERADO_POR_OBRA && GENERADO_POR_OBRA.obrasSinPeriodo) || []).forEach(o => { if (o.cod_obra) conocidas.add(o.cod_obra.toLowerCase().trim()); });
+  list.innerHTML = ordenG.map(g => {
+    const rows = grupos[g].slice().sort((a, b) => (a.estado === 'cobrado') - (b.estado === 'cobrado') || b.importe - a.importe);
+    const pend = rows.filter(f => f.estado !== 'cobrado').reduce((s2, f) => s2 + f.importe, 0);
+    const cobr = rows.filter(f => f.estado === 'cobrado').reduce((s2, f) => s2 + f.importe, 0);
+    const sin = g === '__sin__';
+    return `<div style="background:#fff;border:1px solid ${sin ? '#ddd6fe' : 'var(--border)'};border-left:4px solid ${sin ? '#7c3aed' : '#f59e0b'};border-radius:10px;padding:10px 14px;margin-bottom:10px;">
+      <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:6px;">
+        ${sin ? `<strong style="font-size:13px;color:#5b21b6;">❓ Sin asignar</strong><span style="font-size:11px;background:#f5f3ff;border:1px solid #ddd6fe;color:#5b21b6;border-radius:12px;padding:2px 8px;">la columna Obra dice solo "Fondo de reparo" — poner el nombre del Maestro</span>`
+             : `<strong style="font-size:13px;">${g}</strong>${conocidas.size && !conocidas.has(g.toLowerCase().trim()) ? `<span style="font-size:10.5px;background:#fff7ed;border:1px solid #fdba74;color:#9a3412;border-radius:12px;padding:2px 8px;" title="Este nombre no coincide con ninguna obra del Maestro: es como lo escribió Esteban. Si es una obra vigente, usar el nombre del Maestro; si es una obra vieja ya cerrada, está bien así.">no está en el Maestro</span>` : ''}`}
+        <span style="margin-left:auto;font-size:12px;white-space:nowrap;">Pendiente <strong style="color:#b45309;">${fmt(pend)}</strong>${cobr > 0 ? ` <span style="color:var(--muted);">· cobrado ${fmt(cobr)}</span>` : ''}</span>
+      </div>
+      <table style="width:100%;font-size:12px;">
+        ${rows.map(f => `<tr style="border-top:1px solid var(--border);">
+          <td style="padding:6px 8px;">${f.concepto}${sin && f.obraRaw ? '' : ''}${f.conceptos.length > 1 ? `<div style="font-size:10.5px;color:var(--muted);">también como: ${f.conceptos.filter(c => c !== f.concepto).join(' · ')}</div>` : ''}<div style="font-size:10.5px;color:var(--muted);">desde ${MES[f.mesPrimero] || f.mesPrimero}${f.mesPrimero !== f.mesVisto ? ' hasta ' + (MES[f.mesVisto] || f.mesVisto) : ''}</div></td>
+          <td style="padding:6px 8px;white-space:nowrap;font-size:11.5px;">${estadoHTML(f)}</td>
+          <td style="padding:6px 8px;text-align:right;font-weight:700;white-space:nowrap;">${fmt(f.importe)}</td>
+          <td style="padding:6px 4px;text-align:right;white-space:nowrap;">${_sheetLinkAudit(f)}</td>
+        </tr>`).join('')}
+      </table>
+    </div>`;
+  }).join('');
+}
+
 function _fondosReparoPendientes() {
   const data = _seguimientoCobros();
   if (!data) return [];
@@ -10101,6 +10256,7 @@ function renderAll() {
   renderAuditorias();
   renderSeguimientoCobros();
   renderCobranzaMargen();
+  renderFondosReparo();
   _syncKpiCardsTipo();
 }
 
