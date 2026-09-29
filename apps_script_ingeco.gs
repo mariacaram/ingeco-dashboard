@@ -2170,7 +2170,9 @@ function leerRemitosAsfalto() {
           else if (CAT_ARIDOS[desc]) dsCat = CAT_ARIDOS[desc];
           if (dsCat) {
             const udC = esKg ? 'TN' : udRaw;
-            const uCat = (dsCat === 'Pavimax' || dsCat.indexOf('Asfalto') === 0) ? 'TN' : (udC || 'M3');
+            // Pavimax se mide en BOLSAS de 25 kg (María, sep-2026): la cantidad
+            // puede venir en KG (÷25), en TN (×40) o directamente en bolsas.
+            const uCat = dsCat === 'Pavimax' ? 'Bolsa' : (dsCat.indexOf('Asfalto') === 0 ? 'TN' : (udC || 'M3'));
             if (!resultado[mesKey].porObra[obra]) resultado[mesKey].porObra[obra] = { caliente: 0, frio: 0 };
             const po = resultado[mesKey].porObra[obra];
             if (!po.cat) po.cat = [];
@@ -2180,7 +2182,12 @@ function leerRemitosAsfalto() {
               if (x.ds === dsCat && (x.tp || '') === tipoColRaw && x.d === destino && x.u === uCat) { ec = x; break; }
             }
             if (!ec) { ec = { ds: dsCat, tp: tipoColRaw, d: destino, u: uCat, t: 0 }; po.cat.push(ec); }
-            ec.t = Math.round((ec.t + cant) * 10) / 10;
+            let cantCat = cant;
+            if (dsCat === 'Pavimax') {
+              const esTn = udRaw === 'TN' || udRaw === 'TON' || udRaw === 'TONS' || udRaw === 'TM' || udRaw === 'TONELADAS';
+              cantCat = esKg ? cantRaw / 25 : (esTn ? cantRaw * 40 : cantRaw);
+            }
+            ec.t = Math.round((ec.t + cantCat) * 10) / 10;
           }
         }
 
@@ -2191,10 +2198,12 @@ function leerRemitosAsfalto() {
         }
         // Pavimax es asfalto frío embolsado: en los remitos la descripción dice
         // solo "Pavimax" (sin la palabra asfalto) — cuenta igual como frío
-        if (!desc.includes('ASFALTO') && !desc.includes('PAVIMAX')) continue;
+        // Pavimax es una unidad aparte (bolsas de 25 kg, ver po.cat): no suma
+        // a las tn de asfalto caliente/frío (María, sep-2026)
+        if (!desc.includes('ASFALTO') || desc.includes('PAVIMAX')) continue;
         if (cant <= 0) continue;
         const tipo = desc.includes('CALIENTE') ? 'caliente'
-                   : (desc.includes('FRI') || desc.includes('FRÍO') || desc.includes('PAVIMAX')) ? 'frio' : null;
+                   : (desc.includes('FRI') || desc.includes('FRÍO')) ? 'frio' : null;
         // Sub-destino del caliente: descripción vieja ("...para carpeta/bacheo")
         // o col TIPO nueva ("Carpeta Ingeco" / "Bacheo Ingeco")
         const subTipo = tipo === 'caliente'
