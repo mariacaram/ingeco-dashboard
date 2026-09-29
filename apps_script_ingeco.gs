@@ -365,11 +365,18 @@ function leerTangoMO() {
 
       // Detectar mes desde el nombre del archivo
       // Soporta "MM-YYYY" con o sin espacios (ej: "01-2026", "05 - 2026") y texto (ENE..DIC)
+      // El patrón "MM - YYYY" puede venir con prefijo ("Copia de 09 - 2026
+      // QUINCENAS", sep-2026): se busca en cualquier parte del nombre, no solo
+      // al inicio. Si trae año y no es el año en curso, se omite.
       let mes = null;
       const MAP = { 1:'ene', 2:'feb', 3:'mar', 4:'abr', 5:'may', 6:'jun',
                     7:'jul', 8:'ago', 9:'sep', 10:'oct', 11:'nov', 12:'dic' };
-      const mNum = nombre.match(/^(\d{1,2})\s*-\s*\d{4}/);
+      const mNum = nombre.match(/(?:^|[^\d])(\d{1,2})\s*-\s*(\d{4})(?!\d)/);
       if (mNum) {
+        if (parseInt(mNum[2]) !== new Date().getFullYear()) {
+          Logger.log('Tango — "' + file.getName() + '" es de otro año (' + mNum[2] + ') — omitido');
+          continue;
+        }
         mes = MAP[parseInt(mNum[1])] || null;
       } else if (nombre.includes('ENE'))  mes = 'ene';
       else if (nombre.includes('FEB'))    mes = 'feb';
@@ -389,10 +396,20 @@ function leerTangoMO() {
         continue;
       }
 
+      // Si hay dos archivos para el mismo mes (ej. el original y una "Copia de"),
+      // gana el que NO es copia; a igualdad, el modificado más recientemente.
+      const esCopia = /^COPIA\s+DE/.test(nombre);
+      const prev = resultado[mes] ? resultado[mes]._meta : null;
+      if (prev && (prev.esCopia === esCopia ? prev.modif >= file.getLastUpdated().getTime() : !prev.esCopia)) {
+        Logger.log('Tango — "' + file.getName() + '" duplica el mes ' + mes + ' (ya cargado "' + prev.nombre + '") — omitido');
+        continue;
+      }
+
       Logger.log('Tango — procesando "' + file.getName() + '" → ' + mes);
       const data = parsearArchivoTangoMO(file);
       if (data && data.rows && data.rows.length > 0) {
         resultado[mes] = data.rows;
+        Object.defineProperty(resultado[mes], '_meta', { value: { nombre: file.getName(), esCopia: esCopia, modif: file.getLastUpdated().getTime() }, enumerable: false });
         resultadoQuincenas[mes] = data.quincenas || [];
       }
     }
