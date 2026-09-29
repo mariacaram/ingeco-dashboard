@@ -2148,8 +2148,14 @@ function leerRemitosAsfalto() {
         const iDescS = matSlots[slot][0], iCantS = matSlots[slot][1], iUDS = matSlots[slot][2];
         // Sin acentos: "FRÍO" (NFC o NFD) → "FRIO" — los includes() de abajo quedan estables
         const desc = String(iDescS >= 0 ? row[iDescS] || '' : '').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-        const cant = typeof row[iCantS] === 'number' ? row[iCantS]
+        const cantRaw = typeof row[iCantS] === 'number' ? row[iCantS]
                    : parseFloat(String(row[iCantS] || '').replace(',', '.')) || 0;
+        // UNIDAD: si la cantidad viene en KG (Pavimax embolsado, sep-2026) se
+        // convierte a toneladas; en TN/TON queda igual. Otras unidades (M3,
+        // LTS, viaje) no son toneladas y siguen su camino normal.
+        const udRaw = iUDS >= 0 ? String(row[iUDS] || '').toUpperCase().trim() : '';
+        const esKg  = udRaw === 'KG' || udRaw === 'KGS' || udRaw === 'KILOS' || udRaw === 'KILOGRAMOS';
+        const cant  = esKg ? Math.round(cantRaw) / 1000 : cantRaw;
 
         // ── Desglose por CATEGORÍA para provisiones/ventas (convención jun-2026):
         // descripción normalizada + col TIPO + destino, incluye áridos en M3.
@@ -2163,7 +2169,7 @@ function leerRemitosAsfalto() {
           else if (desc.includes('ASFALTO') && (desc.includes('FRI') || desc.includes('FRÍO'))) dsCat = 'Asfalto en frío';
           else if (CAT_ARIDOS[desc]) dsCat = CAT_ARIDOS[desc];
           if (dsCat) {
-            const udC = iUDS >= 0 ? String(row[iUDS] || '').toUpperCase().trim() : '';
+            const udC = esKg ? 'TN' : udRaw;
             const uCat = (dsCat === 'Pavimax' || dsCat.indexOf('Asfalto') === 0) ? 'TN' : (udC || 'M3');
             if (!resultado[mesKey].porObra[obra]) resultado[mesKey].porObra[obra] = { caliente: 0, frio: 0 };
             const po = resultado[mesKey].porObra[obra];
@@ -2180,7 +2186,7 @@ function leerRemitosAsfalto() {
 
         // ── De acá en adelante: solo asfalto en toneladas (para tn y prorrateo de MO) ──
         if (iUDS >= 0) {
-          const ud = String(row[iUDS] || '').toUpperCase().trim();
+          const ud = esKg ? 'TN' : udRaw;
           if (ud !== 'TN' && ud !== 'TON' && ud !== 'TONS' && ud !== 'TM' && ud !== 'TONELADAS') continue;
         }
         // Pavimax es asfalto frío embolsado: en los remitos la descripción dice
