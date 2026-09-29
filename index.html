@@ -5816,12 +5816,19 @@ function openRepuestosPanel() {
   const d = REPUESTOS_EQUIPOS[mesActual];
   const items = d && d.items ? d.items : [];
   const porEq = {};
-  items.forEach(it => { const k = it.codEq || 'Sin código'; if (!porEq[k]) porEq[k] = { n: 0, costo: 0 }; porEq[k].n++; porEq[k].costo += it.costo; });
+  items.forEach(it => { const k = it.codEq || 'Sin código'; if (!porEq[k]) porEq[k] = { n: 0, costo: 0, nombre: it.equipo || k, items: [] }; porEq[k].n++; porEq[k].costo += it.costo; porEq[k].items.push(it); });
   const eqs = Object.entries(porEq).sort((a, b) => b[1].costo - a[1].costo);
   const total = eqs.reduce((s, e) => s + e[1].costo, 0);
+  const SHEET_REP = 'https://docs.google.com/spreadsheets/d/1JpXjGTJwlvMuEI-rFTd4KeKvzd708-yuSLAhIRuCFC0/edit';
+  const gid = d && d.gid;
+  const hayDet = items.some(it => it.fila || it.proveedor);
+  const filaEntrega = it => `<tr style="background:#fafafa;">
+          <td style="padding:5px 10px 5px 22px;font-size:11px;color:var(--muted);" colspan="2">${it.nEntrega ? '#' + it.nEntrega + ' · ' : ''}${it.proveedor || ''}${it.razon ? ' · ' + it.razon : ''}${it.resumen ? '<br><span style="font-size:10px;">' + it.resumen + '</span>' : ''}</td>
+          <td style="padding:5px 10px;font-size:11px;text-align:right;white-space:nowrap;">${fmt(it.costo)}${it.fila ? ` <a href="${SHEET_REP}${gid ? '?gid=' + gid + '#gid=' + gid : ''}&range=A${it.fila}" target="_blank" style="font-size:10px;">fila ${it.fila} ↗</a>` : ''}</td>
+        </tr>`;
   content.innerHTML = `
     <div class="panel-title">Repuestos de máquinas — ${mesLabel}</div>
-    <div class="panel-sub">Entregas agrupadas por equipo · <a href="https://docs.google.com/spreadsheets/d/1JpXjGTJwlvMuEI-rFTd4KeKvzd708-yuSLAhIRuCFC0/edit" target="_blank">ENTREGAS DE REPUESTOS (Nico) ↗</a></div>
+    <div class="panel-sub">Entregas agrupadas por equipo · <a href="${SHEET_REP}" target="_blank">Pedidos y entregas de repuestos (Nico) ↗</a>${hayDet ? ' · click en un equipo para ver las entregas' : ''}</div>
     <table style="width:100%;border-collapse:collapse;margin-top:10px;">
       <thead><tr style="background:#f1f5f9;">
         <th style="text-align:left;padding:7px 10px;font-size:11px;">Equipo</th>
@@ -5829,11 +5836,11 @@ function openRepuestosPanel() {
         <th style="text-align:right;padding:7px 10px;font-size:11px;">Costo</th>
       </tr></thead>
       <tbody>
-        ${eqs.map(e => `<tr style="border-top:1px solid var(--border);">
-          <td style="padding:7px 10px;font-size:12px;font-weight:600;">${e[0]}</td>
+        ${eqs.map((e, i) => `<tr style="border-top:1px solid var(--border);${hayDet ? 'cursor:pointer;' : ''}" ${hayDet ? `onclick="document.querySelectorAll('.rep-det-${i}').forEach(x => x.style.display = x.style.display === 'none' ? '' : 'none')"` : ''}>
+          <td style="padding:7px 10px;font-size:12px;font-weight:600;" title="${e[1].nombre}">${e[1].nombre.length > 42 ? e[1].nombre.slice(0, 40) + '…' : e[1].nombre}</td>
           <td style="padding:7px 10px;font-size:12px;text-align:right;color:var(--muted);">${e[1].n}</td>
           <td style="padding:7px 10px;font-size:12px;text-align:right;" class="neg-val"><strong>${fmt(e[1].costo)}</strong></td>
-        </tr>`).join('')}
+        </tr>${hayDet ? e[1].items.slice().sort((x, y) => y.costo - x.costo).map(it => filaEntrega(it).replace('<tr style="', `<tr class="rep-det-${i}" style="display:none;`)).join('') : ''}`).join('')}
         <tr style="background:#fef2f2;border-top:2px solid #fca5a5;font-weight:700;">
           <td style="padding:8px 10px;font-size:12px;">TOTAL · ${items.length} entregas</td>
           <td></td>

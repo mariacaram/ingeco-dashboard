@@ -1877,35 +1877,63 @@ function leerGastosEstructura() {
 // ============================================================
 function leerRepuestosEquipos() {
   try {
-    const ss    = SpreadsheetApp.openById(FILE_IDS.repuestosEquipos);
-    const sheet = ss.getSheetByName('ENTREGAS') || ss.getSheets()[0];
-    const rows  = sheet.getDataRange().getValues();
+    const ss = SpreadsheetApp.openById(FILE_IDS.repuestosEquipos);
+    // La planilla se reestructuró (sep-2026): la hoja pasó a llamarse
+    // "REGISTRO ENTREGAS" (hay también "FORMULARIO ENTREGA", que no es un
+    // registro). Se busca por nombre y las columnas se detectan por header.
+    const sheets = ss.getSheets();
+    const sheet = ss.getSheetByName('REGISTRO ENTREGAS')
+      || sheets.find(sh => /ENTREGA/i.test(sh.getName()) && !/FORMULARIO/i.test(sh.getName()))
+      || ss.getSheetByName('ENTREGAS')
+      || sheets[0];
+    const rows = sheet.getDataRange().getValues();
+    const gid  = sheet.getSheetId();
 
-    const COL_FECHA  = 2;  // C
-    const COL_COD_EQ = 4;  // E
-    const COL_COSTO  = 9;  // J
-
-    let hdrIdx = 0;
-    for (let i = 0; i < Math.min(5, rows.length); i++) {
-      const rowStr = rows[i].map(c => String(c).toLowerCase()).join('|');
-      if (rowStr.includes('fecha') || rowStr.includes('costo') || rowStr.includes('código')) {
-        hdrIdx = i; break;
+    let hdrIdx = -1, iFecha = -1, iCod = -1, iCosto = -1, iEq = -1, iProv = -1, iRazon = -1, iObraG = -1, iNEnt = -1, iOrden = -1, iResumen = -1;
+    for (let i = 0; i < Math.min(10, rows.length); i++) {
+      const h = rows[i].map(c => String(c).toUpperCase().trim());
+      const f = h.findIndex(c => c === 'FECHA' || c.indexOf('FECHA') === 0);
+      const c = h.findIndex(c => c === 'COSTO' || c.indexOf('COSTO') === 0);
+      if (f >= 0 && c >= 0) {
+        hdrIdx = i; iFecha = f; iCosto = c;
+        iCod     = h.findIndex(x => x === 'CÓDIGO 1' || x === 'CODIGO 1' || x === 'CÓDIGO' || x === 'CODIGO');
+        iEq      = h.findIndex(x => x.indexOf('EQUIPO/SECTOR') === 0 || x === 'EQUIPO');
+        iProv    = h.findIndex(x => x.indexOf('PROVEEDOR') === 0);
+        iRazon   = h.findIndex(x => x.indexOf('RAZÓN') === 0 || x.indexOf('RAZON') === 0);
+        iObraG   = h.findIndex(x => x.indexOf('OBRA GENERAL') === 0);
+        iNEnt    = h.findIndex(x => x.indexOf('N° ENTREGA') === 0 || x.indexOf('Nº ENTREGA') === 0 || x.indexOf('N ENTREGA') === 0);
+        iOrden   = h.findIndex(x => x.indexOf('N° ORDEN') === 0 || x.indexOf('Nº ORDEN') === 0);
+        iResumen = h.findIndex(x => x.indexOf('RESUMEN') === 0);
+        break;
       }
     }
-    Logger.log('Repuestos — hoja: ' + sheet.getName() + ' hdr=' + hdrIdx);
+    if (hdrIdx < 0) {
+      // Formato viejo (hoja ENTREGAS sin header reconocible): C fecha, E código, J costo
+      hdrIdx = 0; iFecha = 2; iCod = 4; iCosto = 9;
+    }
+    Logger.log('Repuestos — hoja: ' + sheet.getName() + ' hdr=' + hdrIdx + ' fecha=' + iFecha + ' cod=' + iCod + ' costo=' + iCosto);
 
     const resultado = {};
     for (let i = hdrIdx + 1; i < rows.length; i++) {
       const row  = rows[i];
-      const mes  = parsearMes(row[COL_FECHA]);
+      const mes  = parsearMes(row[iFecha]);
       if (!mes) continue;
-      const codEq = String(row[COL_COD_EQ] || '').trim();
-      const costo = parsearMonto(row[COL_COSTO]);
+      const costo = parsearMonto(row[iCosto]);
       if (!costo || costo <= 0) continue;
+      const codEq = iCod >= 0 ? String(row[iCod] || '').trim() : '';
+      const eq    = iEq >= 0 ? String(row[iEq] || '').trim() : '';
 
-      if (!resultado[mes]) resultado[mes] = { total: 0, items: [] };
+      if (!resultado[mes]) resultado[mes] = { total: 0, items: [], gid: gid };
       resultado[mes].total += costo;
-      resultado[mes].items.push({ codEq, costo: Math.round(costo) });
+      const it = { codEq: codEq || (eq && !/—/.test(eq) ? eq : ''), costo: Math.round(costo), fila: i + 1 };
+      if (eq)         it.equipo    = eq;
+      if (iProv >= 0 && row[iProv])     it.proveedor = String(row[iProv]).trim();
+      if (iRazon >= 0 && row[iRazon])   it.razon     = String(row[iRazon]).trim();
+      if (iObraG >= 0 && row[iObraG])   it.obra      = String(row[iObraG]).trim();
+      if (iNEnt >= 0 && row[iNEnt])     it.nEntrega  = String(row[iNEnt]).trim();
+      if (iOrden >= 0 && row[iOrden])   it.nOrden    = String(row[iOrden]).trim();
+      if (iResumen >= 0 && row[iResumen]) it.resumen = String(row[iResumen]).trim().slice(0, 120);
+      resultado[mes].items.push(it);
     }
     for (const mes of Object.keys(resultado)) resultado[mes].total = Math.round(resultado[mes].total);
 
