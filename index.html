@@ -2842,14 +2842,17 @@ function computeMargenObrasMes(mes) {
     // Certificación teórica de provisiones (tn × precio de convenio — hoy solo
     // asfalto caliente a Muni SMT). Informativa: NO suma al margen real.
     const certBase = (tnCat && tnCat.length) ? tnCat : (tnDet || []);
-    const certTeorica = _aplicarCorteDet(mes, o.cod_obra || o.nombre, certBase).det.reduce((s, e) => {
+    let certTeorica = _aplicarCorteDet(mes, o.cod_obra || o.nombre, certBase).det.reduce((s, e) => {
       const pTn = _precioProvision(e, mes);
       return s + (pTn ? Math.round(e.t * pTn) : 0);
     }, 0);
+    // Períodos de certificación (Esteban corta por fecha, no por mes)
+    const periodoAj = _ajustePeriodosProvision(mes, o.cod_obra || o.nombre);
+    if (periodoAj.montoIn || periodoAj.montoOut) certTeorica = Math.max(0, certTeorica - periodoAj.montoOut + periodoAj.montoIn);
     const precioAsf = precioMesResumen; // para mostrar fuente/arrastre en la celda
     const margen  = aCobrar - insumos - (moObra || 0) - (costoAsfObra || 0) - alquiler;
     const hasData = aCobrar > 0 || insumos > 0 || moHormigon > 0 || alquiler > 0 || tnObraTotal > 0 || moObra != null;
-    return { o, aCobrar, certTeorica, insumos, insumosOC, moHormigon, alquiler, tnObra: tnObraC, tnFrioObra: tnFrioC, tnCarpeta, tnBacheo, tnDet, tnCat, tnObraTotal, moObra, moImputada, costoAsfObra, precioAsf, margen, hasData, extra: !!extra };
+    return { o, aCobrar, certTeorica, periodoAj, insumos, insumosOC, moHormigon, alquiler, tnObra: tnObraC, tnFrioObra: tnFrioC, tnCarpeta, tnBacheo, tnDet, tnCat, tnObraTotal, moObra, moImputada, costoAsfObra, precioAsf, margen, hasData, extra: !!extra };
   };
 
   const rows = obras.map(o => buildDatosObra(o, false));
@@ -3151,6 +3154,64 @@ const CORTES_PROVISION = [
   { mes: 'jul', frio: true, obraRe: /asfalto fr/i, destinoRe: /san miguel de tucum/i, tnFijo: 14,
     nota: 'Corte al 30/07 — borrón y cuenta nueva: lo despachado antes del 30/07 ya está pagado. Julio cuenta solo 14,0 tn (8,0 pendientes + 6,0 del 30-31/07)' },
 ];
+// Períodos de certificación de provisiones: Esteban certifica por fecha de
+// corte, no por mes calendario. Cada regla dice qué remitos (obra + destino +
+// rango de fechas dd/mm) pertenecen a la certificación que se muestra en la
+// fila de `mes` (la real es lo que Esteban carga en el mes siguiente a `mes`).
+// Los remitos del rango se SUMAN a la teórica de `mes` y se RESTAN de la del
+// mes calendario al que pertenecen. Con regla vigente no se arrastra
+// excedente del mes anterior (María, sep-2026: "los $53,9M son 27/08–08/09").
+const PERIODOS_CERT_PROVISION = [
+  { obraRe: /asfalto caliente/i, destinoRe: /san miguel de tucum/i, frio: false, desde: '01/08', hasta: '07/08', mes: 'jul', cert: 'Certif. 1 de Esteban, 933 tn' },
+  { obraRe: /asfalto caliente/i, destinoRe: /san miguel de tucum/i, frio: false, desde: '27/08', hasta: '08/09', mes: 'ago', cert: 'Certif. 2 de Esteban, 450 tn' },
+];
+const _ddmmNum = f => { const m = String(f || '').match(/^(\d{1,2})\/(\d{1,2})/); return m ? parseInt(m[2]) * 100 + parseInt(m[1]) : null; };
+// Devuelve { montoIn, montoOut, tnIn, tnOut, notas, aplica } para la fila de `mes`
+function _ajustePeriodosProvision(mes, obraNombre) {
+  const out = { montoIn: 0, montoOut: 0, tnIn: 0, tnOut: 0, notas: [], aplica: false };
+  if (!mes || mes === 'total' || !obraNombre) return out;
+  const reglas = PERIODOS_CERT_PROVISION.filter(r => r.obraRe.test(obraNombre));
+  if (!reglas.length) return out;
+  const nk = obraNombre.toLowerCase().trim();
+  const mesNum = MES_ORDER.indexOf(mes) + 1;
+  const acum = {}; // clave regla+dirección → tn / monto (para armar la nota)
+  MES_ORDER.forEach(m => {
+    const rm = REMITOS_ASFALTO[m];
+    if (!rm || !rm.porObra) return;
+    Object.entries(rm.porObra).forEach(([obra, v]) => {
+      if (obra.toLowerCase().trim() !== nk || !v.dias) return;
+      v.dias.forEach(dia => {
+        const n = _ddmmNum(dia.f);
+        if (n == null) return;
+        const esFrio = dia.s === 'frio';
+        const regla = reglas.find(r => (r.frio == null || r.frio === esFrio) && r.destinoRe.test(dia.d || '') && n >= _ddmmNum(r.desde) && n <= _ddmmNum(r.hasta));
+        if (!regla) return;
+        const mesCal = Math.floor(n / 100);
+        const pTn = _precioProvision({ s: esFrio ? 'frio' : 'caliente', d: dia.d }, mes) || 0;
+        let dir = null;
+        if (regla.mes === mes && mesCal !== mesNum) dir = 'in';        // remito de otro mes que certifica acá
+        else if (regla.mes !== mes && mesCal === mesNum) dir = 'out';  // remito de este mes que certifica en otro
+        if (!dir) return;
+        out.aplica = true;
+        const k = regla.desde + '|' + regla.hasta + '|' + dir;
+        if (!acum[k]) acum[k] = { regla, dir, tn: 0, monto: 0 };
+        acum[k].tn = Math.round((acum[k].tn + dia.t) * 10) / 10;
+        acum[k].monto += Math.round(dia.t * pTn);
+      });
+    });
+  });
+  // También aplica (sin mover tn) si la fila es el mes de una regla: no se arrastra excedente
+  if (reglas.some(r => r.mes === mes)) out.aplica = true;
+  Object.values(acum).forEach(a => {
+    if (a.dir === 'in') { out.tnIn += a.tn; out.montoIn += a.monto; }
+    else { out.tnOut += a.tn; out.montoOut += a.monto; }
+    out.notas.push(a.dir === 'in'
+      ? `incluye ${fmtTn(a.tn)} tn del ${a.regla.desde}–${a.regla.hasta} (${a.regla.cert})`
+      : `excluye ${fmtTn(a.tn)} tn del ${a.regla.desde}–${a.regla.hasta}, certificadas en ${MES[a.regla.mes] || a.regla.mes} (${a.regla.cert})`);
+  });
+  return out;
+}
+
 // Aplica los cortes al detalle de una obra — funciona con el formato viejo
 // (s: frio/carpeta/...) y el nuevo por categorías (ds/tp). La nota queda
 // adjunta a la entrada cortada (e.nota) para dibujarse pegada a SU fila.
@@ -3231,6 +3292,9 @@ function _certExcedentePrev(mes, obraNombre) {
   const idx = MES_ORDER.indexOf(mes);
   if (idx <= 0) return null;
   const mesPrev = MES_ORDER[idx - 1];
+  // Con período de certificación definido, la real de Esteban ya está
+  // conciliada contra sus remitos: no se arrastra nada al mes siguiente.
+  if (_ajustePeriodosProvision(mesPrev, obraNombre).aplica || _ajustePeriodosProvision(mes, obraNombre).aplica) return null;
   const dPrev = computeMargenObrasMes(mesPrev);
   if (!dPrev) return null;
   const nk = (obraNombre || '').toLowerCase().trim();
@@ -3374,6 +3438,11 @@ function _filasOtroGastoTR(r) {
       const tipReal = real ? real.items.map(i => `${i.concepto}: ${fmt(i.importe)}${i.cat === 'cobrados' || i.cat === 'facturados' ? '' : ' (programado — no suma)'}`).join(' · ') : '';
       const urlReal = (real && typeof _sheetUrlAudit === 'function' && real.items[0]) ? _sheetUrlAudit(real.items[0]) : '';
       // (La fila Σ se quitó: el encabezado del grupo ya muestra teórica y real.)
+      if (r.periodoAj && r.periodoAj.notas.length) {
+        filas.push(`<tr><td colspan="7" style="padding:2px 4px 8px;font-size:11px;color:#64748b;">
+          📅 Cert. teórica por período de certificación: ${r.periodoAj.notas.join(' · ')}.
+        </td></tr>`);
+      }
       if (aj) {
         filas.push(`<tr><td colspan="7" style="padding:2px 4px 8px;font-size:11px;color:#64748b;">
           ℹ️ Cert. teórica ajustada: a los <strong>${fmt(r.certTeorica)}</strong> del mes se les descuentan <strong>${fmt(descuento)}</strong> pagados de más en ${MES[aj.mesPrev] || aj.mesPrev} (Esteban cargó ${fmt(aj.realPrev)} contra un teórico de ${fmt(aj.teoPrev)}) → queda <strong>${fmt(teoAjust)}</strong>. Ese excedente ya se pagó y no debería volver a pagarse.

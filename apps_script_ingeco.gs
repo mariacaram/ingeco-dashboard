@@ -2087,13 +2087,15 @@ function leerRemitosAsfalto() {
         const obra = iObra >= 0 ? String(row[iObra] || '').trim() : '';
 
         // ── Fecha exacta (columna FECHA) — se calcula para CUALQUIER remito ──
-        var fechaObj = null;
+        var fechaObj = null, _esUTC = false;
         if (iFecha >= 0 && row[iFecha] !== '' && row[iFecha] != null) {
           var rawF = row[iFecha];
           if (rawF instanceof Date) {
             // Usar UTC para evitar desfase UTC-3 (medianoche UTC = día anterior en Argentina)
             fechaObj = new Date(Date.UTC(rawF.getUTCFullYear(), rawF.getUTCMonth(), rawF.getUTCDate()));
+            _esUTC = true;
           } else {
+            _esUTC = false;
             var parts = String(rawF).trim().split('/');
             if (parts.length === 3) {
               // Formato es-AR: día/mes/año. Si el primer número no puede ser
@@ -2195,7 +2197,7 @@ function leerRemitosAsfalto() {
           : null;
 
         if (fechaObj && !isNaN(fechaObj.getTime())) {
-          detalle.push({ fecha: fechaObj, fechaStr: Utilities.formatDate(fechaObj, TZ, 'dd/MM/yyyy'), tipo: tipo, cant: Math.round(cant * 10) / 10, obra: obra });
+          detalle.push({ fecha: fechaObj, fechaStr: Utilities.formatDate(fechaObj, _esUTC ? 'UTC' : TZ, 'dd/MM/yyyy'), tipo: tipo, cant: Math.round(cant * 10) / 10, obra: obra });
         }
 
         // Detalle legible por obra: tipo + sub-destino (carpeta/bacheo) + cliente (col H).
@@ -2207,7 +2209,9 @@ function leerRemitosAsfalto() {
           const po = resultado[mesKey].porObra[obraKey];
           if (fechaObj && !isNaN(fechaObj.getTime())) {
             if (!po.dias) po.dias = [];
-            const fStr = Utilities.formatDate(fechaObj, TZ, 'dd/MM');
+            // fechaObj de celdas Date se arma en UTC (medianoche UTC): formatear
+            // en UTC, si no en Argentina cae al día anterior (sep-2026)
+            const fStr = Utilities.formatDate(fechaObj, _esUTC ? 'UTC' : TZ, 'dd/MM');
             let ed = null;
             for (var qd = 0; qd < po.dias.length; qd++) {
               if (po.dias[qd].f === fStr && po.dias[qd].s === s && po.dias[qd].d === d) { ed = po.dias[qd]; break; }
