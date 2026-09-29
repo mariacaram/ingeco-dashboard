@@ -2769,8 +2769,25 @@ function computeMargenObrasMes(mes) {
   const tnDetPorObraKey = {}; // detalle legible [{s, d, t}] — subtipo + destino (col H)
   const tnCatPorObraKey = {}; // categorías jun-2026 [{ds, tp, d, u, t}] — desc + TIPO + destino
   let tnTotalGlobal = 0; // caliente + frío — denominador del prorrateo de MO
+  // Pavimax siempre en su propio grupo, aunque Roberto lo haya cargado bajo
+  // otra provisión (ej. "Provisión de asfalto frío") — María, sep-2026
+  const PAVIMAX_KEY = 'provisión de pavimax';
+  const _porObraNorm = {};
   if (remitosMes && remitosMes.porObra) {
     Object.entries(remitosMes.porObra).forEach(([obra, v]) => {
+      const k = obra.toLowerCase().trim();
+      if (!v || !v.cat || !v.cat.length || ES_PAVIMAX(obra) || !/^provisi/i.test(obra)) { _porObraNorm[obra] = v; return; }
+      const pav = v.cat.filter(e => e.ds === 'Pavimax'), resto = v.cat.filter(e => e.ds !== 'Pavimax');
+      if (!pav.length) { _porObraNorm[obra] = v; return; }
+      _porObraNorm[obra] = Object.assign({}, v, { cat: resto });
+      const nomPav = Object.keys(remitosMes.porObra).find(o => o.toLowerCase().trim() === PAVIMAX_KEY) || 'Provisión de Pavimax';
+      const dst = _porObraNorm[nomPav] || (remitosMes.porObra[nomPav] ? Object.assign({}, remitosMes.porObra[nomPav]) : { caliente: 0, frio: 0, cat: [] });
+      dst.cat = (dst.cat || []).concat(pav);
+      _porObraNorm[nomPav] = dst;
+    });
+  }
+  if (remitosMes && remitosMes.porObra) {
+    Object.entries(_porObraNorm).forEach(([obra, v]) => {
       const k = obra.toLowerCase().trim();
       if (!k) return;
       tnPorObraKey[k]     = (tnPorObraKey[k]     || 0) + (v.caliente || 0);
