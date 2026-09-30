@@ -79,6 +79,14 @@ Vive en `leerStockAsfalto()` (`.gs`) y `renderStockDisplay()` / `openStockDetall
 - Cada ajuste manual reinicia el cálculo de ingresos/consumo de ESE stock desde su propia fecha — la hoja "Ajuste de stock" tiene una columna F con el tipo (`asfalto`/`frio`); filas viejas sin esa columna se leen como `asfalto`.
 - El endpoint de ajuste (`action=ajusteStock`) usa `fetchJSONP()` (fetch con fallback a `<script>` JSONP) — no un JSONP puro — porque el JSONP puro es frágil ante bloqueadores/extensiones del navegador.
 
+## Caché del Apps Script y cómo pegar el `.gs` (aprendido sep-2026)
+
+- El caché vive en Script Properties (cuota **500 KB en total**). Cada bloque se guarda **comprimido** (gzip+base64 con prefijo `gz:`) vía `_cacheSet`/`_cacheGet`; sin compresión las OC con detalle fila por fila superaban la cuota y el bloque `_oc` quedaba en `{}`. Nunca volver a `PROPS.setProperty(JSON.stringify(...))` directo.
+- `exec?action=diag&key=API_KEY` devuelve nombre y tamaño de cada clave guardada más una prueba de escritura comprimida; `action=limpiar` borra claves que no son del caché actual. Es la forma rápida de diagnosticar "sin dato" en el tablero.
+- Al copiar el `.gs` al portapapeles desde la terminal usar `LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 pbcopy < apps_script_ingeco.gs`. Sin eso los acentos llegan corruptos al editor (`'ÓRDENES'` deja de coincidir y el lector de OC cae a otra pestaña).
+- Un `doGet` en vivo (sin `cache=1`, con `key`) reconstruye y guarda el caché: sirve para forzar la actualización sin tocar el editor. El trigger `actualizarHorario` hace lo mismo cada hora.
+- Los triggers corren el código **guardado**; la Web App corre la **versión implementada**. Después de pegar hay que hacer las dos cosas: guardar y publicar nueva versión.
+
 ## Otras cosas no obvias del dominio
 
 - **OC Insumos**: hay que distinguir obras "INT" (internas: Predio Warnes, Planta de Asfalto, Planta de Trituración — no son obras de construcción real) de obras reales. `getOCPlantaInterna()` filtra solo las internas; `getOCPlanta()` excluye las internas (para el total de obras). El campo `obra` de cada ítem de OC debe leerse de la columna **OBRA GENERAL** de la planilla de Guillermo Konicek, no de "OBRA PARTICULAR" (son columnas distintas con nombres parecidos, `_findCol` matchea por substring así que hay que priorizar `'obra general'` antes que `'obra'` en el array de keywords).
