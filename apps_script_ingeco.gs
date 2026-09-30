@@ -82,6 +82,34 @@ function doGet(e) {
     const callback = e && e.parameter && e.parameter.callback;
     const action   = e && e.parameter && e.parameter.action;
 
+    // ── Diagnóstico del almacén de propiedades (cuota 500 KB) ─────────
+    // action=diag → nombre y tamaño de cada clave (nunca el valor).
+    // action=limpiar → borra claves que no son del caché actual ni API_KEY.
+    if (action === 'diag' || action === 'limpiar') {
+      const props = PROPS.getProperties();
+      const validas = {};
+      ['', '_obras', '_alquiler', '_mo', '_moq', '_oc', '_remitos', '_cobros_est', '_stock', '_precio', '_gest', '_repuestos', '_fechas']
+        .forEach(sfx => { validas[CACHE_KEY + sfx] = true; });
+      validas['API_KEY'] = true;
+      const claves = Object.keys(props).map(k => ({ k: k, len: (props[k] || '').length, gz: (props[k] || '').indexOf('gz:') === 0, valida: !!validas[k] }));
+      let borradas = [];
+      if (action === 'limpiar') {
+        claves.filter(c => !c.valida).forEach(c => { PROPS.deleteProperty(c.k); borradas.push(c.k); });
+      }
+      // Prueba de escritura comprimida (para diagnosticar fallas de gzip/cuota)
+      let prueba = 'ok';
+      try {
+        const obj = { x: new Array(3000).fill('prueba de compresión ÓRDENES').join(' ') };
+        _cacheSet(CACHE_KEY + '_probe', obj);
+        const raw = PROPS.getProperty(CACHE_KEY + '_probe') || '';
+        const back = _cacheGet(CACHE_KEY + '_probe');
+        prueba = 'escrito ' + raw.length + ' bytes (' + raw.substring(0, 3) + ') · lectura ' + (back && back.x === obj.x ? 'ok' : 'FALLA');
+        PROPS.deleteProperty(CACHE_KEY + '_probe');
+      } catch (pe) { prueba = 'ERROR: ' + pe; }
+      const out = { status: 'ok', total: claves.reduce((s, c) => s + c.len, 0), claves: claves, borradas: borradas, prueba: prueba };
+      return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
+    }
+
     // ── Ajuste de stock ──────────────────────────────────────────
     if (action === 'ajusteStock') {
       const stockAntes = parseFloat((e.parameter.stockAntes || '0').replace(',', '.'));
@@ -1967,14 +1995,14 @@ function leerRepuestosEquipos() {
 
       if (!resultado[mes]) resultado[mes] = { total: 0, items: [], gid: gid };
       resultado[mes].total += costo;
+      // Campos mínimos por entrega: el caché de Script Properties tiene cuota
+      // (500 KB en total), así que no se guarda el detalle largo de cada fila.
       const it = { codEq: codEq || (eq && !/—/.test(eq) ? eq : ''), costo: Math.round(costo), fila: i + 1 };
-      if (eq)         it.equipo    = eq;
-      if (iProv >= 0 && row[iProv])     it.proveedor = String(row[iProv]).trim();
-      if (iRazon >= 0 && row[iRazon])   it.razon     = String(row[iRazon]).trim();
-      if (iObraG >= 0 && row[iObraG])   it.obra      = String(row[iObraG]).trim();
+      if (eq && eq.indexOf('—') < 0)    it.equipo    = eq.slice(0, 40);
+      if (iProv >= 0 && row[iProv])     it.proveedor = String(row[iProv]).trim().slice(0, 40);
+      if (iRazon >= 0 && row[iRazon])   it.razon     = String(row[iRazon]).trim().slice(0, 30);
       if (iNEnt >= 0 && row[iNEnt])     it.nEntrega  = String(row[iNEnt]).trim();
-      if (iOrden >= 0 && row[iOrden])   it.nOrden    = String(row[iOrden]).trim();
-      if (iResumen >= 0 && row[iResumen]) it.resumen = String(row[iResumen]).trim().slice(0, 120);
+      if (iResumen >= 0 && row[iResumen]) it.resumen = String(row[iResumen]).trim().slice(0, 50);
       resultado[mes].items.push(it);
     }
     for (const mes of Object.keys(resultado)) resultado[mes].total = Math.round(resultado[mes].total);
