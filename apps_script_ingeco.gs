@@ -151,7 +151,7 @@ function doGet(e) {
         if (data.moQuincenas) PROPS.setProperty(CACHE_KEY + '_moq', JSON.stringify(data.moQuincenas));
       } catch(ce) { Logger.log('Cache write (moq) error: ' + ce); }
       try {
-        if (data.ocInsumos) PROPS.setProperty(CACHE_KEY + '_oc', JSON.stringify(data.ocInsumos));
+        if (data.ocInsumos && Object.keys(data.ocInsumos).length) PROPS.setProperty(CACHE_KEY + '_oc', JSON.stringify(data.ocInsumos));
       } catch(ce) { Logger.log('Cache write (oc) error: ' + ce); }
       try {
         if (data.remitosAsfalto) PROPS.setProperty(CACHE_KEY + '_remitos', JSON.stringify(data.remitosAsfalto));
@@ -233,7 +233,7 @@ function actualizarNocturno() {
     if (data.alquilerEquipos) PROPS.setProperty(CACHE_KEY + '_alquiler', JSON.stringify(data.alquilerEquipos));
     if (data.moCtroCosto)     PROPS.setProperty(CACHE_KEY + '_mo',       JSON.stringify(data.moCtroCosto));
     if (data.moQuincenas)     PROPS.setProperty(CACHE_KEY + '_moq',      JSON.stringify(data.moQuincenas));
-    if (data.ocInsumos)       PROPS.setProperty(CACHE_KEY + '_oc',       JSON.stringify(data.ocInsumos));
+    if (data.ocInsumos && Object.keys(data.ocInsumos).length) PROPS.setProperty(CACHE_KEY + '_oc', JSON.stringify(data.ocInsumos));
     if (data.remitosAsfalto)  PROPS.setProperty(CACHE_KEY + '_remitos',  JSON.stringify(data.remitosAsfalto));
     if (data.cobrosEsteban)   PROPS.setProperty(CACHE_KEY + '_cobros_est', JSON.stringify(data.cobrosEsteban));
     if (data.stockAsfalto)    PROPS.setProperty(CACHE_KEY + '_stock',    JSON.stringify(data.stockAsfalto));
@@ -646,9 +646,22 @@ function mapearCentro(ctro) {
 function leerOCInsumos() {
   try {
     const ss    = SpreadsheetApp.openById(FILE_IDS.ocInsumos);
-    // Hoja "ÓRDENES" (la planilla ahora tiene también "Maestro de obras" como primera pestaña)
-    const sheet = ss.getSheetByName('ÓRDENES') || ss.getSheetByName('ORDENES')
-               || ss.getSheetByName('Órdenes') || ss.getSheets()[ss.getSheets().length - 1];
+    // Hoja "ÓRDENES": el nombre puede venir con la Ó en distinta forma Unicode
+    // (getSheetByName('ÓRDENES') fallaba y caía a la última pestaña, que hoy es
+    // "Maestro de obras" → resultado vacío, sep-2026). Se compara sin acentos y,
+    // si aun así no aparece, se toma la pestaña cuyo encabezado tiene PROVEEDOR y MONTO.
+    const _sinAcentos = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
+    const hojas = ss.getSheets();
+    let sheet = hojas.find(sh => _sinAcentos(sh.getName()) === 'ORDENES')
+             || hojas.find(sh => /ORDENES/.test(_sinAcentos(sh.getName())));
+    if (!sheet) {
+      sheet = hojas.find(sh => {
+        const h = sh.getRange(1, 1, Math.min(5, sh.getLastRow() || 1), sh.getLastColumn() || 1).getValues()
+          .map(r => r.map(c => _sinAcentos(c)).join('|')).join('||');
+        return h.indexOf('PROVEEDOR') >= 0 && h.indexOf('MONTO') >= 0;
+      }) || hojas[0];
+    }
+    Logger.log('OC Insumos — hoja usada: ' + sheet.getName());
     const rows  = sheet.getDataRange().getValues();
 
     if (rows.length < 2) return null;
