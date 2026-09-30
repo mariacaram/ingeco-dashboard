@@ -45,6 +45,27 @@ const TC_USD_MENSUAL = { feb: 1430, mar: 1413, abr: 1397, may: 1381, jun: 1427 }
 const PROPS = PropertiesService.getScriptProperties();
 const CACHE_KEY = 'ingeco_cache';
 
+// Caché en Script Properties (tope 500 KB total, 9 KB "oficiales" por clave).
+// Cada bloque se guarda comprimido (gzip + base64, ~4-6x más chico) con el
+// prefijo "gz:"; al leer se acepta también el JSON plano viejo (sep-2026:
+// las OC con detalle fila por fila hicieron saltar la cuota).
+function _cacheSet(key, obj) {
+  const json = JSON.stringify(obj);
+  const gz = 'gz:' + Utilities.base64Encode(Utilities.gzip(Utilities.newBlob(json, 'application/json')).getBytes());
+  PROPS.setProperty(key, gz.length < json.length ? gz : json);
+}
+function _cacheGet(key) {
+  const raw = PROPS.getProperty(key);
+  if (!raw) return null;
+  try {
+    if (raw.indexOf('gz:') === 0) {
+      const bytes = Utilities.base64Decode(raw.substring(3));
+      return JSON.parse(Utilities.ungzip(Utilities.newBlob(bytes, 'application/x-gzip')).getDataAsString());
+    }
+    return JSON.parse(raw);
+  } catch (e) { Logger.log('cacheGet error ' + key + ': ' + e); return null; }
+}
+
 // ============================================================
 // ENDPOINT PRINCIPAL — el dashboard llama a esta URL
 // ============================================================
@@ -81,98 +102,98 @@ function doGet(e) {
 
     let data;
     if (useCache) {
-      const cached = PROPS.getProperty(CACHE_KEY);
-      data = cached ? JSON.parse(cached) : buildData();
+      const cached = _cacheGet(CACHE_KEY);
+      data = cached ? cached : buildData();
       // Cada campo grande se guarda en su propia clave (límite 9 KB por propiedad)
       if (data && !data.generadoPorObra) {
-        const cachedObras = PROPS.getProperty(CACHE_KEY + '_obras');
-        if (cachedObras) data.generadoPorObra = JSON.parse(cachedObras);
+        const cachedObras = _cacheGet(CACHE_KEY + '_obras');
+        if (cachedObras) data.generadoPorObra = cachedObras;
       }
       if (data && !data.alquilerEquipos) {
-        const cachedAlquiler = PROPS.getProperty(CACHE_KEY + '_alquiler');
-        if (cachedAlquiler) data.alquilerEquipos = JSON.parse(cachedAlquiler);
+        const cachedAlquiler = _cacheGet(CACHE_KEY + '_alquiler');
+        if (cachedAlquiler) data.alquilerEquipos = cachedAlquiler;
       }
       if (data && !data.moCtroCosto) {
-        const cachedMo = PROPS.getProperty(CACHE_KEY + '_mo');
-        if (cachedMo) data.moCtroCosto = JSON.parse(cachedMo);
+        const cachedMo = _cacheGet(CACHE_KEY + '_mo');
+        if (cachedMo) data.moCtroCosto = cachedMo;
       }
       if (data && !data.moQuincenas) {
-        const cachedMoQ = PROPS.getProperty(CACHE_KEY + '_moq');
-        if (cachedMoQ) data.moQuincenas = JSON.parse(cachedMoQ);
+        const cachedMoQ = _cacheGet(CACHE_KEY + '_moq');
+        if (cachedMoQ) data.moQuincenas = cachedMoQ;
       }
       if (data && !data.ocInsumos) {
-        const cachedOc = PROPS.getProperty(CACHE_KEY + '_oc');
-        if (cachedOc) data.ocInsumos = JSON.parse(cachedOc);
+        const cachedOc = _cacheGet(CACHE_KEY + '_oc');
+        if (cachedOc) data.ocInsumos = cachedOc;
       }
       if (data && !data.remitosAsfalto) {
-        const cachedRem = PROPS.getProperty(CACHE_KEY + '_remitos');
-        if (cachedRem) data.remitosAsfalto = JSON.parse(cachedRem);
+        const cachedRem = _cacheGet(CACHE_KEY + '_remitos');
+        if (cachedRem) data.remitosAsfalto = cachedRem;
       }
       if (data && !data.cobrosEsteban) {
-        const cachedCob = PROPS.getProperty(CACHE_KEY + '_cobros_est');
-        if (cachedCob) data.cobrosEsteban = JSON.parse(cachedCob);
+        const cachedCob = _cacheGet(CACHE_KEY + '_cobros_est');
+        if (cachedCob) data.cobrosEsteban = cachedCob;
       }
       if (data && !data.stockAsfalto) {
-        const cachedStock = PROPS.getProperty(CACHE_KEY + '_stock');
-        if (cachedStock) data.stockAsfalto = JSON.parse(cachedStock);
+        const cachedStock = _cacheGet(CACHE_KEY + '_stock');
+        if (cachedStock) data.stockAsfalto = cachedStock;
       }
       if (data && !data.precioAsfalto) {
-        const cachedPrecio = PROPS.getProperty(CACHE_KEY + '_precio');
-        if (cachedPrecio) data.precioAsfalto = JSON.parse(cachedPrecio);
+        const cachedPrecio = _cacheGet(CACHE_KEY + '_precio');
+        if (cachedPrecio) data.precioAsfalto = cachedPrecio;
       }
       if (data && !data.gastosEstructura) {
-        const cachedGest = PROPS.getProperty(CACHE_KEY + '_gest');
-        if (cachedGest) data.gastosEstructura = JSON.parse(cachedGest);
+        const cachedGest = _cacheGet(CACHE_KEY + '_gest');
+        if (cachedGest) data.gastosEstructura = cachedGest;
       }
       if (data && !data.repuestosEquipos) {
-        const cachedRep = PROPS.getProperty(CACHE_KEY + '_repuestos');
-        if (cachedRep) data.repuestosEquipos = JSON.parse(cachedRep);
+        const cachedRep = _cacheGet(CACHE_KEY + '_repuestos');
+        if (cachedRep) data.repuestosEquipos = cachedRep;
       }
       if (data && !data.fechasFuentes) {
-        const cachedFechas = PROPS.getProperty(CACHE_KEY + '_fechas');
-        if (cachedFechas) data.fechasFuentes = JSON.parse(cachedFechas);
+        const cachedFechas = _cacheGet(CACHE_KEY + '_fechas');
+        if (cachedFechas) data.fechasFuentes = cachedFechas;
       }
     } else {
       data = buildData();
       // Guardar cada campo en su propia clave — PropertiesService tiene límite de 9 KB por propiedad
       try {
-        PROPS.setProperty(CACHE_KEY, JSON.stringify({ status: data.status, timestamp: data.timestamp }));
+        _cacheSet(CACHE_KEY, { status: data.status, timestamp: data.timestamp });
       } catch(ce) { Logger.log('Cache write error: ' + ce); }
       try {
-        if (data.generadoPorObra) PROPS.setProperty(CACHE_KEY + '_obras', JSON.stringify(data.generadoPorObra));
+        if (data.generadoPorObra) _cacheSet(CACHE_KEY + '_obras', data.generadoPorObra);
       } catch(ce) { Logger.log('Cache write (obras) error: ' + ce); }
       try {
-        if (data.alquilerEquipos) PROPS.setProperty(CACHE_KEY + '_alquiler', JSON.stringify(data.alquilerEquipos));
+        if (data.alquilerEquipos) _cacheSet(CACHE_KEY + '_alquiler', data.alquilerEquipos);
       } catch(ce) { Logger.log('Cache write (alquiler) error: ' + ce); }
       try {
-        if (data.moCtroCosto) PROPS.setProperty(CACHE_KEY + '_mo', JSON.stringify(data.moCtroCosto));
+        if (data.moCtroCosto) _cacheSet(CACHE_KEY + '_mo', data.moCtroCosto);
       } catch(ce) { Logger.log('Cache write (mo) error: ' + ce); }
       try {
-        if (data.moQuincenas) PROPS.setProperty(CACHE_KEY + '_moq', JSON.stringify(data.moQuincenas));
+        if (data.moQuincenas) _cacheSet(CACHE_KEY + '_moq', data.moQuincenas);
       } catch(ce) { Logger.log('Cache write (moq) error: ' + ce); }
       try {
-        if (data.ocInsumos && Object.keys(data.ocInsumos).length) PROPS.setProperty(CACHE_KEY + '_oc', JSON.stringify(data.ocInsumos));
+        if (data.ocInsumos && Object.keys(data.ocInsumos).length) _cacheSet(CACHE_KEY + '_oc', data.ocInsumos);
       } catch(ce) { Logger.log('Cache write (oc) error: ' + ce); }
       try {
-        if (data.remitosAsfalto) PROPS.setProperty(CACHE_KEY + '_remitos', JSON.stringify(data.remitosAsfalto));
+        if (data.remitosAsfalto) _cacheSet(CACHE_KEY + '_remitos', data.remitosAsfalto);
       } catch(ce) { Logger.log('Cache write (remitos) error: ' + ce); }
       try {
-        if (data.cobrosEsteban) PROPS.setProperty(CACHE_KEY + '_cobros_est', JSON.stringify(data.cobrosEsteban));
+        if (data.cobrosEsteban) _cacheSet(CACHE_KEY + '_cobros_est', data.cobrosEsteban);
       } catch(ce) { Logger.log('Cache write (cobros_est) error: ' + ce); }
       try {
-        if (data.stockAsfalto) PROPS.setProperty(CACHE_KEY + '_stock', JSON.stringify(data.stockAsfalto));
+        if (data.stockAsfalto) _cacheSet(CACHE_KEY + '_stock', data.stockAsfalto);
       } catch(ce) { Logger.log('Cache write (stock) error: ' + ce); }
       try {
-        if (data.precioAsfalto) PROPS.setProperty(CACHE_KEY + '_precio', JSON.stringify(data.precioAsfalto));
+        if (data.precioAsfalto) _cacheSet(CACHE_KEY + '_precio', data.precioAsfalto);
       } catch(ce) { Logger.log('Cache write (precio) error: ' + ce); }
       try {
-        if (data.gastosEstructura) PROPS.setProperty(CACHE_KEY + '_gest', JSON.stringify(data.gastosEstructura));
+        if (data.gastosEstructura) _cacheSet(CACHE_KEY + '_gest', data.gastosEstructura);
       } catch(ce) { Logger.log('Cache write (gest) error: ' + ce); }
       try {
-        if (data.repuestosEquipos) PROPS.setProperty(CACHE_KEY + '_repuestos', JSON.stringify(data.repuestosEquipos));
+        if (data.repuestosEquipos) _cacheSet(CACHE_KEY + '_repuestos', data.repuestosEquipos);
       } catch(ce) { Logger.log('Cache write (repuestos) error: ' + ce); }
       try {
-        if (data.fechasFuentes) PROPS.setProperty(CACHE_KEY + '_fechas', JSON.stringify(data.fechasFuentes));
+        if (data.fechasFuentes) _cacheSet(CACHE_KEY + '_fechas', data.fechasFuentes);
       } catch(ce) { Logger.log('Cache write (fechas) error: ' + ce); }
     }
 
@@ -228,19 +249,19 @@ function crearTriggerHorario() {
 function actualizarNocturno() {
   try {
     const data = buildData();
-    PROPS.setProperty(CACHE_KEY, JSON.stringify({ status: data.status, timestamp: data.timestamp }));
-    if (data.generadoPorObra) PROPS.setProperty(CACHE_KEY + '_obras',   JSON.stringify(data.generadoPorObra));
-    if (data.alquilerEquipos) PROPS.setProperty(CACHE_KEY + '_alquiler', JSON.stringify(data.alquilerEquipos));
-    if (data.moCtroCosto)     PROPS.setProperty(CACHE_KEY + '_mo',       JSON.stringify(data.moCtroCosto));
-    if (data.moQuincenas)     PROPS.setProperty(CACHE_KEY + '_moq',      JSON.stringify(data.moQuincenas));
-    if (data.ocInsumos && Object.keys(data.ocInsumos).length) PROPS.setProperty(CACHE_KEY + '_oc', JSON.stringify(data.ocInsumos));
-    if (data.remitosAsfalto)  PROPS.setProperty(CACHE_KEY + '_remitos',  JSON.stringify(data.remitosAsfalto));
-    if (data.cobrosEsteban)   PROPS.setProperty(CACHE_KEY + '_cobros_est', JSON.stringify(data.cobrosEsteban));
-    if (data.stockAsfalto)    PROPS.setProperty(CACHE_KEY + '_stock',    JSON.stringify(data.stockAsfalto));
-    if (data.precioAsfalto)   PROPS.setProperty(CACHE_KEY + '_precio',   JSON.stringify(data.precioAsfalto));
-    if (data.gastosEstructura) PROPS.setProperty(CACHE_KEY + '_gest',    JSON.stringify(data.gastosEstructura));
-    if (data.repuestosEquipos) PROPS.setProperty(CACHE_KEY + '_repuestos', JSON.stringify(data.repuestosEquipos));
-    if (data.fechasFuentes)   PROPS.setProperty(CACHE_KEY + '_fechas',   JSON.stringify(data.fechasFuentes));
+    _cacheSet(CACHE_KEY, { status: data.status, timestamp: data.timestamp });
+    if (data.generadoPorObra) _cacheSet(CACHE_KEY + '_obras', data.generadoPorObra);
+    if (data.alquilerEquipos) _cacheSet(CACHE_KEY + '_alquiler', data.alquilerEquipos);
+    if (data.moCtroCosto)     _cacheSet(CACHE_KEY + '_mo', data.moCtroCosto);
+    if (data.moQuincenas)     _cacheSet(CACHE_KEY + '_moq', data.moQuincenas);
+    if (data.ocInsumos && Object.keys(data.ocInsumos).length) _cacheSet(CACHE_KEY + '_oc', data.ocInsumos);
+    if (data.remitosAsfalto)  _cacheSet(CACHE_KEY + '_remitos', data.remitosAsfalto);
+    if (data.cobrosEsteban)   _cacheSet(CACHE_KEY + '_cobros_est', data.cobrosEsteban);
+    if (data.stockAsfalto)    _cacheSet(CACHE_KEY + '_stock', data.stockAsfalto);
+    if (data.precioAsfalto)   _cacheSet(CACHE_KEY + '_precio', data.precioAsfalto);
+    if (data.gastosEstructura) _cacheSet(CACHE_KEY + '_gest', data.gastosEstructura);
+    if (data.repuestosEquipos) _cacheSet(CACHE_KEY + '_repuestos', data.repuestosEquipos);
+    if (data.fechasFuentes)   _cacheSet(CACHE_KEY + '_fechas', data.fechasFuentes);
     // Espejo de cobros reales en el archivo de Agustín (pestaña autogenerada)
     try { escribirCobrosEnAgustin(data.cobrosEsteban); }
     catch (e) { Logger.log('escribirCobrosEnAgustin error: ' + e); }
