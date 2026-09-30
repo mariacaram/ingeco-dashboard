@@ -50,6 +50,14 @@ const CACHE_KEY = 'ingeco_cache';
 // ============================================================
 function doGet(e) {
   try {
+    // Clave compartida con el proxy de Vercel (Script Property API_KEY).
+    // Si está configurada, cualquier pedido sin la clave correcta se rechaza:
+    // la URL del Web App deja de servir datos a quien la tenga.
+    const apiKey = PropertiesService.getScriptProperties().getProperty('API_KEY');
+    if (apiKey && !(e && e.parameter && e.parameter.key === apiKey)) {
+      return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'No autorizado' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
     const callback = e && e.parameter && e.parameter.callback;
     const action   = e && e.parameter && e.parameter.action;
 

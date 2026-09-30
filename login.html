@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>INGECO — Acceso</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231b3a5c'/%3E%3Cpath d='M9 22 L15 10 L23 22' stroke='%23e8a100' stroke-width='2.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cline x1='11.5' y1='17' x2='20.5' y2='17' stroke='%23e8a100' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root { --primary:#1b3a5c; --accent:#e8a100; --text:#0f172a; --muted:#64748b; }
+  * { box-sizing:border-box; }
+  body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px;
+         font-family:'Inter',system-ui,sans-serif; color:var(--text);
+         background:radial-gradient(1200px 600px at 20% -10%, #24476f 0%, #1b3a5c 40%, #10253d 100%); }
+  .box { background:#fff; border-radius:16px; padding:40px 36px; width:100%; max-width:400px; text-align:center;
+         box-shadow:0 30px 80px -20px rgba(0,0,0,.6); }
+  .logo { display:flex; flex-direction:column; align-items:center; gap:8px; margin-bottom:22px; }
+  .logo img { height:44px; }
+  .logo span { font-size:12px; color:var(--muted); letter-spacing:.04em; }
+  h1 { font-family:'Space Grotesk',sans-serif; font-size:20px; margin:0 0 6px; }
+  p { font-size:13px; color:var(--muted); margin:0 0 24px; line-height:1.5; }
+  #gsi { display:flex; justify-content:center; min-height:44px; }
+  .err { display:none; margin-top:16px; background:#fef2f2; border:1px solid #fecaca; color:#991b1b; border-radius:8px; padding:10px 12px; font-size:12.5px; line-height:1.5; }
+  .foot { margin-top:22px; font-size:11px; color:var(--muted); }
+</style>
+</head>
+<body>
+  <div class="box">
+    <div class="logo">
+      <img src="/Logo.png" alt="INGECO">
+      <span>Dashboard Ejecutivo 2026</span>
+    </div>
+    <h1>Acceso restringido</h1>
+    <p>Ingresá con tu cuenta de Google autorizada.</p>
+    <div id="gsi"></div>
+    <div class="err" id="err"></div>
+    <div class="foot">Solo cuentas habilitadas por INGECO. Cada ingreso queda validado por Google.</div>
+  </div>
+
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script>
+    const errEl = document.getElementById('err');
+    function showErr(msg) { errEl.textContent = msg; errEl.style.display = 'block'; }
+
+    // Destino post-login: solo rutas internas del mismo sitio
+    function nextPath() {
+      const n = new URLSearchParams(location.search).get('next') || '/';
+      return (n.startsWith('/') && !n.startsWith('//') && !n.includes('\\')) ? n : '/';
+    }
+
+    async function onCredential(resp) {
+      errEl.style.display = 'none';
+      try {
+        const r = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ credential: resp.credential }),
+        });
+        const d = await r.json().catch(() => ({}));
+        if (r.ok && d.status === 'ok') { location.replace(nextPath()); return; }
+        if (r.status === 403) showErr((d.email ? d.email + ': ' : '') + 'esta cuenta no tiene acceso al tablero. Pedile a María que la habilite.');
+        else if (r.status === 429) showErr('Demasiados intentos. Esperá un minuto y volvé a probar.');
+        else showErr(d.message || 'No se pudo validar el ingreso. Probá de nuevo.');
+      } catch (e) {
+        showErr('Sin conexión con el servidor. Probá de nuevo.');
+      }
+    }
+
+    async function init() {
+      // Si ya hay sesión válida, directo al tablero
+      try { const me = await fetch('/api/auth/me', { cache: 'no-store' }); if (me.ok) { location.replace(nextPath()); return; } } catch (e) {}
+      let clientId = '';
+      try { clientId = (await (await fetch('/api/auth/config', { cache: 'no-store' })).json()).clientId; } catch (e) {}
+      if (!clientId) { showErr('El acceso con Google todavía no está configurado (falta GOOGLE_CLIENT_ID).'); return; }
+      const esperar = () => new Promise(res => { const t = setInterval(() => { if (window.google && google.accounts) { clearInterval(t); res(); } }, 50); });
+      await esperar();
+      google.accounts.id.initialize({ client_id: clientId, callback: onCredential, ux_mode: 'popup', auto_select: false, itp_support: true });
+      google.accounts.id.renderButton(document.getElementById('gsi'), { theme: 'filled_blue', size: 'large', text: 'signin_with', shape: 'pill', width: 280, locale: 'es' });
+    }
+    init();
+  </script>
+</body>
+</html>

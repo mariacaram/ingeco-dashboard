@@ -26,14 +26,23 @@ Está hardcodeada en dos lugares (deben coincidir siempre):
 - `index.html` → `const APPS_SCRIPT_URL = '...'`
 - `api/datos.js` → `const APPS_SCRIPT_URL = '...'`
 
-## Autenticación del dashboard
+## Autenticación del dashboard (Google Sign-In + sesión de servidor)
 
-Login simple client-side (`const ROLES = {...}` en `index.html`, cerca de `doLogin()`). Dos roles: `directorio` y `administracion`, con contraseñas hardcodeadas en el JS (no es seguridad real, es solo para uso interno). Para testear sin loguearse manualmente en el navegador de Preview:
-```js
-sessionStorage.setItem('ingeco_auth','1');
-sessionStorage.setItem('ingeco_role','directorio');
-location.reload();
-```
+Desde sep-2026 NO hay contraseñas en el frontend. El acceso lo controla el servidor:
+
+- **`lib/session.js`**: allowlist `ALLOWED_USERS` (mail → rol `directorio`/`administracion`), firma y verificación del JWT de sesión (HS256 con `SESSION_SECRET`), cookie `__Host-ingeco_session` (HttpOnly, Secure, SameSite=Lax, 12 h).
+- **`middleware.js`** (Vercel Edge): sin sesión válida no se sirve NADA salvo `/login.html`, `/Logo.png` y `/api/auth/*`. Páginas → redirect a login; `/api/*` → 401.
+- **`login.html`**: botón "Sign in with Google" (Google Identity Services). El ID token va a `POST /api/auth/login`, que lo verifica contra las claves públicas de Google (`jose`), exige `email_verified` y mail en el allowlist, y emite la cookie.
+- **`api/auth/me.js`** devuelve `{email, role}`; `index.html` lo llama al arrancar (`bootAuth`) para aplicar el rol. `api/auth/logout.js` borra la cookie.
+- **`api/datos.js`**: exige sesión, solo reenvía parámetros conocidos, agrega `key=APPS_SCRIPT_KEY` y para escrituras (`action=ajusteStock`) exige el header `X-Requested-With: ingeco-dashboard` (anti-CSRF). El navegador nunca llama a Apps Script directo (`APPS_SCRIPT_URL` en index.html es `/api/datos`).
+- **`doGet` del `.gs`** rechaza todo pedido sin `key` igual a la Script Property `API_KEY` (si la propiedad existe).
+- `vercel.json`: CSP, HSTS, nosniff, X-Frame-Options DENY, no-store. `.vercelignore` evita desplegar el `.gs`, el HTML legacy, demos y docs.
+
+Variables de entorno en Vercel (Settings → Environment Variables, Production): `GOOGLE_CLIENT_ID` (OAuth Client ID tipo Web, con origen autorizado `https://ingeco-dashboard.vercel.app`), `SESSION_SECRET` (≥32 caracteres aleatorios), `APPS_SCRIPT_KEY` (mismo valor que la Script Property `API_KEY` en Apps Script). Sin `GOOGLE_CLIENT_ID` el login muestra un aviso y nadie entra.
+
+Para dar acceso a alguien: agregar el mail en `ALLOWED_USERS` y pushear. Para sacarlo: quitarlo — sus sesiones vigentes dejan de servir al instante porque `verifySession` vuelve a chequear el allowlist.
+
+Para testear la UI en el preview local (sin Vercel no hay middleware ni cookie): el `bootAuth` va a redirigir a `/login.html` porque `/api/auth/me` no existe. Para probar solo la UI, en la consola del preview: `document.body.classList.add('authed'); applyRole('directorio','test')` después de anular la redirección (o inyectar datos antes de que corra `bootAuth`).
 
 ## Cómo levantar el preview local
 

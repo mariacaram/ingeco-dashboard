@@ -1,0 +1,9 @@
+# Solo se despliega lo que el tablero necesita. Nada del código fuente del
+# backend, archivos legacy ni documentación queda accesible por URL.
+apps_script_ingeco.gs
+dashboard_ingeco.html
+demo-convial
+CLAUDE.md
+.claude
+_datos_test.json
+*.md

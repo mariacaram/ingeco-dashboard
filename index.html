@@ -697,25 +697,7 @@
 <body>
 
 <!-- LOGIN OVERLAY -->
-<div id="login-overlay">
-  <div class="login-box">
-    <div class="login-logo">
-      <img id="login-logo-img" class="logo-mark" alt="INGECO">
-      <span class="logo-sub">Dashboard Ejecutivo 2026</span>
-    </div>
-    <h2>Acceso restringido</h2>
-    <div class="login-field">
-      <label>Usuario</label>
-      <input type="text" id="login-user" placeholder="Usuario" autocomplete="username" />
-    </div>
-    <div class="login-field">
-      <label>Contraseña</label>
-      <input type="password" id="login-pass" placeholder="Contraseña" autocomplete="current-password" />
-    </div>
-    <div class="login-error" id="login-error">Usuario o contraseña incorrectos</div>
-    <button class="login-btn" onclick="doLogin()">Ingresar</button>
-  </div>
-</div>
+<!-- El acceso lo controla el servidor (middleware + Google Sign-In en login.html) -->
 
 <!-- HEADER -->
 <div class="header">
@@ -9637,7 +9619,9 @@ function openOCPanel(obraName) {
 // ================================================================
 
 // Pegá acá la URL de tu Web App después de hacer el deploy en Apps Script:
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwXe_MLjncMNA4-v8GLfmvhQFZG0cuMeXzSHIBccBIUUTTpXEvJuLhek-mC_S4twVCu9A/exec';
+// El navegador nunca habla con Apps Script directo: todo pasa por el proxy
+// /api/datos, que exige sesión y agrega la clave secreta del backend.
+const APPS_SCRIPT_URL = '/api/datos';
 
 // Un ítem de OC es interno (INT) si el maestro lo marca (CLIENTE == INT),
 // o si la obra es una de las que imputan a la planta en sí (aunque el maestro no la tenga cargada).
@@ -9866,7 +9850,9 @@ async function ajustarStock(tipo) {
 
   let data;
   try {
-    data = await fetchJSONP(url);
+    const resp = await fetch(url, { method: 'GET', headers: { 'X-Requested-With': 'ingeco-dashboard' }, cache: 'no-store' });
+    if (resp.status === 401) { location.href = '/login.html'; return; }
+    data = await resp.json();
   } catch (err) {
     fb.textContent = '⚠ Sin respuesta del servidor. Verificá tu conexión.';
     fb.style.color = 'var(--neg)';
@@ -11085,23 +11071,23 @@ function setMes(mes) {
 // LOGIN
 // ================================================================
 
+// Los roles ya no tienen contraseña: los asigna el servidor según el mail de
+// Google (lib/session.js → ALLOWED_USERS). Acá solo se aplica la vista.
 const ROLES = {
-  directorio:     { pass: 'DirectorioIngeco', bodyClass: 'role-directorio', label: 'Directorio' },
-  administracion: { pass: 'TableroIngeco',    bodyClass: 'role-admin',      label: 'Administración' },
+  directorio:     { bodyClass: 'role-directorio', label: 'Directorio' },
+  administracion: { bodyClass: 'role-admin',      label: 'Administración' },
 };
 
 function esAdmin() {
   return document.body.classList.contains('role-admin');
 }
 
-function applyRole(roleName) {
+function applyRole(roleName, email) {
   document.body.classList.remove('role-directorio', 'role-admin');
   const r = ROLES[roleName];
   if (r) document.body.classList.add(r.bodyClass);
-  // Mostrar el rol activo en el header
   const rolEl = document.getElementById('rol-actual');
-  if (rolEl) rolEl.textContent = r ? 'Usuario: ' + r.label : '—';
-  // Si el admin estaba parado en la tab Taller (oculta), llevarlo a Margen
+  if (rolEl) rolEl.textContent = (r ? r.label : '—') + (email ? ' · ' + email : '');
   if (roleName === 'administracion') {
     const tallerPanel = document.getElementById('tab-taller');
     if (tallerPanel && tallerPanel.classList.contains('active') && typeof openTab === 'function') {
@@ -11110,62 +11096,40 @@ function applyRole(roleName) {
   }
 }
 
-function cerrarSesion() {
-  sessionStorage.removeItem('ingeco_auth');
-  sessionStorage.removeItem('ingeco_role');
-  document.body.classList.remove('role-directorio', 'role-admin');
-  // Cerrar cualquier panel abierto
-  const panel = document.getElementById('sidePanel');
-  const overlay = document.getElementById('overlay');
-  if (panel) panel.classList.remove('open');
-  if (overlay) overlay.classList.remove('open');
-  // Limpiar y mostrar el login
-  const lu = document.getElementById('login-user');
-  const lp = document.getElementById('login-pass');
-  const le = document.getElementById('login-error');
-  if (lu) lu.value = '';
-  if (lp) lp.value = '';
-  if (le) le.style.display = 'none';
-  document.body.classList.remove('authed'); // vuelve a ocultar el contenido
-  document.getElementById('login-overlay').style.display = '';
-  if (lu) lu.focus();
+async function cerrarSesion() {
+  try { await fetch('/api/auth/logout', { method: 'POST', cache: 'no-store' }); } catch (e) {}
+  try { sessionStorage.clear(); } catch (e) {}
+  location.replace('/login.html');
 }
 
-function doLogin() {
-  const user = document.getElementById('login-user').value.trim().toLowerCase();
-  const pass = document.getElementById('login-pass').value;
-  const r = ROLES[user];
-  if (r && pass === r.pass) {
-    sessionStorage.setItem('ingeco_auth', '1');
-    sessionStorage.setItem('ingeco_role', user);
-    applyRole(user);
-    document.body.classList.add('authed'); // muestra el contenido
-    document.getElementById('login-overlay').style.display = 'none';
-  } else {
-    document.getElementById('login-error').style.display = 'block';
-    document.getElementById('login-pass').value = '';
-    document.getElementById('login-pass').focus();
+// Al abrir: se pide al servidor quién es el usuario (cookie HttpOnly firmada).
+// Sin sesión válida el middleware ni siquiera sirve esta página, pero por si
+// la sesión venció mientras estaba abierta, se vuelve al login.
+(async function bootAuth() {
+  try {
+    const r = await fetch('/api/auth/me', { cache: 'no-store' });
+    if (!r.ok) throw new Error('sin sesión');
+    const me = await r.json();
+    applyRole(me.role, me.email);
+    document.body.classList.add('authed');
+  } catch (e) {
+    location.replace('/login.html?next=' + encodeURIComponent(location.pathname + location.search));
   }
-}
+})();
 
-// Permitir login con Enter
-document.getElementById('login-pass').addEventListener('keydown', function(e) {
-  if (e.key === 'Enter') doLogin();
-});
-document.getElementById('login-user').addEventListener('keydown', function(e) {
-  if (e.key === 'Enter') document.getElementById('login-pass').focus();
-});
+// Si la sesión vence mientras el tablero está abierto, cualquier 401 del proxy manda al login
+const _fetchOrig = window.fetch.bind(window);
+window.fetch = async function(input, init) {
+  const resp = await _fetchOrig(input, init);
+  const u = typeof input === 'string' ? input : (input && input.url) || '';
+  if (resp.status === 401 && u.startsWith('/api/') && !u.startsWith('/api/auth/')) location.replace('/login.html');
+  return resp;
+};
 
 // Dólar oficial promedio por mes (para el precio de referencia del asfalto):
 // se carga al arrancar y, si cambió algo, se vuelve a renderizar.
 cargarDolarOficial().then(() => { try { renderAll(); } catch(e) {} });
 
-// Si ya estaba autenticado en esta sesión, restaurar role y ocultar login
-if (sessionStorage.getItem('ingeco_auth') === '1') {
-  applyRole(sessionStorage.getItem('ingeco_role') || 'administracion');
-  document.body.classList.add('authed');
-  document.getElementById('login-overlay').style.display = 'none';
-}
 
 // ================================================================
 // INIT

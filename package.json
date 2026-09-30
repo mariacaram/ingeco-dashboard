@@ -1,0 +1,8 @@
+{
+  "name": "ingeco-dashboard",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "jose": "^4.15.9"
+  }
+}
