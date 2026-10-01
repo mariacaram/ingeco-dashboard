@@ -3250,6 +3250,14 @@ function _htmlRecordatorio(p, fechas) {
       '<th style="text-align:left;padding:8px 12px;font-size:12px;color:#64748b;">Última modificación</th></tr>' +
       filas +
     '</table>' +
+    '<div style="background:#f0f7ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px 14px;margin-top:16px;font-size:14px;color:#1e3a5f;">' +
+      '<b>Cuando termines de cargar, verificá que se vea en el tablero:</b>' +
+      '<ol style="margin:8px 0 0 18px;padding:0;line-height:1.6;">' +
+        '<li>Entrá a <a href="' + URL_TABLERO + '" style="color:#1d4ed8;font-weight:700;">' + URL_TABLERO.replace('https://', '') + '</a> con tu cuenta de Google de INGECO.</li>' +
+        '<li>Tocá <b>Actualizar datos</b> (arriba a la derecha) y esperá a que termine.</li>' +
+        '<li>Recargá la página y revisá que aparezca lo que cargaste.</li>' +
+      '</ol>' +
+    '</div>' +
     '<p style="font-size:13px;color:#64748b;margin-top:16px;">Gracias.<br>INGECO · Dashboard Ejecutivo</p>' +
   '</div>';
 }
