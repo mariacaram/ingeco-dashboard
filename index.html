@@ -3937,11 +3937,17 @@ function renderResumenTipoContrato() {
   _TIPOS_PDF = lista.map(g => g.tipo);
   const idxHoyT = Math.min(new Date().getMonth(), MES_ORDER.length - 1);
   const idxDefT = Math.max(0, idxHoyT - 1);
-  const opcHastaT = MES_ORDER.slice(0, idxHoyT + 1).map((m, i) =>
-    `<option value="${m}" ${i === idxDefT ? 'selected' : ''}>hasta ${(MES[m] || m).replace(' 2026', '')}${i === idxHoyT ? ' (en curso)' : ''}</option>`).join('');
+  // Dos modos: acumulado "hasta" un mes, o "solo" un mes (valor "solo:jul")
+  const _mesesPDFT = MES_ORDER.slice(0, idxHoyT + 1);
+  const _lblT = (m, i) => (MES[m] || m).replace(' 2026', '') + (i === idxHoyT ? ' (en curso)' : '');
+  const opcHastaT =
+    `<optgroup label="Acumulado">` + _mesesPDFT.map((m, i) =>
+      `<option value="${m}" ${i === idxDefT ? 'selected' : ''}>hasta ${_lblT(m, i)}</option>`).join('') + `</optgroup>` +
+    `<optgroup label="Un solo mes">` + _mesesPDFT.map((m, i) =>
+      `<option value="solo:${m}">solo ${_lblT(m, i)}</option>`).join('') + `</optgroup>`;
   const barraPDF = `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--muted);">
     📄 Estado de resultados por tipo de contratación (realizado)
-    <select id="pdf-hasta-mes-tipo" title="Hasta qué mes incluir" style="border:1.5px solid var(--border);border-radius:8px;font-size:12px;padding:4px 8px;background:#fff;cursor:pointer;">${opcHastaT}</select>
+    <select id="pdf-hasta-mes-tipo" title="Período: acumulado hasta un mes, o un solo mes" style="border:1.5px solid var(--border);border-radius:8px;font-size:12px;padding:4px 8px;background:#fff;cursor:pointer;">${opcHastaT}</select>
     <span>· elegí el tipo con el botón de cada cuadro</span>
   </div>`;
 
@@ -4341,13 +4347,16 @@ function _recolectarDatosTipo(tipo, soloMes, hastaMes) {
   return A.meses.length ? A : null;
 }
 let _TIPOS_PDF = [];
-function generarReportePDFTipo(idx, hastaMes) {
+function generarReportePDFTipo(idx, periodo) {
   const tipo = _TIPOS_PDF[idx];
   if (!tipo) return;
-  const D = _recolectarDatosTipo(tipo, null, hastaMes);
+  // periodo: 'jul' = acumulado hasta julio · 'solo:jul' = solo julio
+  const soloMes  = String(periodo || '').startsWith('solo:') ? String(periodo).slice(5) : null;
+  const hastaMes = soloMes ? null : periodo;
+  const D = _recolectarDatosTipo(tipo, soloMes, hastaMes);
   const esc = s => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const n = D ? D.porObra.length : 0;
-  generarReportePDF('', tipo, null, hastaMes, D, {
+  generarReportePDF('', tipo, soloMes, hastaMes, D, {
     titulo: tipo,
     porQue: 'Tipo de Contratación',
     metaHtml: `<span>Tipo de contratación: <b>${esc(tipo)}</b></span><span>Obras incluidas: <b>${n}</b></span>`,
