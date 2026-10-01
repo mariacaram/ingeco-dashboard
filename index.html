@@ -1131,29 +1131,6 @@
     </div>
   </div>
 
-  <div class="section">
-    <div class="section-title" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-      🏭 Stock de asfalto
-      <span style="font-size:11px;font-weight:500;color:var(--muted);" id="stock-mp-label"></span>
-      <button onclick="openAjusteStockPanel()" style="margin-left:auto;font-size:11px;font-weight:700;padding:4px 12px;border-radius:14px;border:1px solid var(--border);background:#fff;color:var(--text);cursor:pointer;" title="Cargar un nuevo corte de stock (Agustín)">✏️ Ajustar stock</button>
-    </div>
-    <div style="display:flex;align-items:stretch;gap:12px;flex-wrap:wrap;">
-      <div class="clickable-panel" onclick="openStockDetallePanel()" title="Click para ver cómo se forma el stock" style="cursor:pointer;flex:1;min-width:160px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center;">
-        <div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.06em;margin-bottom:8px;">ASFALTO (MATERIA PRIMA)</div>
-        <div style="font-size:32px;font-weight:800;color:#16a34a;" id="stock-mp-valor">sin dato</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:4px;" id="ajuste-stock-fecha-sub"></div>
-      </div>
-      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 4px;color:var(--muted);" title="25 tn de asfalto (1 camión) rinden 500 tn de mezcla">
-        <div style="font-size:22px;font-weight:800;color:var(--text);">×20</div>
-      </div>
-      <div class="clickable-panel" onclick="openStockDetallePanel()" title="Click para ver cómo se forma el stock" style="cursor:pointer;flex:1;min-width:160px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center;">
-        <div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.06em;margin-bottom:8px;">MEZCLA PRODUCIBLE</div>
-        <div style="font-size:32px;font-weight:800;color:var(--text);" id="stock-producible-valor">sin dato</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:4px;" id="stock-producible-sub">caliente o frío</div>
-      </div>
-    </div>
-  </div>
-
   <!-- Costo de producción caliente / frío -->
   <div class="section">
     <div class="section-title" title="Insumos y MO del mes distribuidos según las toneladas de cada proceso">Costo de producción · <span id="mes-label-planta-costo"></span></div>
@@ -3979,6 +3956,19 @@ function renderResumenTipoContrato() {
     ${esTotal ? '' : '<th class="num" title="Contribución marginal total de la obra — solo meses cerrados, mismo criterio que el historial">Contrib. marginal total</th>'}
   </tr></thead>`;
 
+  // Estado de resultados (PDF) por tipo — mismo criterio que el de obra:
+  // solo meses realizados, hasta el mes elegido (por defecto el último cerrado)
+  _TIPOS_PDF = lista.map(g => g.tipo);
+  const idxHoyT = Math.min(new Date().getMonth(), MES_ORDER.length - 1);
+  const idxDefT = Math.max(0, idxHoyT - 1);
+  const opcHastaT = MES_ORDER.slice(0, idxHoyT + 1).map((m, i) =>
+    `<option value="${m}" ${i === idxDefT ? 'selected' : ''}>hasta ${(MES[m] || m).replace(' 2026', '')}${i === idxHoyT ? ' (en curso)' : ''}</option>`).join('');
+  const barraPDF = `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--muted);">
+    📄 Estado de resultados por tipo de contratación (realizado)
+    <select id="pdf-hasta-mes-tipo" title="Hasta qué mes incluir" style="border:1.5px solid var(--border);border-radius:8px;font-size:12px;padding:4px 8px;background:#fff;cursor:pointer;">${opcHastaT}</select>
+    <span>· elegí el tipo con el botón de cada cuadro</span>
+  </div>`;
+
   // Un cuadro por tipo: obras ordenadas por margen + fila de subtotal
   const cuadros = lista.map((g, i) => {
     const mgColor = g.tot.margen > 0 ? 'pos-val' : g.tot.margen < 0 ? 'neg-val' : '';
@@ -3999,6 +3989,7 @@ function renderResumenTipoContrato() {
       <div style="font-size:13px;font-weight:700;margin-bottom:10px;display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;">${g.tipo}
         <span style="font-weight:400;color:var(--muted);font-size:12px;">· ${g.rows.length} obra${g.rows.length !== 1 ? 's' : ''}</span>
         <span style="margin-left:auto;font-size:12px;font-weight:400;color:var(--muted);">${esTotal ? 'Contribución marginal' : 'Mensual'}: <strong class="${mgColor}">${fmt(g.tot.margen)}</strong>${(!esTotal && g.tot.hayAcum) ? ` &nbsp;·&nbsp; Total: <strong class="${acColor}">${fmt(g.tot.acum)}</strong>` : ''}</span>
+        <button onclick="generarReportePDFTipo(${i}, (document.getElementById('pdf-hasta-mes-tipo') || {}).value)" title="Estado de resultados de todas las obras de ${g.tipo.replace(/"/g, '&quot;')} — solo meses realizados" style="font-size:11.5px;font-weight:600;padding:5px 12px;border-radius:8px;border:1.5px solid var(--primary);background:#fff;color:var(--primary);cursor:pointer;">📄 PDF</button>
       </div>
       <div class="table-wrap"><table class="tabla-margen-tipo">${thead}<tbody>${filas.join('')}</tbody></table></div>
     </div>`;
@@ -4024,7 +4015,7 @@ function renderResumenTipoContrato() {
     ${(!esTotal && totG.hayAcum) ? `<span>Contrib. marginal total: <strong class="${totG.acum > 0 ? 'pos-val' : totG.acum < 0 ? 'neg-val' : ''}">${fmt(totG.acum)}</strong></span>` : ''}
   </div>`;
 
-  cont.innerHTML = cuadros + footer;
+  cont.innerHTML = barraPDF + cuadros + footer;
 }
 
 // ── Historial por obra: desglose mes a mes de ingresos/gastos y margen ──
@@ -4315,14 +4306,94 @@ function _recolectarDatosObra(codObra, nombreObra, soloMes, hastaMes) {
   return { meses, porMes, certificados, provTotales, equipoTotales, provPorMes, equipoPorMes, tot, algunaEstim, infoObra: infoObra || { nombre: nombreObra, cod_obra: codObra, cliente: '', tipo: '' } };
 }
 
+// Reporte por TIPO DE CONTRATACIÓN: mismas obras que el cuadro de la pestaña
+// "Por tipo de contratación" (sin provisiones/otros gastos ni internas). Suma
+// el detalle de cada obra con _recolectarDatosObra, así los números son
+// exactamente la suma de los reportes por obra.
+function _recolectarDatosTipo(tipo, soloMes, hastaMes) {
+  const idxHoy = new Date().getMonth();
+  let idxHasta = hastaMes ? MES_ORDER.indexOf(hastaMes) : Math.max(0, idxHoy - 1);
+  if (idxHasta < 0 || idxHasta > idxHoy) idxHasta = Math.max(0, idxHoy - 1);
+  const meses = soloMes ? [soloMes] : MES_ORDER.slice(0, idxHasta + 1);
+  const obras = {};
+  meses.forEach(m => {
+    const d = computeMargenObrasMes(m);
+    if (!d) return;
+    d.rows.forEach(r => {
+      if (r.otroGasto || !r.hasData || _tipoDeFila(r.o) !== tipo) return;
+      const k = ((r.o.cod_obra || r.o.nombre) || '').toLowerCase().trim();
+      // Filas "extra" (solo OC/remitos/alquiler/MO, sin fila en Agustín): el
+      // nombre es una etiqueta genérica ("Con alquiler de maquinaria"…) que
+      // comparten varias obras — se identifican SOLO por el código.
+      if (k && !obras[k]) obras[k] = r.extra
+        ? { cod: r.o.cod_obra || r.o.nombre || '', nombre: '', etiqueta: r.o.cod_obra || r.o.nombre || '' }
+        : { cod: r.o.cod_obra || '', nombre: r.o.nombre || r.o.cod_obra || '' };
+    });
+  });
+  const A = { meses: [], porMes: {}, certificados: [], provTotales: {}, equipoTotales: {}, provPorMes: {}, equipoPorMes: {},
+    tot: { aCobrar: 0, insumos: 0, mo: 0, moh: 0, asf: 0, alquiler: 0, margen: 0, tnCal: 0, tnFrio: 0 }, algunaEstim: false, porObra: [],
+    infoObra: { nombre: tipo, cod_obra: '', cliente: '', tipo } };
+  const sumaProv = (dst, src) => Object.entries(src || {}).forEach(([k, v]) => {
+    if (!dst[k]) dst[k] = { monto: 0, nOC: 0 };
+    dst[k].monto += v.monto || 0; dst[k].nOC += v.nOC || 0;
+  });
+  const sumaEq = (dst, src) => Object.entries(src || {}).forEach(([k, v]) => {
+    if (!dst[k]) dst[k] = Object.assign({}, v, { horas: 0, costo: 0 });
+    dst[k].horas += v.horas || 0; dst[k].costo += v.costo || 0;
+  });
+  Object.values(obras).forEach(ob => {
+    const D = _recolectarDatosObra(ob.cod, ob.nombre, soloMes, hastaMes);
+    if (!D) return;
+    Object.keys(A.tot).forEach(k => { A.tot[k] += D.tot[k] || 0; });
+    if (D.algunaEstim) A.algunaEstim = true;
+    D.meses.forEach(m => {
+      const s = D.porMes[m];
+      const t = A.porMes[m] || (A.porMes[m] = { aCobrar: 0, insumos: 0, mo: 0, moEstim: false, moh: 0, asf: 0, alquiler: 0, margen: 0, tnCal: 0, tnFrio: 0, nCert: 0 });
+      ['aCobrar', 'insumos', 'mo', 'moh', 'asf', 'alquiler', 'margen', 'tnCal', 'tnFrio', 'nCert'].forEach(k => { t[k] += s[k] || 0; });
+      if (s.moEstim) t.moEstim = true;
+      if (!A.provPorMes[m]) A.provPorMes[m] = {};
+      sumaProv(A.provPorMes[m], D.provPorMes[m]);
+      if (!A.equipoPorMes[m]) A.equipoPorMes[m] = {};
+      sumaEq(A.equipoPorMes[m], D.equipoPorMes[m]);
+    });
+    A.certificados = A.certificados.concat(D.certificados);
+    sumaProv(A.provTotales, D.provTotales);
+    sumaEq(A.equipoTotales, D.equipoTotales);
+    A.porObra.push(Object.assign({ nombre: ob.etiqueta || ob.nombre || ob.cod }, D.tot));
+  });
+  A.meses = MES_ORDER.filter(m => A.porMes[m]);
+  return A.meses.length ? A : null;
+}
+let _TIPOS_PDF = [];
+function generarReportePDFTipo(idx, hastaMes) {
+  const tipo = _TIPOS_PDF[idx];
+  if (!tipo) return;
+  const D = _recolectarDatosTipo(tipo, null, hastaMes);
+  const esc = s => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const n = D ? D.porObra.length : 0;
+  generarReportePDF('', tipo, null, hastaMes, D, {
+    titulo: tipo,
+    porQue: 'Tipo de Contratación',
+    metaHtml: `<span>Tipo de contratación: <b>${esc(tipo)}</b></span><span>Obras incluidas: <b>${n}</b></span>`,
+    sinDatos: 'No hay datos realizados para este tipo de contratación en el período elegido.',
+  });
+}
+
 // soloMes (opcional): key de mes (ej. 'jul') para generar el reporte de un
 // único mes en vez del histórico completo de la obra.
-function generarReportePDF(codObra, nombreObra, soloMes, hastaMes) {
-  const D = _recolectarDatosObra(codObra, nombreObra, soloMes, hastaMes);
-  if (!D) { alert('No hay datos para generar el reporte de esta obra.'); return; }
+// Dpre/cfg (opcionales): datos ya agregados y textos del encabezado — los usa
+// el reporte por tipo de contratación (generarReportePDFTipo) con el mismo formato.
+function generarReportePDF(codObra, nombreObra, soloMes, hastaMes, Dpre, cfg) {
+  cfg = cfg || {};
+  const D = Dpre || _recolectarDatosObra(codObra, nombreObra, soloMes, hastaMes);
+  if (!D) { alert(cfg.sinDatos || 'No hay datos para generar el reporte de esta obra.'); return; }
 
   const showMO = !esAdmin();               // rol administración no ve MO
-  const pf = n => (n == null || n === 0) ? '—' : '$' + Math.round(n).toLocaleString('es-AR');
+  const pf = n => (n == null || n === 0) ? '—' : (n < 0 ? '−$' : '$') + Math.abs(Math.round(n)).toLocaleString('es-AR');
+  // Insumos de OC sin la MO tercerizada de hormigón (que va en su propia línea:
+  // r.insumos ya la incluye, así la cascada suma exacto)
+  const insOC = D.tot.insumos - (D.tot.moh || 0);
+  const insOCMes = m => (D.porMes[m].insumos || 0) - (D.porMes[m].moh || 0);
   const pct = (n, base) => base > 0 ? (n / base * 100).toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%' : '—';
   const mesLbl = m => (MES[m] || m).replace(' 2026', '');
   const esc = s => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -4351,7 +4422,7 @@ function generarReportePDF(codObra, nombreObra, soloMes, hastaMes) {
     </tr>`;
   };
   let cascadaFilas = filaCascada('Generado (ingresos certificados)', D.tot.aCobrar, 'ing');
-  cascadaFilas += filaCascada('Insumos (OC de compra)', D.tot.insumos, 'egr');
+  cascadaFilas += filaCascada('Insumos (OC de compra)', insOC, 'egr');
   if (showMO) cascadaFilas += filaCascada('Mano de obra asfalto (prorrateada)' + (D.algunaEstim ? ' *' : ''), D.tot.mo, 'egr');
   if (D.tot.moh > 0) cascadaFilas += filaCascada('Mano de obra hormigón (tercerizada)', D.tot.moh, 'egr');
   cascadaFilas += filaCascada('Costo de asfalto', D.tot.asf, 'egr');
@@ -4379,14 +4450,14 @@ function generarReportePDF(codObra, nombreObra, soloMes, hastaMes) {
       <td style="padding:6px 10px;font-size:12px;border-top:1px solid #e2e8f0;">${esc(p.prov)}</td>
       <td style="padding:6px 10px;font-size:12px;text-align:center;border-top:1px solid #e2e8f0;color:#64748b;">${p.nOC}</td>
       <td style="padding:6px 10px;font-size:12px;text-align:right;border-top:1px solid #e2e8f0;font-weight:600;color:#dc2626;">${pf(p.monto)}</td>
-      <td style="padding:6px 10px;font-size:11px;text-align:right;border-top:1px solid #e2e8f0;color:#94a3b8;">${pct(p.monto, D.tot.insumos)}</td>
+      <td style="padding:6px 10px;font-size:11px;text-align:right;border-top:1px solid #e2e8f0;color:#94a3b8;">${pct(p.monto, insOC)}</td>
     </tr>`).join('');
   if (provResto.length > 0) provFilas += `
     <tr>
       <td style="padding:6px 10px;font-size:12px;border-top:1px solid #e2e8f0;font-style:italic;color:#64748b;">Otros ${provResto.length} proveedores</td>
       <td style="padding:6px 10px;font-size:12px;text-align:center;border-top:1px solid #e2e8f0;color:#64748b;">${restoNOC}</td>
       <td style="padding:6px 10px;font-size:12px;text-align:right;border-top:1px solid #e2e8f0;font-weight:600;color:#dc2626;">${pf(restoMonto)}</td>
-      <td style="padding:6px 10px;font-size:11px;text-align:right;border-top:1px solid #e2e8f0;color:#94a3b8;">${pct(restoMonto, D.tot.insumos)}</td>
+      <td style="padding:6px 10px;font-size:11px;text-align:right;border-top:1px solid #e2e8f0;color:#94a3b8;">${pct(restoMonto, insOC)}</td>
     </tr>`;
 
   // ── Apertura por mes (solo en el acumulado): mes → proveedores / equipos ──
@@ -4394,11 +4465,11 @@ function generarReportePDF(codObra, nombreObra, soloMes, hastaMes) {
   const filaMes = (m, cells) => `<tr style="background:#f8fafc;">${[{ t: '<strong>' + mesLbl(m) + '</strong>' }].concat(cells).map(c => tdM(c.t, c.a, 'font-weight:700;border-top:2px solid #e2e8f0;' + (c.c ? 'color:' + c.c + ';' : ''))).join('')}</tr>`;
   let provMesFilas = '';
   if (!esMensual && D.meses.length > 1 && D.provPorMes) {
-    D.meses.filter(m => D.porMes[m].insumos > 0).forEach(m => {
+    D.meses.filter(m => insOCMes(m) > 0).forEach(m => {
       const provs = Object.entries(D.provPorMes[m] || {}).map(([prov, v]) => ({ prov, ...v })).sort((a, b) => b.monto - a.monto);
       const nOCm = provs.reduce((s2, x) => s2 + x.nOC, 0);
-      provMesFilas += filaMes(m, [{ t: nOCm, a: 'center' }, { t: pf(D.porMes[m].insumos), a: 'right', c: '#dc2626' }, { t: pct(D.porMes[m].insumos, D.tot.insumos), a: 'right' }]);
-      provMesFilas += provs.map(x => `<tr>${tdM('<span style="color:#475569;padding-left:14px;">' + esc(x.prov) + '</span>')}${tdM(x.nOC, 'center', 'color:#64748b;')}${tdM(pf(x.monto), 'right', 'color:#64748b;')}${tdM(pct(x.monto, D.porMes[m].insumos), 'right', 'color:#94a3b8;font-size:10.5px;')}</tr>`).join('');
+      provMesFilas += filaMes(m, [{ t: nOCm, a: 'center' }, { t: pf(insOCMes(m)), a: 'right', c: '#dc2626' }, { t: pct(insOCMes(m), insOC), a: 'right' }]);
+      provMesFilas += provs.map(x => `<tr>${tdM('<span style="color:#475569;padding-left:14px;">' + esc(x.prov) + '</span>')}${tdM(x.nOC, 'center', 'color:#64748b;')}${tdM(pf(x.monto), 'right', 'color:#64748b;')}${tdM(pct(x.monto, insOCMes(m)), 'right', 'color:#94a3b8;font-size:10.5px;')}</tr>`).join('');
     });
   }
   let eqMesFilas = '';
@@ -4470,7 +4541,7 @@ function generarReportePDF(codObra, nombreObra, soloMes, hastaMes) {
   const totRow = (cells) => `<tr style="background:#f1f5f9;font-weight:700;border-top:2px solid #cbd5e1;">${cells.map(c => `<td style="padding:8px 10px;font-size:12px;text-align:${c.a || 'left'};color:${c.c || '#1e293b'};">${c.t}</td>`).join('')}</tr>`;
 
   const html = `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
-<title>Reporte ${esc(o.nombre || o.cod_obra)}${esMensual ? ' — ' + periodo : ''} — INGECO</title>
+<title>Reporte ${esc(cfg.titulo || o.nombre || o.cod_obra)}${esMensual ? ' — ' + periodo : ''} — INGECO</title>
 <style>
   @page { size: A4; margin: 13mm 14mm; }
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -4509,7 +4580,7 @@ function generarReportePDF(codObra, nombreObra, soloMes, hastaMes) {
   <div class="header">
     <div>
       <div class="brand"><img src="${LOGO_INGECO_B64}" alt="INGECO"></div>
-      <div class="doc-tipo">Reporte ${esMensual ? 'Mensual' : 'Histórico'} de Contribución Marginal por Obra</div>
+      <div class="doc-tipo">Reporte ${esMensual ? 'Mensual' : 'Histórico'} de Contribución Marginal por ${cfg.porQue || 'Obra'}</div>
     </div>
     <div class="header-right">
       Generado: ${hoy}<br>Adrián Koss · Socio Director
@@ -4517,11 +4588,12 @@ function generarReportePDF(codObra, nombreObra, soloMes, hastaMes) {
   </div>
 
   <div class="obra-box">
-    <div class="obra-nombre">${esc(o.nombre || o.cod_obra)}</div>
+    <div class="obra-nombre">${esc(cfg.titulo || o.nombre || o.cod_obra)}</div>
     <div class="obra-meta">
+      ${cfg.metaHtml ? cfg.metaHtml : `
       ${o.cod_obra && o.cod_obra !== o.nombre ? `<span>Código: <b>${esc(o.cod_obra)}</b></span>` : ''}
       <span>Tipo de contratación: <b>${esc(tipo)}</b></span>
-      ${o.cliente && o.cliente !== '—' ? `<span>Cliente: <b>${esc(o.cliente)}</b></span>` : ''}
+      ${o.cliente && o.cliente !== '—' ? `<span>Cliente: <b>${esc(o.cliente)}</b></span>` : ''}`}
       <span>Período: <b>${periodo}</b></span>
     </div>
   </div>
@@ -4543,6 +4615,28 @@ function generarReportePDF(codObra, nombreObra, soloMes, hastaMes) {
     <div class="val">${est}${pf(margen)} <span style="font-size:14px;font-weight:600;">(${pct(margen, D.tot.aCobrar)})</span></div>
   </div>
 
+  ${D.porObra && D.porObra.length ? (() => {
+    const filasO = D.porObra.slice().sort((a, b) => b.margen - a.margen).map(x => {
+      const egr = x.insumos + x.mo + x.asf + x.alquiler;
+      const c = x.margen >= 0 ? '#16a34a' : '#dc2626';
+      return `<tr>
+        <td style="padding:6px 10px;font-size:12px;border-top:1px solid #e2e8f0;">${esc(x.nombre)}</td>
+        <td style="padding:6px 10px;font-size:12px;text-align:right;border-top:1px solid #e2e8f0;color:#16a34a;">${pf(x.aCobrar)}</td>
+        <td style="padding:6px 10px;font-size:12px;text-align:right;border-top:1px solid #e2e8f0;color:#dc2626;">${pf(egr)}</td>
+        <td style="padding:6px 10px;font-size:12px;text-align:right;border-top:1px solid #e2e8f0;font-weight:700;color:${c};">${pf(x.margen)}</td>
+        <td style="padding:6px 10px;font-size:11px;text-align:right;border-top:1px solid #e2e8f0;color:#94a3b8;">${pct(x.margen, x.aCobrar)}</td>
+        <td style="padding:6px 10px;font-size:11px;text-align:right;border-top:1px solid #e2e8f0;color:#94a3b8;">${pct(x.margen, margen)}</td>
+      </tr>`;
+    }).join('');
+    return seccion('§', 'Contribución por obra', 'Cuánto aportó cada obra del tipo · ordenadas de mayor a menor contribución', `
+      <table class="data">
+        ${th([{ t: 'Obra' }, { t: 'Certificado', a: 'right' }, { t: 'Egresos', a: 'right' }, { t: 'Contrib. marginal', a: 'right' }, { t: '% s/cert.', a: 'right' }, { t: '% del tipo', a: 'right' }])}
+        <tbody>${filasO}
+          ${totRow([{ t: 'TOTAL ' + D.porObra.length + ' OBRAS' }, { t: pf(D.tot.aCobrar), a: 'right', c: '#16a34a' }, { t: pf(egresosMostrado), a: 'right', c: '#dc2626' }, { t: est + pf(margen), a: 'right', c: mgColor }, { t: pct(margen, D.tot.aCobrar), a: 'right' }, { t: '100%', a: 'right' }])}
+        </tbody>
+      </table>`);
+  })() : ''}
+
   ${seccion('1', 'Ingresos — Certificados', 'Certificados por período (Obras a cobrar — Agustín)', `
     <table class="data">
       ${th([{ t: 'Mes' }, { t: 'Nº cert.', a: 'center' }, { t: 'Monto certificado', a: 'right' }])}
@@ -4553,11 +4647,11 @@ function generarReportePDF(codObra, nombreObra, soloMes, hastaMes) {
 
   <div class="seccion"><div class="sec-titulo"><span class="sec-num">2</span>Egresos</div></div>
 
-  ${D.tot.insumos > 0 ? seccion('2.1', 'Insumos — Órdenes de compra', 'Agrupado por proveedor · fuente: Guillermo Konicek', `
+  ${insOC > 0 ? seccion('2.1', 'Insumos — Órdenes de compra', 'Agrupado por proveedor · fuente: Guillermo Konicek', `
     <table class="data">
       ${th([{ t: 'Proveedor' }, { t: 'Nº OC', a: 'center' }, { t: 'Monto', a: 'right' }, { t: '%', a: 'right' }])}
       <tbody>${provFilas}
-        ${totRow([{ t: 'TOTAL INSUMOS' }, { t: '', a: 'center' }, { t: pf(D.tot.insumos), a: 'right', c: '#dc2626' }, { t: '100%', a: 'right' }])}
+        ${totRow([{ t: 'TOTAL INSUMOS' }, { t: '', a: 'center' }, { t: pf(insOC), a: 'right', c: '#dc2626' }, { t: '100%', a: 'right' }])}
       </tbody>
     </table>
     ${provMesFilas ? `<div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.03em;margin:14px 0 4px;">Apertura por mes</div>
@@ -10160,8 +10254,8 @@ function renderPlantaCharts() {
         const hTot  = Math.round(rem.total    / maxTn * CHARTH);
         const hFrio = Math.round((rem.frio || 0) / maxTn * CHARTH);
         const hCal  = hTot - hFrio;
-        bars += `<rect x="${x}" y="${YBASE - hTot}"  width="${BAR_W}" height="${hCal}"  fill="#f97316" rx="2 2 0 0"/>`;
-        bars += `<rect x="${x}" y="${YBASE - hFrio}" width="${BAR_W}" height="${hFrio}" fill="#60a5fa" rx="0 0 2 2"/>`;
+        bars += `<rect x="${x}" y="${YBASE - hTot}"  width="${BAR_W}" height="${hCal}"  fill="#f97316" rx="2"/>`;
+        bars += `<rect x="${x}" y="${YBASE - hFrio}" width="${BAR_W}" height="${hFrio}" fill="#60a5fa" rx="2"/>`;
         bars += `<text x="${cx}" y="${YBASE - hTot - 4}" text-anchor="middle" font-size="9" fill="var(--text)" font-weight="600">${fmtTn(rem.total)}</text>`;
         lbls += `<text x="${cx}" y="${YBASE + 16}" text-anchor="middle" font-size="10" fill="var(--muted)">${MES_CORTO[mes] || mes}</text>`;
       });
@@ -10195,7 +10289,7 @@ function renderPlantaCharts() {
         const cx  = 10 + STEP * i + STEP / 2;
         const x   = cx - BAR_W / 2;
         const h   = Math.round(val / maxVal * CHARTH);
-        bars += `<rect x="${x}" y="${YBASE - h}" width="${BAR_W}" height="${h}" fill="#f59e0b" rx="2 2 0 0"/>`;
+        bars += `<rect x="${x}" y="${YBASE - h}" width="${BAR_W}" height="${h}" fill="#f59e0b" rx="2"/>`;
         bars += `<text x="${cx}" y="${YBASE - h - 4}" text-anchor="middle" font-size="9" fill="var(--text)" font-weight="600">${fmt(val)}</text>`;
         lbls += `<text x="${cx}" y="${YBASE + 16}" text-anchor="middle" font-size="10" fill="var(--muted)">${MES_CORTO[mes] || mes}</text>`;
       });
