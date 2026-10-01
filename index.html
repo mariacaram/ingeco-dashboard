@@ -6595,6 +6595,10 @@ const ES_INGRESO_NO_OBRA = t => ES_OBRA_TALLER(t) || /air\s*liquide|hidr[oó]xid
 // Pavimax (bolsas) se vende sin pasar por la planilla de cobros de Esteban:
 // nunca es una inconsistencia que falte ahí (María, sep-2026)
 const ES_PAVIMAX = t => /pavimax/i.test(t || '');
+// Obras anteriores al archivo de Agustín: siguen en Estado financiero (Esteban
+// las cobra), pero Agustín no las carga porque se enfoca en lo nuevo — no son
+// inconsistencia (María, oct-2026). Para sumar otra, agregarla a la regex.
+const ES_OBRA_ANTERIOR = t => /san\s*cayetano|av(enida|\.)?\s*belgrano/i.test(t || '');
 const fmtBolsas = n => Math.round(n || 0).toLocaleString('es-AR');
 // Cobros de Esteban imputados al Taller: cobrado / facturado / programado
 // del mes (o de todos los meses en TOTAL).
@@ -6907,7 +6911,7 @@ function runAuditorias() {
     Object.entries(seg.obras).forEach(([n, o]) => {
       const nk = n.toLowerCase().trim();
       if (agSet.has(nk) || yaTitulos.has(nk)) return;
-      if (ES_INGRESO_NO_OBRA(n) || esCentroInternoConocido(n) || ES_FONDO_REPARO(n) || ES_REDET(n) || /^provisi|^venta de|^obra no disponible|^\(sin obra\)|^sin obra/i.test(n)) return;
+      if (ES_INGRESO_NO_OBRA(n) || ES_OBRA_ANTERIOR(n) || esCentroInternoConocido(n) || ES_FONDO_REPARO(n) || ES_REDET(n) || /^provisi|^venta de|^obra no disponible|^\(sin obra\)|^sin obra/i.test(n)) return;
       const total = (o.cob || 0) + (o.pend || 0);
       if (total <= AUDIT_TOLERANCIA) return;
       AUDIT_RESULTADOS.push({
@@ -7415,6 +7419,8 @@ function renderSeguimientoCobros() {
       ? `<span style="font-size:11px;color:var(--muted);" title="Ingreso del Taller (alquiler a terceros): lo registra Esteban, no va en el archivo de obras de Agustín. Se ve en la pestaña Taller Mecánico.">Taller</span>`
       : ES_INGRESO_NO_OBRA(n)
       ? `<span style="font-size:11px;color:var(--muted);" title="Ingreso por servicios, no es una obra: lo registra solo Esteban, Agustín no lo carga. No es una diferencia.">No es obra</span>`
+      : ES_OBRA_ANTERIOR(n)
+      ? `<span style="font-size:11px;color:var(--muted);" title="Obra anterior: la cobra Esteban, pero Agustín no la carga porque su archivo arranca con las obras nuevas. No es una diferencia.">Obra anterior</span>`
       : v
       ? (v.tipo === 'ok'
           ? `<span data-restrict="sueldos" style="color:#16a34a;font-weight:700;" title="${v.tip}">✓</span>`
