@@ -87,6 +87,10 @@ Vive en `leerStockAsfalto()` (`.gs`) y `renderStockDisplay()` / `openStockDetall
 - Un `doGet` en vivo (sin `cache=1`, con `key`) reconstruye y guarda el caché: sirve para forzar la actualización sin tocar el editor. El trigger `actualizarHorario` hace lo mismo cada hora.
 - Los triggers corren el código **guardado**; la Web App corre la **versión implementada**. Después de pegar hay que hacer las dos cosas: guardar y publicar nueva versión.
 
+## Recordatorios por mail (oct-2026)
+
+Al final del `.gs`: `RECORDATORIOS` (persona, mail, frecuencia `lunes`/`quincena`, archivos). `enviarRecordatorios()` corre por trigger diario a las 8 (`crearTriggerRecordatorios()`) y manda los lunes y, a Mauro, los días 3 y 17. Salen desde la cuenta dueña del script (María; pasará a Gonzalo). Con `RECORDATORIOS_MODO_PRUEBA = true` todo le llega a `RECORDATORIOS_PRUEBA_A` con el destinatario real en el asunto; pasarlo a `false` cuando estén los mails. El código de mails no necesita publicar versión nueva de la Web App (los triggers corren el código guardado).
+
 ## Otras cosas no obvias del dominio
 
 - **OC Insumos**: hay que distinguir obras "INT" (internas: Predio Warnes, Planta de Asfalto, Planta de Trituración — no son obras de construcción real) de obras reales. `getOCPlantaInterna()` filtra solo las internas; `getOCPlanta()` excluye las internas (para el total de obras). El campo `obra` de cada ítem de OC debe leerse de la columna **OBRA GENERAL** de la planilla de Guillermo Konicek, no de "OBRA PARTICULAR" (son columnas distintas con nombres parecidos, `_findCol` matchea por substring así que hay que priorizar `'obra general'` antes que `'obra'` en el array de keywords).
