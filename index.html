@@ -6737,6 +6737,14 @@ const ES_PAVIMAX = t => /pavimax/i.test(t || '');
 // las cobra), pero Agustín no las carga porque se enfoca en lo nuevo — no son
 // inconsistencia (María, oct-2026). Para sumar otra, agregarla a la regex.
 const ES_OBRA_ANTERIOR = t => /san\s*cayetano|av(enida|\.)?\s*belgrano/i.test(t || '');
+// Inconsistencias ya resueltas internamente: no se muestran en Auditorías.
+// hastaMonto = diferencia que se dio por resuelta; si la diferencia crece por
+// encima de eso (ej. otro certificado nuevo), vuelve a aparecer.
+const AUDIT_RESUELTAS = [
+  { chequeo: 'Cobro sin registrar', obra: /lomas\s*de\s*taf/i, hastaMonto: 393000000,
+    nota: 'CERT 1, 2 y 4 marcados cobrados sin registro en Esteban: resuelto internamente (María, oct-2026)' },
+];
+const _auditResuelta = r => AUDIT_RESUELTAS.some(x => x.chequeo === r.chequeo && x.obra.test(r.titulo || '') && (r.monto || 0) <= x.hastaMonto);
 const fmtBolsas = n => Math.round(n || 0).toLocaleString('es-AR');
 // Cobros de Esteban imputados al Taller: cobrado / facturado / programado
 // del mes (o de todos los meses en TOTAL).
@@ -7137,6 +7145,7 @@ function runAuditorias() {
     });
   }
 
+  AUDIT_RESULTADOS = AUDIT_RESULTADOS.filter(r => !_auditResuelta(r));
   AUDIT_RESULTADOS.sort((a, b) => (b.grave - a.grave) || (b.monto - a.monto));
 }
 
