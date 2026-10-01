@@ -10950,9 +10950,46 @@ function _ajustarAlquilerTC() {
   });
 }
 
+// Destinos de remitos escritos de distintas formas que son el mismo cliente.
+// Se unifican antes de calcular (tn, certificación teórica y precio de
+// convenio, que se busca por el nombre completo). Para sumar otro, agregar acá.
+const ALIAS_DESTINO_REMITO = [
+  [/^\s*(municipalidad|muni\.?)\s+(de\s+)?smt\s*$/i, 'Municipalidad de San Miguel de Tucumán'],
+];
+function _normDestinoRemito(d) {
+  for (const [re, canon] of ALIAS_DESTINO_REMITO) if (re.test(d || '')) return canon;
+  return d;
+}
+// Idempotente: reescribe d en cat/det/dias de cada obra y fusiona duplicados.
+function _normalizarDestinosRemitos() {
+  Object.values(REMITOS_ASFALTO || {}).forEach(rm => {
+    Object.values((rm && rm.porObra) || {}).forEach(po => {
+      let cambio = false;
+      ['cat', 'det', 'dias'].forEach(arr => (po[arr] || []).forEach(e => {
+        const n = _normDestinoRemito(e.d);
+        if (n !== e.d) { e.d = n; cambio = true; }
+      }));
+      if (!cambio) return;
+      if (po.cat) po.cat = _tnDetMerge([], po.cat);
+      if (po.det) po.det = _tnDetMerge([], po.det);
+      if (po.dias) {
+        const mk = e => [e.f, e.s, e.d, e.src || ''].join('|');
+        const out = [];
+        po.dias.forEach(e => {
+          const ex = out.find(x => mk(x) === mk(e));
+          if (ex) { ex.t = Math.round((ex.t + e.t) * 10) / 10; ex.fs = (ex.fs || []).concat(e.fs || []); }
+          else out.push(Object.assign({}, e, { fs: (e.fs || []).slice() }));
+        });
+        po.dias = out;
+      }
+    });
+  });
+}
+
 function renderAll() {
   _ajustarAlquilerTC();
   _normalizarObrasEsteban();
+  _normalizarDestinosRemitos();
   _sintetizarTotales();
   _renderMonthButtons();
   renderMargen();
