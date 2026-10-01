@@ -3202,50 +3202,51 @@ const URL_TABLERO = 'https://ingeco-dashboard.vercel.app';
 // Por archivo: cols = columnas que lee el tablero (no cambiarles el título);
 // obraCol = columna donde va el nombre de la obra tal cual el Maestro;
 // maestro = pestaña del archivo que trae sola la lista del Maestro de obras.
+// instructivo = ID del Google Doc con el instructivo (carpetas de Instructivos en Drive).
 const RECORDATORIOS = [
   { nombre: 'Agustín y Sergio', email: 'adegregorio@grupoingeco.com.ar,sergiocangemi@grupoingeco.com.ar', frecuencia: 'lunes',
     archivos: [
-      { fileKey: 'agustinObras', titulo: 'Obras a cobrar',
+      { fileKey: 'agustinObras', instructivo: '1GtZ5jMOIND3WKAYKK2kFvVMeegwtYP0DZ6aQ_EJfldg', titulo: 'Obras a cobrar',
         que: 'Certificados del mes con su período de realización, y marcar como "Cobrada" lo que ya se cobró.',
         cols: ['Nombre Obra', 'Estado $', 'Monto Total', 'Anticipo financiero', 'Monto a certificar', 'Código', 'Período de realización'],
         obraCol: 'Código', maestro: 'Maestro de obras' },
-      { fileKey: 'maestroObras', titulo: 'Maestro de obras',
+      { fileKey: 'maestroObras', instructivo: '1E4f3DovCKRbzQ0z-DqIIof3O__FBJhBJmY_tBHqzhsI', titulo: 'Maestro de obras',
         que: 'Solo si hay una obra nueva: agregarla en una fila nueva con su nombre, cliente y tipo de contrato. No cambiar el nombre de una obra que ya existe: las otras planillas copian esta lista.',
         cols: ['NOMBRE DE OBRA', 'CLIENTE', 'TIPO_CONTRATO', 'ESTADO'] },
     ] },
   { nombre: 'Agustín', email: 'adegregorio@grupoingeco.com.ar', frecuencia: 'mensual',
-    archivos: [{ fileKey: 'equiposFlota', titulo: 'Tarifas y precios del mes',
+    archivos: [{ fileKey: 'equiposFlota', instructivo: '19rwnaUSO4RG1ZZ-q3S70Emh4VjinfsX4gAJdTlxWels', titulo: 'Tarifas y precios del mes',
       que: 'Actualizar los precios del mes.',
       cols: ['CÓDIGO', 'PF'] }] },
   { nombre: 'Esteban',   email: 'esaguir@grupoingeco.com.ar', frecuencia: 'lunes',
-    archivos: [{ fileKey: 'estebanSheet', titulo: 'Cobros (planilla por mes)',
+    archivos: [{ fileKey: 'estebanSheet', instructivo: '15l2ZYx7WsChKyGNc4Lkd7-v-uMM5T1wqYSfQV5AaZko', titulo: 'Cobros (planilla por mes)',
       que: 'Cobros de la semana con fecha real de cobro, facturas emitidas y fechas probables de lo pendiente. Cada mes nuevo va en una pestaña con el nombre del mes (ej. "Octubre") y las mismas columnas.',
       cols: ['OBRA', 'CLIENTE', 'CONCEPTO', 'IMPORTE', 'FECHA PROBABLE', 'FECHA REAL'],
       obraCol: 'OBRA', maestro: 'Maestro de obras' }] },
   { nombre: 'Guillermo', email: 'compras1@grupoingeco.com.ar', frecuencia: 'lunes',
-    archivos: [{ fileKey: 'ocInsumos', titulo: 'Órdenes de compra de insumos',
+    archivos: [{ fileKey: 'ocInsumos', instructivo: '1W0M0JvTawzOzEIbZAGLhHSU5-xsQoyC00C8Hwt0oDa8', titulo: 'Órdenes de compra de insumos',
       que: 'OC de la semana con la OBRA GENERAL completa (sin "Obra no disponible").',
       cols: ['N° ORDEN', 'PROVEEDOR', 'FECHA', 'DESCRIPCIÓN', 'MONTO', 'OBRA GENERAL'],
       obraCol: 'OBRA GENERAL', maestro: 'Maestro de obras' }] },
   { nombre: 'Roberto',   email: 'deposito@grupoingeco.com.ar', frecuencia: 'lunes',
-    archivos: [{ fileKey: 'remitosAsfalto', titulo: 'Remitos oficiales',
+    archivos: [{ fileKey: 'remitosAsfalto', instructivo: '1xmtQ6uYIQaF9emb73TRk3nos8cnGbFGUC9z4XbEqVfA', titulo: 'Remitos oficiales',
       que: 'Remitos de la semana con OBRA GENERAL, destino, unidad (TON o KG) y fecha del año en curso.',
       cols: ['FECHA', 'CANTIDAD 1', 'UNIDAD 1', 'DESCRIPCIÓN 1', 'DESTINO', 'OBRA GENERAL'],
       obraCol: 'OBRA GENERAL', maestro: 'Maestro de obras' }] },
   { nombre: 'Nico',      email: 'nicobdallagata@gmail.com', frecuencia: 'lunes',
     archivos: [
-      { fileKey: 'usageEquipos', titulo: 'Partes diarios de equipos', que: 'Horas por equipo y obra de toda la semana.',
+      { fileKey: 'usageEquipos', instructivo: '1ZO5ygH-1qVKZm7dp8lgex0i6VCR0JyYydQPCM6r4_w0', titulo: 'Partes diarios de equipos', que: 'Horas por equipo y obra de toda la semana.',
         cols: ['FECHA', 'CÓDIGO', 'TIEMPO TRABAJO (HR)', 'OBRA GENERAL'],
         obraCol: 'OBRA GENERAL', maestro: 'Maestro de obras' },
-      { fileKey: 'repuestosEquipos', titulo: 'Pedidos y entregas de repuestos', que: 'Entregas de la semana con costo y equipo, en la pestaña REGISTRO ENTREGAS.',
+      { fileKey: 'repuestosEquipos', instructivo: '12TcS_Mm_eYR2xyUdli27cfVsP3OwEhuidyD8P-Eu9BY', titulo: 'Pedidos y entregas de repuestos', que: 'Entregas de la semana con costo y equipo, en la pestaña REGISTRO ENTREGAS.',
         cols: ['FECHA', 'CÓDIGO 1', 'COSTO', 'OBRA GENERAL'] },
     ] },
   { nombre: 'Romina',    email: 'contabilidad2@grupoingeco.com.ar', frecuencia: 'lunes',
-    archivos: [{ fileKey: 'gastosEstructura', titulo: 'Gastos de estructura (libro mayor)',
+    archivos: [{ fileKey: 'gastosEstructura', instructivo: '1btdqRIgsDz4KzY-hpvmoOgl3BfLz1UqkkYLxFrSr2q8', titulo: 'Gastos de estructura (libro mayor)',
       que: 'Gastos administrativos del mes, cada uno con su cuenta. Cada mes nuevo va en una pestaña nueva con las mismas columnas.',
       cols: ['Cuenta', 'Fecha', 'Numero Comprobante', 'Razón social', 'Debe', 'Haber'] }] },
   { nombre: 'Mauro',     email: 'sueldos01@grupoingeco.com.ar', frecuencia: 'quincena',
-    archivos: [{ fileKey: 'tangoFolder', carpeta: true, titulo: 'Quincenas TANGO (carpeta)',
+    archivos: [{ fileKey: 'tangoFolder', instructivo: '1ppN0EWc83Pg3SlDLQ-5S-TML5c8_meWxUBpJpNTzmB8', carpeta: true, titulo: 'Quincenas TANGO (carpeta)',
       que: 'La quincena que cerró, con la columna OBRA (R) completa. Taller y Planta de Asfalto con su nombre.',
       cols: ['OBRA (columna R)', 'Maquinista (columna S)'],
       obraCol: 'OBRA (columna R)', maestro: 'Maestro de obra' }] },
@@ -3271,6 +3272,7 @@ function _htmlRecordatorio(p, fechas) {
     return '<tr>' +
       '<td style="padding:10px 12px;border-top:1px solid #e2e8f0;vertical-align:top;"><a href="' + _urlArchivoRecordatorio(a) + '" style="color:#1b3a5c;font-weight:700;text-decoration:none;">' + a.titulo + ' ↗</a>' +
       '<div style="color:#475569;font-size:13px;margin-top:4px;">' + a.que + '</div>' +
+      (a.instructivo ? '<div style="font-size:12.5px;margin-top:6px;"><a href="https://docs.google.com/document/d/' + a.instructivo + '/edit" style="color:#1d4ed8;font-weight:700;">📘 Ver instructivo (2 minutos) ↗</a></div>' : '') +
       (a.cols && a.cols.length ? '<div style="color:#475569;font-size:12.5px;margin-top:6px;"><b>Columnas que lee el tablero:</b> ' + a.cols.join(' · ') + '</div>' : '') +
       (a.maestro ? '<div style="color:#475569;font-size:12.5px;margin-top:4px;"><b>Nombre de la obra:</b> en ' + a.obraCol + ', copiado tal cual de la pestaña <b>"' + a.maestro + '"</b> de este mismo archivo (se actualiza sola).</div>' : '') +
       '</td>' +
