@@ -2056,8 +2056,47 @@ const MO_CTRO_COSTO = {};
 // mostrar 1ª/2ª quincena + total en el detalle de las tarjetas de MO.
 // { ene: [{nombre, total, totalObra, totalTaller, totalPlanta}], ... }
 const MO_QUINCENAS = {};
-function getMO(mes) { const a = MO_CTRO_COSTO[mes || mesActual]; return Array.isArray(a) ? a : []; }
+// Meses viejos (ene/feb, formato sin columna R) traen Taller, Pta. Asfalto,
+// Trituradora y Predio clasificados como "Obra": se corrigen por nombre, con
+// el mismo criterio que clasificarMOPorNombre() del Apps Script (oct-2026).
+function _clasifMOPorNombre(r) {
+  const c = r.clasificacion || 'Obra';
+  if (c !== 'Obra') return c;
+  const n = String(r.centro || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (/taller/.test(n)) return 'Taller';
+  if (/(planta|pta\.?)\s*(de\s*)?asfalt/.test(n) || /tritura/.test(n)) return 'Pta. Asfalto';
+  if (/predio|cantera|administraci/.test(n)) return 'Interno';
+  return c;
+}
+function getMO(mes) {
+  const a = MO_CTRO_COSTO[mes || mesActual];
+  if (!Array.isArray(a)) return [];
+  return a.map(r => { const c = _clasifMOPorNombre(r); return c === r.clasificacion ? r : Object.assign({}, r, { clasificacion: c }); });
+}
 function getMOObra(mes)   { return getMO(mes).filter(r => (r.clasificacion || 'Obra') === 'Obra'); }
+// Toda la MO del mes (o de todos los meses en TOTAL), agrupada por área.
+// Maquinistas = Taller (operan equipos del Taller); Pta. Asfalto incluye la
+// Trituradora; Interno = Predio, cantera, administración (María, oct-2026).
+const MO_GRUPOS = [
+  { key: 'obra',    label: 'Obras',                        test: c => c === 'Obra' },
+  { key: 'taller',  label: 'Taller (mecánicos y maquinistas)', test: c => c === 'Taller' || c === 'Maquinista' },
+  { key: 'planta',  label: 'Planta de asfalto y trituración', test: c => c === 'Pta. Asfalto' },
+  { key: 'interno', label: 'Predio y otros internos',      test: c => c === 'Interno' },
+];
+function getMOTodo(mes) {
+  // En TOTAL usa MO_CTRO_COSTO.total (suma de los meses + estimados de los meses sin dato)
+  const out = { total: 0, grupos: {}, filas: {}, conDatos: false, estimado: false };
+  MO_GRUPOS.forEach(g => { out.grupos[g.key] = 0; out.filas[g.key] = {}; });
+  [mes || mesActual].forEach(m => getMO(m).forEach(r => {
+    if (r.estimado) out.estimado = true;
+    const c = r.clasificacion || 'Obra';
+    const g = MO_GRUPOS.find(x => x.test(c)) || MO_GRUPOS[3];
+    out.grupos[g.key] += r.monto || 0;
+    out.filas[g.key][r.centro] = (out.filas[g.key][r.centro] || 0) + (r.monto || 0);
+    out.total += r.monto || 0; out.conDatos = true;
+  }));
+  return out;
+}
 
 // Estima la MO de un mes SIN datos cargados, tomando el último mes con datos como
 // referencia y prorrateando por días transcurridos ("se replica la situación").
@@ -2350,7 +2389,22 @@ function renderMargen() {
     const _moResto = (_moObras != null && _moTotalMes != null) ? Math.max(0, _moTotalMes - _moObras) : 0;
     const _restoTip = _moResto > 1000 ? ` Además hay ${fmt(_moResto)} de MO del mes que no se imputa a obras (centros internos, Taller, provisiones).` : '';
     const _subMO = document.getElementById('kpi-mo-obras-sub');
-    if (moMensual != null) {
+    // Pedido María (oct-2026): la tarjeta muestra TODA la MO del mes (obras +
+    // Taller + Planta de asfalto/trituración + Predio). La tabla por obra sigue
+    // restando solo la MO de cada obra.
+    const _moTodo = getMOTodo(mesActual);
+    if (_moTodo.conDatos) {
+      kpiMO.textContent = (_moTodo.estimado ? '~' : '') + fmt(_moTodo.total);
+      kpiMO.className   = 'kpi-value neg-val';
+      _subMO.textContent = 'Toda la empresa · obras ' + fmt(_moTodo.grupos.obra);
+      _subMO.title = MO_GRUPOS.map(g => g.label + ': ' + fmt(_moTodo.grupos[g.key])).join(' · ') + '. Click para ver el detalle.';
+    } else if (mesActual !== 'total' && getMOEstimadoGenerico(mesActual, getMO)) {
+      const _estTodo = getMOEstimadoGenerico(mesActual, getMO);
+      kpiMO.textContent = '~' + fmt(_estTodo.monto);
+      kpiMO.className   = 'kpi-value neg-val';
+      _subMO.textContent = 'Estimado · toda la empresa';
+      _subMO.title = 'TANGO todavía no tiene quincenas de este mes: estimación con base ' + (MES[_estTodo.refMes] || _estTodo.refMes) + '.';
+    } else if (moMensual != null) {
       // En TOTAL las filas sintetizadas pueden incluir MO estimada de meses sin dato
       const tieneEstim = moArr.some(r => r.estimado);
       kpiMO.textContent = (tieneEstim ? '~' : '') + fmt(_moObras != null ? _moObras : moMensual);
@@ -8560,16 +8614,16 @@ function openMOPanel() {
   if (!panel) return;
 
   const mesLabel = MES[mesActual] || mesActual;
-  // Solo MO de OBRAS: Taller, Planta (Asfalto/Trituración), Predio Warnes y
-  // demás internos se ven en sus propias secciones, no en Contribución marginal.
-  const moArr = getMOObra(mesActual);
+  // Toda la MO del mes agrupada por área (obras, Taller, Planta, Predio).
+  const moTodo = getMOTodo(mesActual);
+  const moArr = moTodo.conDatos ? [moTodo] : [];
 
   let html = '';
   if (moArr.length === 0) {
-    const est = getMOEstimado(mesActual);
+    const est = getMOEstimadoGenerico(mesActual, getMO);
     if (est) {
-      const refQuincenas = _htmlQuincenasMO(est.refMes, 'totalObra', '1ª y 2ª quincena del mes de referencia');
-      const refMonto    = getMOObra(est.refMes).reduce((s, r) => s + r.monto, 0);
+      const refQuincenas = _htmlQuincenasMO(est.refMes, 'total', '1ª y 2ª quincena del mes de referencia');
+      const refMonto    = getMO(est.refMes).reduce((s, r) => s + r.monto, 0);
       const refIdxDias  = MES_ORDER.indexOf(est.refMes);
       const diasMesRef  = new Date(2026, refIdxDias + 1, 0).getDate();
       const diasUsados  = est.esMesActualCalendario ? est.diasTranscurridos : est.diasMes;
@@ -8595,40 +8649,36 @@ function openMOPanel() {
       html = `<p class="nd" style="padding:16px;">Sin datos de MO para ${mesLabel}</p>`;
     }
   } else if (esAdmin()) {
-    // Rol Administración: solo el TOTAL, nunca el detalle por centro de costo (sueldos individuales)
-    const total = moArr.reduce((s, r) => s + r.monto, 0);
+    // Rol Administración: solo el TOTAL, nunca el detalle por centro de costo
     html = `<div style="text-align:center;padding:18px 16px;">
-        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">Total Mano de Obra de obras · ${mesLabel}</div>
-        <div class="neg-val" style="font-size:30px;font-weight:800;margin-top:8px;">${fmt(total)}</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:6px;">${moArr.length} obras · TANGO (Mauro)</div>
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">Total Mano de Obra · ${mesLabel}</div>
+        <div class="neg-val" style="font-size:30px;font-weight:800;margin-top:8px;">${fmt(moTodo.total)}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:6px;">Obras, Taller, Planta y Predio · TANGO (Mauro)</div>
       </div>
-      ${_htmlQuincenasMO(mesActual, 'totalObra')}
       <div style="margin-top:8px;background:#f1f5f9;border:1px solid var(--border);border-radius:10px;padding:11px 14px;font-size:12px;color:var(--text);line-height:1.5;">
-        🔒 El desglose por centro de costo no está disponible para tu usuario. Solo se muestra el total de mano de obra.
+        🔒 El desglose no está disponible para tu usuario. Solo se muestra el total de mano de obra.
       </div>`;
   } else {
-    const sorted = [...moArr].sort((a, b) => b.monto - a.monto);
-    const total  = sorted.reduce((s, r) => s + r.monto, 0);
-    const thead  = `<thead><tr style="background:#f8fafc;border-bottom:2px solid var(--border);">
-      <th style="text-align:left;padding:8px 10px;font-size:11px;color:var(--muted);font-weight:600;">OBRA</th>
-      <th style="text-align:right;padding:8px 10px;font-size:11px;color:var(--muted);font-weight:600;">MONTO</th>
-    </tr></thead>`;
-
-    const filas = sorted.map(r => `
-      <tr style="border-top:1px solid var(--border);">
-        <td style="padding:8px 10px;font-size:12px;font-weight:600;color:var(--primary);">${r.centro}</td>
-        <td style="text-align:right;padding:8px 10px;font-size:12px;white-space:nowrap;" class="neg-val">${fmt(r.monto)}</td>
-      </tr>`).join('');
-
-    html = `${_htmlQuincenasMO(mesActual, 'totalObra')}
-    <table style="width:100%;border-collapse:collapse;">${thead}<tbody>
-      ${filas}
+    const bloques = MO_GRUPOS.map(g => {
+      const filas = Object.entries(moTodo.filas[g.key]).sort((x, y) => y[1] - x[1]);
+      if (!filas.length) return '';
+      return `<tr style="background:#f8fafc;border-top:2px solid var(--border);">
+          <td style="padding:8px 10px;font-size:12px;font-weight:700;">${g.label}</td>
+          <td style="text-align:right;padding:8px 10px;font-size:12px;font-weight:700;" class="neg-val">${fmt(moTodo.grupos[g.key])}</td>
+        </tr>` + filas.map(([c, v]) => `<tr style="border-top:1px solid var(--border);">
+          <td style="padding:6px 10px 6px 22px;font-size:12px;color:var(--primary);">${c}</td>
+          <td style="text-align:right;padding:6px 10px;font-size:12px;white-space:nowrap;" class="neg-val">${fmt(v)}</td>
+        </tr>`).join('');
+    }).join('');
+    html = `${_htmlQuincenasMO(mesActual, 'total')}
+    <table style="width:100%;border-collapse:collapse;"><tbody>
+      ${bloques}
       <tr style="background:#fef2f2;border-top:3px solid #fca5a5;font-weight:700;">
-        <td style="padding:9px 10px;font-size:12px;">TOTAL MO OBRAS · ${sorted.length} obra${sorted.length !== 1 ? 's' : ''}</td>
-        <td style="text-align:right;padding:9px 10px;font-size:14px;" class="neg-val">${fmt(total)}</td>
+        <td style="padding:9px 10px;font-size:12px;">TOTAL MANO DE OBRA</td>
+        <td style="text-align:right;padding:9px 10px;font-size:14px;" class="neg-val">${fmt(moTodo.total)}</td>
       </tr>
     </tbody></table>
-    <div style="font-size:10.5px;color:var(--muted);margin-top:8px;">La MO de Taller Mecánico, Planta de Asfalto, Planta de Trituración, Predio Warnes y demás áreas internas no va acá — se ve en las secciones Taller Mecánico, Planta de Asfalto y Gastos de Estructura.</div>`;
+    <div style="font-size:10.5px;color:var(--muted);margin-top:8px;line-height:1.5;">En la tabla por obra cada obra resta solo su propia MO (${fmt(moTodo.grupos.obra)} en total). Taller, Planta y Predio no son obras: su MO se ve acá y en sus secciones.</div>`;
   }
 
   content.innerHTML = `
@@ -10678,7 +10728,7 @@ function _sintetizarTotales() {
   // MO TANGO: agrega por centro de costo + filas de MO estimada de los meses sin dato
   delete MO_CTRO_COSTO.total;
   const acc = {};
-  MES_ORDER.forEach(m => (Array.isArray(MO_CTRO_COSTO[m]) ? MO_CTRO_COSTO[m] : []).forEach(r => {
+  MES_ORDER.forEach(m => getMO(m).forEach(r => {
     const k = (r.centro || '') + '|' + (r.clasificacion || 'Obra');
     if (!acc[k]) acc[k] = { centro: r.centro, clasificacion: r.clasificacion, monto: 0 };
     acc[k].monto += r.monto || 0;
