@@ -1965,6 +1965,7 @@ function editarPrecioAsfaltoUSD() {
   const n = parseFloat(String(v).replace(',', '.').trim());
   if (!(n > 0)) { PRECIO_ASFALTO_USD_OVERRIDE = null; try { localStorage.removeItem('ingeco_precio_asfalto_usd'); } catch(e) {} }
   else { PRECIO_ASFALTO_USD_OVERRIDE = n; try { localStorage.setItem('ingeco_precio_asfalto_usd', String(n)); } catch(e) {} }
+  subirAjuste('asfaltoUsd', '', '', n > 0 ? n : '');
   renderAll();
 }
 
@@ -2019,11 +2020,13 @@ function guardarAjustePrecio(desde, caliente, frio) {
   PRECIO_ASFALTO_AJUSTES = PRECIO_ASFALTO_AJUSTES.filter(a => a.desde !== desde);
   PRECIO_ASFALTO_AJUSTES.push({ desde: desde, caliente: Math.round(+caliente) || 0, frio: Math.round(+frio) || 0 });
   try { localStorage.setItem('ingeco_precio_ajustes', JSON.stringify(PRECIO_ASFALTO_AJUSTES)); } catch(e) {}
+  subirAjuste('asfalto', '', desde, JSON.stringify({ caliente: Math.round(+caliente) || 0, frio: Math.round(+frio) || 0 }));
   renderRentabilidad();
 }
 function borrarAjustePrecio(desde) {
   PRECIO_ASFALTO_AJUSTES = PRECIO_ASFALTO_AJUSTES.filter(a => a.desde !== desde);
   try { localStorage.setItem('ingeco_precio_ajustes', JSON.stringify(PRECIO_ASFALTO_AJUSTES)); } catch(e) {}
+  subirAjuste('asfalto', '', desde, '');
   renderRentabilidad();
 }
 // Gastos de Estructura (libro mayor admin.) — se carga desde Apps Script
@@ -3098,8 +3101,69 @@ function editarPrecioProvisionE(eEnc) {
   const ex = arr.find(p => p.key === k && p.desde === mesRef);
   if (ex) ex.precio = precio; else arr.push({ key: k, desde: mesRef, precio });
   localStorage.setItem(PRECIOS_PROVISION_LS, JSON.stringify(arr));
+  subirAjuste('provision', k, mesRef, precio);
   renderAll();
 }
+// ── Ajustes compartidos: planilla "Ajustes del tablero" (oct-2026) ──
+// Los precios que se cargan con el lápiz (✎) se guardan en una planilla de
+// Drive vía Apps Script, así los ve cualquier navegador/usuario y no se
+// pierden. localStorage queda solo como copia local. Cada carga de datos trae
+// la lista completa (data.ajustesTablero) y gana la última fila de cada
+// (tipo, clave, desde); valor vacío = ajuste borrado.
+async function subirAjuste(tipo, clave, desde, valor) {
+  const p = new URLSearchParams({ action: 'guardarAjuste', tipo: tipo, clave: clave || '', desde: desde || '',
+                                  valor: valor == null ? '' : String(valor) });
+  try {
+    const r = await fetch('/api/datos?' + p.toString(), { headers: { 'X-Requested-With': 'ingeco-dashboard' }, cache: 'no-store' });
+    const d = await r.json();
+    if (!d || d.status !== 'ok') throw new Error((d && d.message) || 'HTTP ' + r.status);
+    return true;
+  } catch (e) {
+    alert('No se pudo guardar en la planilla compartida (' + e.message + '). Quedó guardado solo en este navegador: probá de nuevo en un rato.');
+    return false;
+  }
+}
+function aplicarAjustesServidor(rows) {
+  if (!Array.isArray(rows)) return;
+  const ult = {};
+  rows.forEach(r => { ult[r.tipo + '§' + r.clave + '§' + r.desde] = r; });
+  const tiene = (t, c, d) => Object.prototype.hasOwnProperty.call(ult, t + '§' + (c || '') + '§' + (d || ''));
+  // Migración: lo que este navegador tenía guardado y la planilla todavía no
+  // conoce se sube una vez (así no se pierde lo cargado antes del cambio).
+  const pend = [];
+  try { JSON.parse(localStorage.getItem(PRECIOS_PROVISION_LS) || '[]').forEach(x => {
+    if (x && x.key && x.desde && x.precio > 0 && !tiene('provision', x.key, x.desde)) pend.push(['provision', x.key, x.desde, x.precio]);
+  }); } catch (e) {}
+  try { JSON.parse(localStorage.getItem('ingeco_precio_ajustes') || '[]').forEach(x => {
+    if (x && x.desde && !tiene('asfalto', '', x.desde)) pend.push(['asfalto', '', x.desde, JSON.stringify({ caliente: +x.caliente || 0, frio: +x.frio || 0 })]);
+  }); } catch (e) {}
+  try { const u = parseFloat(localStorage.getItem('ingeco_precio_asfalto_usd'));
+    if (u > 0 && !rows.some(r => r.tipo === 'asfaltoUsd')) pend.push(['asfaltoUsd', '', '', u]); } catch (e) {}
+  try { const ing = JSON.parse(localStorage.getItem('ingeco_ingresos_planta') || '{}');
+    Object.keys(ing).forEach(m => { if (ing[m] != null && !tiene('ingresosPlanta', m, '')) pend.push(['ingresosPlanta', m, '', ing[m]]); }); } catch (e) {}
+  pend.forEach(x => { ult[x[0] + '§' + x[1] + '§' + x[2]] = { tipo: x[0], clave: x[1], desde: x[2], valor: String(x[3]) }; });
+  if (pend.length) (async () => { for (const x of pend) await subirAjuste(x[0], x[1], x[2], x[3]); })();
+  // Armar el estado vigente y reemplazar las copias locales
+  const prov = [], asf = [], ing = {}; let usd = null, hayUsd = false;
+  Object.values(ult).forEach(r => {
+    if (r.tipo === 'asfaltoUsd') { hayUsd = true; usd = +r.valor > 0 ? +r.valor : null; return; }
+    if (r.valor === '' || r.valor == null) return;
+    if (r.tipo === 'provision') prov.push({ key: r.clave, desde: r.desde, precio: +r.valor });
+    else if (r.tipo === 'asfalto') { try { const o = JSON.parse(r.valor); asf.push({ desde: r.desde, caliente: +o.caliente || 0, frio: +o.frio || 0 }); } catch (e) {} }
+    else if (r.tipo === 'ingresosPlanta') ing[r.clave] = +r.valor;
+  });
+  try { localStorage.setItem(PRECIOS_PROVISION_LS, JSON.stringify(prov)); } catch (e) {}
+  PRECIO_ASFALTO_AJUSTES = asf;
+  try { localStorage.setItem('ingeco_precio_ajustes', JSON.stringify(asf)); } catch (e) {}
+  if (hayUsd || usd) {
+    PRECIO_ASFALTO_USD_OVERRIDE = usd;
+    try { if (usd) localStorage.setItem('ingeco_precio_asfalto_usd', String(usd)); else localStorage.removeItem('ingeco_precio_asfalto_usd'); } catch (e) {}
+  }
+  Object.keys(INGRESOS_PLANTA).forEach(k => delete INGRESOS_PLANTA[k]);
+  Object.assign(INGRESOS_PLANTA, ing);
+  try { localStorage.setItem('ingeco_ingresos_planta', JSON.stringify(INGRESOS_PLANTA)); } catch (e) {}
+}
+
 // Compatibilidad con el panel de frío → Otros (formato viejo)
 function editarPrecioProvision(sTipo, dest) {
   editarPrecioProvisionE(encodeURIComponent(JSON.stringify({ s: sTipo, d: dest })));
@@ -6506,6 +6570,7 @@ function setIngresosPlanta(mes, rawVal) {
   }
   try { localStorage.setItem('ingeco_ingresos_planta', JSON.stringify(INGRESOS_PLANTA)); }
   catch(e) {}
+  subirAjuste('ingresosPlanta', mes, '', INGRESOS_PLANTA[mes] != null ? INGRESOS_PLANTA[mes] : '');
   renderRentabilidad();
 }
 
@@ -11106,6 +11171,7 @@ async function refreshData() {
       if (data.repuestosEquipos && typeof data.repuestosEquipos === 'object') {
         Object.assign(REPUESTOS_EQUIPOS, data.repuestosEquipos);
       }
+      if (Array.isArray(data.ajustesTablero)) aplicarAjustesServidor(data.ajustesTablero);
       if (data.fechasFuentes && typeof data.fechasFuentes === 'object') {
         Object.assign(FECHAS_FUENTES, data.fechasFuentes);
       }
@@ -11350,6 +11416,7 @@ if (APPS_SCRIPT_URL) {
         if (data.repuestosEquipos && typeof data.repuestosEquipos === 'object') {
           Object.assign(REPUESTOS_EQUIPOS, data.repuestosEquipos);
         }
+        if (Array.isArray(data.ajustesTablero)) aplicarAjustesServidor(data.ajustesTablero);
         if (data.fechasFuentes && typeof data.fechasFuentes === 'object') {
           Object.assign(FECHAS_FUENTES, data.fechasFuentes);
         }

@@ -35,6 +35,7 @@ const FILE_IDS = {
   ajusteStock:    '1yZArsIKYMfq9UPUXyiASXtDNXyubTjFx3PPW2VjG-uA',  // Formulario Ingreso Asfalto Agustín
   precioAsfalto:  '1lqKTXtDLT2FxyXurxjU1uE4epDOKs5SP8AXu5wAUsJ4',  // Precio de mercado asfalto $/tn por mes
   gastosEstructura: '1beFIrKD6ljPKjjssuWP-_TmTH8vr1TktBnVDuX9nxyM', // Libro mayor de gastos admin. (Gastos de Estructura)
+  ajustesTablero:   '1n11HzMIKGTJnhQm6cACMq4MCsOiafk6pl_d18yM9Ye4', // Precios/ajustes cargados desde el tablero (✎) — historial
 };
 
 // Tipo de cambio USD → ARS oficial promedio mensual (Banco Nación Argentina)
@@ -143,6 +144,13 @@ function doGet(e) {
       return ContentService.createTextOutput(json).setMimeType(ContentService.MimeType.JSON);
     }
 
+    // ── Precios/ajustes cargados desde el tablero (✎) ─────────────
+    if (action === 'guardarAjuste') {
+      const r = guardarAjusteTablero(e.parameter.tipo, e.parameter.clave, e.parameter.desde,
+                                     e.parameter.valor, e.parameter.usuario);
+      return ContentService.createTextOutput(JSON.stringify(r)).setMimeType(ContentService.MimeType.JSON);
+    }
+
     const useCache  = e && e.parameter && e.parameter.cache === '1';
 
     let data;
@@ -242,6 +250,11 @@ function doGet(e) {
       } catch(ce) { Logger.log('Cache write (fechas) error: ' + ce); }
     }
 
+    // Los ajustes del tablero se leen SIEMPRE en vivo (planilla chica), así un
+    // precio guardado se ve enseguida en cualquier navegador aunque sea caché.
+    try { if (data) data.ajustesTablero = leerAjustesTablero(); }
+    catch (ae) { Logger.log('ajustesTablero error: ' + ae); }
+
     const json = JSON.stringify(data);
 
     // JSONP: el dashboard llama con ?callback=xxx para evitar el bloqueo CORS
@@ -314,6 +327,74 @@ function actualizarNocturno() {
   } catch (err) {
     Logger.log('Error en trigger nocturno: ' + err.toString());
   }
+}
+
+// ============================================================
+// AJUSTES DEL TABLERO — precios que se cargan con el lápiz (✎)
+// Planilla "Ajustes del tablero" (carpeta TABLERO INGECO). Es un historial:
+// cada cambio agrega una fila (Fecha | Usuario | Tipo | Clave | Desde | Valor)
+// y el tablero toma la última fila de cada (Tipo, Clave, Desde). Valor vacío =
+// se borró ese ajuste. Antes esto vivía solo en el navegador (localStorage) y
+// se perdía al cambiar de computadora o de cuenta (oct-2026).
+// Tipos: provision (precio por cliente/tipo, Clave = descripción|tipo|destino),
+// asfalto ({"caliente","frio"} desde un mes), asfaltoUsd (USD/tn neto),
+// ingresosPlanta (Clave = mes).
+// ============================================================
+const AJUSTES_TIPOS = { provision: 1, asfalto: 1, asfaltoUsd: 1, ingresosPlanta: 1 };
+const AJUSTES_MESES = ['', 'ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+
+function _ajustesSheet() {
+  return SpreadsheetApp.openById(FILE_IDS.ajustesTablero).getSheets()[0];
+}
+
+function leerAjustesTablero() {
+  const rows = _ajustesSheet().getDataRange().getValues();
+  const out = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    const tipo = String(r[2] || '').trim();
+    if (!AJUSTES_TIPOS[tipo]) continue;
+    out.push({
+      fecha: r[0] instanceof Date ? r[0].toISOString() : String(r[0] || ''),
+      usuario: String(r[1] || ''),
+      tipo: tipo,
+      clave: String(r[3] || ''),
+      desde: String(r[4] || ''),
+      valor: String(r[5] == null ? '' : r[5]),
+    });
+  }
+  return out;
+}
+
+function guardarAjusteTablero(tipo, clave, desde, valor, usuario) {
+  tipo = String(tipo || '').trim();
+  clave = String(clave || '').trim().slice(0, 150);
+  desde = String(desde || '').trim();
+  valor = String(valor == null ? '' : valor).trim();
+  if (!AJUSTES_TIPOS[tipo]) return { status: 'error', message: 'Tipo no permitido' };
+  if (AJUSTES_MESES.indexOf(desde) < 0) return { status: 'error', message: 'Mes inválido' };
+  // Valor: vacío (borrar), un número, o para "asfalto" un JSON con dos números
+  if (valor !== '') {
+    if (tipo === 'asfalto') {
+      let o; try { o = JSON.parse(valor); } catch (e) { return { status: 'error', message: 'Valor inválido' }; }
+      const c = Math.round(+o.caliente || 0), f = Math.round(+o.frio || 0);
+      valor = JSON.stringify({ caliente: c, frio: f });
+    } else {
+      const n = parseFloat(valor);
+      if (!isFinite(n) || n < 0) return { status: 'error', message: 'Valor inválido' };
+      valor = String(n);
+    }
+  }
+  // Evitar fórmulas en la planilla (texto que empieza con = + - @)
+  const seguro = function(t) { return /^[=+\-@]/.test(t) ? "'" + t : t; };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    _ajustesSheet().appendRow([new Date(), seguro(String(usuario || '').slice(0, 100)), tipo, seguro(clave), desde, seguro(valor)]);
+  } finally {
+    lock.releaseLock();
+  }
+  return { status: 'ok' };
 }
 
 // ============================================================

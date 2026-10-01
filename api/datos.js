@@ -5,8 +5,8 @@
 import { sessionFromRequestHeaders } from '../lib/session.js';
 
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwXe_MLjncMNA4-v8GLfmvhQFZG0cuMeXzSHIBccBIUUTTpXEvJuLhek-mC_S4twVCu9A/exec';
-const PARAMS_OK = ['cache', 'action', 'tipo', 'stockAntes', 'stockNuevo', 'usuario', 'fecha'];
-const ACTIONS_OK = new Set(['ajusteStock']);
+const PARAMS_OK = ['cache', 'action', 'tipo', 'stockAntes', 'stockNuevo', 'usuario', 'fecha', 'clave', 'desde', 'valor'];
+const ACTIONS_OK = new Set(['ajusteStock', 'guardarAjuste']);
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
