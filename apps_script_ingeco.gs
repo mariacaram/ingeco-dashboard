@@ -3233,7 +3233,7 @@ const RECORDATORIOS = [
       que: 'Remitos de la semana con OBRA GENERAL, destino, unidad (TON o KG) y fecha del año en curso.',
       cols: ['FECHA', 'CANTIDAD 1', 'UNIDAD 1', 'DESCRIPCIÓN 1', 'DESTINO', 'OBRA GENERAL'],
       obraCol: 'OBRA GENERAL', maestro: 'Maestro de obras' }] },
-  { nombre: 'Nico',      email: 'nicobdallagata@gmail.com', frecuencia: 'lunes',
+  { nombre: 'Nico',      email: 'mantenimiento@grupoingeco.com.ar', frecuencia: 'lunes',
     archivos: [
       { fileKey: 'usageEquipos', instructivo: '1ZO5ygH-1qVKZm7dp8lgex0i6VCR0JyYydQPCM6r4_w0', titulo: 'Partes diarios de equipos', que: 'Horas por equipo y obra de toda la semana.',
         cols: ['FECHA', 'CÓDIGO', 'TIEMPO TRABAJO (HR)', 'OBRA GENERAL'],
