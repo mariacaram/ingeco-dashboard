@@ -6661,7 +6661,9 @@ const SHEET_URLS_AUDIT = {
   ocInsumos: 'https://docs.google.com/spreadsheets/d/1UWUIW4sNtRBa90nYoGg88ghGK8SyyjKe9UdZLRcHMEE/edit',
   partes: 'https://docs.google.com/spreadsheets/d/1e_emRVEUxTaNtLxeC0wXIWKzcKuoulZkFSS9O1e0XHo/edit',
   tarifas: 'https://docs.google.com/spreadsheets/d/1PEcPzwrQ8kE2evmUlrFq9wPbgWOR92MPl3LEqcSYbIk/edit',
+  tango: 'https://drive.google.com/drive/folders/1hQZoJovbFDHNsJhNiGMEueH1bLfXuuCP',
 };
+const NOMBRE_ARCHIVO_AUDIT = { julia: 'archivo de Agustín', esteban: 'planilla de Esteban', tango: 'quincenas de TANGO (Mauro)', remitos: 'remitos de Roberto', ocInsumos: 'OC de Guillermo' };
 function _sheetUrlAudit(it) {
   const base = SHEET_URLS_AUDIT[it && it.src];
   if (!base) return '';
@@ -6671,7 +6673,7 @@ function _sheetLinkAudit(it) {
   const url = _sheetUrlAudit(it);
   if (!url) return '';
   const lbl = (it.gid != null && it.fila) ? `fila ${it.fila} ↗` : 'archivo ↗';
-  return `<a href="${url}" target="_blank" onclick="event.stopPropagation()" title="Abrir en Google Sheets (${it.src === 'julia' ? 'archivo de Agustín' : 'planilla de Esteban'})" style="font-size:10px;font-weight:700;white-space:nowrap;text-decoration:none;color:#2563eb;">${lbl}</a>`;
+  return `<a href="${url}" target="_blank" onclick="event.stopPropagation()" title="Abrir ${NOMBRE_ARCHIVO_AUDIT[it.src] || 'planilla'}" style="font-size:10px;font-weight:700;white-space:nowrap;text-decoration:none;color:#2563eb;">${lbl}</a>`;
 }
 
 const AUDIT_TOLERANCIA = 5e6; // diferencias menores a $5M no se reportan
@@ -7040,6 +7042,42 @@ function runAuditorias() {
       });
     });
   }
+
+  // ── MO de TANGO imputada a un nombre que no está en el Maestro ──
+  // Desde jul-2026 la MO se imputa por la col. R de las quincenas. Si el
+  // nombre no es una obra del Maestro (ej. "Pavimentacion", "UOCRA"), el
+  // costo se toma igual en obras, pero Mauro tiene que corregir el nombre.
+  (() => {
+    const norm = t => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
+    const conocidas = new Set();
+    Object.keys((GENERADO_POR_OBRA && GENERADO_POR_OBRA.tipos) || {}).forEach(k => conocidas.add(norm(k)));
+    ((GENERADO_POR_OBRA && GENERADO_POR_OBRA.obras) || []).forEach(o => { conocidas.add(norm(o.nombre)); conocidas.add(norm(o.cod_obra)); });
+    const esConocida = c => conocidas.has(norm(c)) || (typeof _segNorm === 'function' && conocidas.has(norm(_segNorm(c))));
+    const porCentro = {};
+    const desde = MES_ORDER.indexOf('jul');
+    MES_ORDER.forEach((m, i) => {
+      if (i < desde) return;
+      getMOObra(m).forEach(r => {
+        const c = (r.centro || '').trim();
+        if (!c || esConocida(c)) return;
+        const k = norm(c);
+        if (!porCentro[k]) porCentro[k] = { nombre: c, monto: 0, items: [] };
+        porCentro[k].monto += r.monto || 0;
+        porCentro[k].items.push({ cat: MES[m] || m, txt: 'Quincenas de ' + ((MES[m] || m).replace(' 2026', '')) + ' · columna OBRA (R) = "' + c + '"', monto: r.monto || 0, src: 'tango' });
+      });
+    });
+    Object.values(porCentro).sort((a, b) => b.monto - a.monto).forEach(x => {
+      AUDIT_RESULTADOS.push({
+        chequeo: 'MO sin obra del Maestro',
+        titulo: x.nombre,
+        monto: x.monto,
+        grave: x.monto >= AUDIT_GRAVE,
+        resumen: `En las quincenas de TANGO hay ${fmt(x.monto)} de mano de obra imputada a "${x.nombre}", que no es una obra del Maestro. El costo se toma igual dentro de obras, pero no se puede asignar a ninguna obra concreta. Hay que reemplazarlo en la columna OBRA (R) por la obra del Maestro que corresponda.`,
+        responsable: 'Mauro',
+        items: x.items,
+      });
+    });
+  })();
 
   // ── Conciliaciones automáticas: informativa, para que Agustín confirme ──
   if (concAuto.lista.length) {
