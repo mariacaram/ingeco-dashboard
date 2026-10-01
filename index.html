@@ -616,6 +616,9 @@
   body.role-admin .tabla-margen-tipo th:nth-child(4),
   body.role-admin .tabla-margen-tipo td:nth-child(4):not([colspan]) { display: none !important; }
 
+  /* Desplegables solo para celular (en escritorio se usan los botones) */
+  .mobile-select, .mobile-nav { display: none; }
+
   /* ============================================================
      RESPONSIVE — celular / tablet (≤ 860px)
      El sidebar pasa a ser una barra de navegación horizontal arriba,
@@ -632,6 +635,19 @@
     .header .subtitle { font-size: 11px; margin-top: 0; }
     .header > div:last-child { display: flex; flex-wrap: wrap; width: 100%; gap: 8px 10px; align-items: center; }
     .month-selector { order: 1; width: 100%; flex-wrap: nowrap; min-width: 0; }
+    /* Celular: período y secciones como desplegables (pedido María, oct-2026) */
+    #month-btns { display: none !important; }
+    .mobile-select {
+      display: block; width: 100%; min-width: 0; appearance: none; -webkit-appearance: none;
+      font: 600 16px/1.2 inherit; color: #fff; cursor: pointer;
+      background: rgba(255,255,255,0.10) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23fff' stroke-width='2' fill='none'/%3E%3C/svg%3E") no-repeat right 14px center;
+      border: 1.5px solid rgba(255,255,255,0.28); border-radius: 10px; padding: 10px 38px 10px 14px;
+    }
+    .mobile-select option { color: #0f172a; }
+    .mobile-nav { display: block; position: sticky; top: 0; z-index: 40; background: var(--primary, #1b3a5c); padding: 8px 14px 10px; box-shadow: 0 4px 10px rgba(15,23,42,.18); }
+    .sidebar-nav { display: none !important; }
+    /* Fondos de reparo / Redeterminaciones: tablas sin scroll propio — que el texto baje de línea */
+    #tab-fondos td:not([style*="text-align:right"]), #tab-redets td:not([style*="text-align:right"]) { white-space: normal !important; }
     #month-btns { overflow-x: auto; flex-wrap: nowrap; flex: 1 1 auto; min-width: 0; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
     #month-btns::-webkit-scrollbar { height: 0; }
     .month-btn { flex: 0 0 auto; padding: 7px 12px; }
@@ -709,6 +725,7 @@
     <div class="month-selector">
       <label>Período:</label>
       <div id="month-btns" style="display:flex;gap:6px;"></div>
+      <select id="month-select" class="mobile-select" aria-label="Período" onchange="setMes(this.value)"></select>
     </div>
     <div class="refresh-area">
       <button class="btn-refresh" id="btn-refresh" onclick="refreshData()">🔄 Actualizar datos</button>
@@ -722,6 +739,9 @@
 </div>
 
 <div class="page-body">
+
+<!-- NAV EN CELULAR: desplegable de secciones (se arma desde los botones del sidebar) -->
+<div class="mobile-nav"><select id="nav-select" class="mobile-select" aria-label="Sección" onchange="openTab(this.value)"></select></div>
 
 <!-- SIDEBAR NAV -->
 <nav class="sidebar-nav" id="sidebar-nav">
@@ -1717,6 +1737,11 @@ function _renderMonthButtons() {
     `<button class="month-btn${m === mesActual ? ' active' : ''}" data-mes="${m}" onclick="setMes('${m}')">${MES[m]}</button>`
   ).join('') +
     `<button class="month-btn${mesActual === 'total' ? ' active' : ''}" data-mes="total" onclick="setMes('total')" title="Suma histórica de todos los meses con datos" style="font-weight:700;">TOTAL</button>`;
+  const sel = document.getElementById('month-select');
+  if (sel) {
+    sel.innerHTML = meses.map(m => `<option value="${m}">${MES[m]}</option>`).join('') + '<option value="total">TOTAL del año</option>';
+    sel.value = mesActual;
+  }
 }
 // Primer mes ofrecido en el selector de período — los datos anteriores no
 // están controlados; siguen visibles en el historial por obra.
@@ -11118,6 +11143,7 @@ function renderAll() {
   renderFondosReparo();
   renderRedets();
   _syncKpiCardsTipo();
+  _armarNavSelect();
 }
 
 
@@ -11298,6 +11324,28 @@ function _armScrollReveal() {
 }
 window.addEventListener('load', () => setTimeout(_armScrollReveal, 60));
 
+// Desplegable de secciones para celular: se arma con los botones del sidebar
+// que el rol puede ver (respeta data-restrict) e incluye los contadores.
+function _armarNavSelect() {
+  const sel = document.getElementById('nav-select');
+  if (!sel) return;
+  const opts = [];
+  document.querySelectorAll('.sidebar-nav .tab-btn').forEach(b => {
+    const m = (b.getAttribute('onclick') || '').match(/openTab\('([^']+)'\)/);
+    if (!m || getComputedStyle(b).display === 'none') return; // oculto por rol
+    const badge = b.querySelector('span[id$="-nav-badge"]');
+    const n = badge && badge.style.display !== 'none' ? badge.textContent.trim() : '';
+    let label = [...b.childNodes].filter(x => x.nodeType === 3).map(x => x.textContent).join('').trim();
+    const grupo = b.closest('.sidebar-group');
+    if (grupo) label = 'Contribución marginal · ' + label;
+    opts.push(`<option value="${m[1]}">${label}${n ? ' (' + n + ')' : ''}</option>`);
+  });
+  const actual = sel.value;
+  sel.innerHTML = opts.join('');
+  const act = document.querySelector('.tab-panel.active');
+  sel.value = act ? act.id.replace(/^tab-/, '') : actual;
+}
+
 function openTab(id) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -11318,6 +11366,7 @@ function openTab(id) {
     const act = document.querySelector('.sidebar-nav .tab-btn.active');
     if (nav && act) nav.scrollTo({ left: act.offsetLeft - (nav.clientWidth - act.clientWidth) / 2, behavior: 'smooth' });
   }
+  const _ns = document.getElementById('nav-select'); if (_ns && _ns.value !== id) _ns.value = id;
   window.scrollTo({ top: 0, behavior: 'auto' });
   setTimeout(_armScrollReveal, 40);
 }
@@ -11331,6 +11380,7 @@ function setMes(mes) {
   document.querySelectorAll('.month-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.mes === mes);
   });
+  const _ms = document.getElementById('month-select'); if (_ms) _ms.value = mes;
   renderMargen();
   renderEgresosChart();
   renderCobrosReal();
@@ -11366,6 +11416,7 @@ function applyRole(roleName, email) {
   if (r) document.body.classList.add(r.bodyClass);
   const rolEl = document.getElementById('rol-actual');
   if (rolEl) rolEl.textContent = (r ? r.label : '—') + (email ? ' · ' + email : '');
+  setTimeout(_armarNavSelect, 0);
   if (roleName === 'administracion') {
     const tallerPanel = document.getElementById('tab-taller');
     if (tallerPanel && tallerPanel.classList.contains('active') && typeof openTab === 'function') {
