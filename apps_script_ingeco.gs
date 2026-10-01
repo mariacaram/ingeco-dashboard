@@ -45,6 +45,21 @@ const TC_USD_MENSUAL = { feb: 1430, mar: 1413, abr: 1397, may: 1381, jun: 1427 }
 const PROPS = PropertiesService.getScriptProperties();
 const CACHE_KEY = 'ingeco_cache';
 
+// Huella SHA-256 (hex) de la clave que manda el proxy de Vercel.
+// Para rotar la clave: generar una nueva, cargarla en Vercel (APPS_SCRIPT_KEY)
+// y reemplazar esta huella por la de la clave nueva.
+const API_KEY_SHA256 = '4192fb16eaa180a9ee4c261a5f68b896264829fb737d5e0da0b34089f9d12e56';
+function _sha256Hex(txt) {
+  return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(txt), Utilities.Charset.UTF_8)
+    .map(b => ('0' + ((b + 256) % 256).toString(16)).slice(-2)).join('');
+}
+function _claveValida(k) {
+  if (!k) return false;
+  const prop = PROPS.getProperty('API_KEY');
+  if (prop && k === prop) return true;
+  return _sha256Hex(k) === API_KEY_SHA256;
+}
+
 // Caché en Script Properties (tope 500 KB total, 9 KB "oficiales" por clave).
 // Cada bloque se guarda comprimido (gzip + base64, ~4-6x más chico) con el
 // prefijo "gz:"; al leer se acepta también el JSON plano viejo (sep-2026:
@@ -71,11 +86,13 @@ function _cacheGet(key) {
 // ============================================================
 function doGet(e) {
   try {
-    // Clave compartida con el proxy de Vercel (Script Property API_KEY).
-    // Si está configurada, cualquier pedido sin la clave correcta se rechaza:
-    // la URL del Web App deja de servir datos a quien la tenga.
-    const apiKey = PropertiesService.getScriptProperties().getProperty('API_KEY');
-    if (apiKey && !(e && e.parameter && e.parameter.key === apiKey)) {
+    // Clave compartida con el proxy de Vercel (variable APPS_SCRIPT_KEY).
+    // Todo pedido sin la clave correcta se rechaza. Se valida contra su huella
+    // SHA-256 (la huella no permite reconstruir la clave). No se usa la
+    // pantalla de Propiedades del script porque al guardar desde ahí se
+    // regraban también las claves grandes del caché y el guardado falla
+    // en silencio (oct-2026). Si existiera la propiedad API_KEY, también vale.
+    if (!_claveValida(e && e.parameter && e.parameter.key)) {
       return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'No autorizado' }))
         .setMimeType(ContentService.MimeType.JSON);
     }

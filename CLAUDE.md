@@ -35,10 +35,10 @@ Desde sep-2026 NO hay contraseñas en el frontend. El acceso lo controla el serv
 - **`login.html`**: botón "Sign in with Google" (Google Identity Services). El ID token va a `POST /api/auth/login`, que lo verifica contra las claves públicas de Google (`jose`), exige `email_verified` y mail en el allowlist, y emite la cookie.
 - **`api/auth/me.js`** devuelve `{email, role}`; `index.html` lo llama al arrancar (`bootAuth`) para aplicar el rol. `api/auth/logout.js` borra la cookie.
 - **`api/datos.js`**: exige sesión, solo reenvía parámetros conocidos, agrega `key=APPS_SCRIPT_KEY` y para escrituras (`action=ajusteStock`) exige el header `X-Requested-With: ingeco-dashboard` (anti-CSRF). El navegador nunca llama a Apps Script directo (`APPS_SCRIPT_URL` en index.html es `/api/datos`).
-- **`doGet` del `.gs`** rechaza todo pedido sin `key` igual a la Script Property `API_KEY` (si la propiedad existe).
+- **`doGet` del `.gs`** rechaza todo pedido cuya `key` no coincida con la huella `API_KEY_SHA256` del código (o con la Script Property `API_KEY` si existiera). No usar la pantalla "Propiedades del script" para la clave: al guardar regraba también el caché (>9 KB por clave) y falla en silencio. Para rotar: clave nueva en Vercel (`APPS_SCRIPT_KEY`) + huella nueva en el `.gs` (`printf '%s' CLAVE | shasum -a 256`).
 - `vercel.json`: CSP, HSTS, nosniff, X-Frame-Options DENY, no-store. `.vercelignore` evita desplegar el `.gs`, el HTML legacy, demos y docs.
 
-Variables de entorno en Vercel (Settings → Environment Variables, Production): `GOOGLE_CLIENT_ID` (OAuth Client ID tipo Web, con origen autorizado `https://ingeco-dashboard.vercel.app`), `SESSION_SECRET` (≥32 caracteres aleatorios), `APPS_SCRIPT_KEY` (mismo valor que la Script Property `API_KEY` en Apps Script). Sin `GOOGLE_CLIENT_ID` el login muestra un aviso y nadie entra.
+Variables de entorno en Vercel (Settings → Environment Variables, Production): `GOOGLE_CLIENT_ID` (OAuth Client ID tipo Web, con origen autorizado `https://ingeco-dashboard.vercel.app`), `SESSION_SECRET` (≥32 caracteres aleatorios), `APPS_SCRIPT_KEY` (su SHA-256 es `API_KEY_SHA256` en el `.gs`). Sin `GOOGLE_CLIENT_ID` el login muestra un aviso y nadie entra.
 
 Para dar acceso a alguien: agregar el mail en `ALLOWED_USERS` y pushear. Para sacarlo: quitarlo — sus sesiones vigentes dejan de servir al instante porque `verifySession` vuelve a chequear el allowlist.
 
