@@ -89,7 +89,7 @@ Vive en `leerStockAsfalto()` (`.gs`) y `renderStockDisplay()` / `openStockDetall
 
 ## Recordatorios por mail (oct-2026)
 
-Al final del `.gs`: `RECORDATORIOS` (persona, mail, frecuencia `lunes`/`quincena`, archivos). `enviarRecordatorios()` corre por trigger diario a las 8 (`crearTriggerRecordatorios()`) y manda los lunes y, a Mauro, los días 3 y 17. Salen desde la cuenta dueña del script (María; pasará a Gonzalo). Con `RECORDATORIOS_MODO_PRUEBA = true` todo le llega a `RECORDATORIOS_PRUEBA_A` con el destinatario real en el asunto; pasarlo a `false` cuando estén los mails. El código de mails no necesita publicar versión nueva de la Web App (los triggers corren el código guardado).
+Al final del `.gs`: `RECORDATORIOS` (persona, mail, frecuencia `lunes`/`mensual`/`quincena`, archivos). Hoy: Agustín y Sergio (Obras a cobrar + Maestro), Agustín mensual (precios), Guillermo (OC), Roberto (remitos), Nico (partes diarios + repuestos), Romina (gastos de estructura), Mauro (TANGO, días 3 y 17). Falta el mail de Esteban. Cada persona con mail en `RECORDATORIOS` también tiene que estar en `ALLOWED_USERS` y como usuario de prueba de la app OAuth en Google Cloud (proyecto ingeco-dashboard → Público), si no, no puede entrar. `enviarRecordatorios()` corre por trigger diario a las 8 (`crearTriggerRecordatorios()`) y manda los lunes y, a Mauro, los días 3 y 17. Salen desde la cuenta dueña del script (María; pasará a Gonzalo). Con `RECORDATORIOS_MODO_PRUEBA = true` todo le llega a `RECORDATORIOS_PRUEBA_A` con el destinatario real en el asunto; pasarlo a `false` cuando estén los mails. El código de mails no necesita publicar versión nueva de la Web App (los triggers corren el código guardado).
 
 ## Otras cosas no obvias del dominio
 
