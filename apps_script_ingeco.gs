@@ -521,12 +521,14 @@ function parsearArchivoTangoMO(file) {
 // Col S "Clasificación" quedó DEPRECADA (sep-2026): cuando la quincena trae la
 // col R nueva (nombres del Maestro), la clasificación se deriva del nombre.
 // Estas categorías internas NO van a la parte de obras.
+// Acepta las variantes de nombre de la col E vieja ("Pta. Asfalto",
+// "Trituradora", "Predio Warner"…) porque cuando Mauro no completa la col R
+// se cae a esa columna (sep-2026). La trituradora va a Planta (María, oct-2026).
 function clasificarMOPorNombre(nombre) {
-  const n = String(nombre || '').toLowerCase();
-  if (n.includes('taller')) return 'Taller';
-  if (n.includes('planta de asfalto')) return 'Pta. Asfalto';
-  if (n.includes('planta de trituraci') || n.includes('predio warnes')
-      || n.includes('cantera') || n.includes('administraci')) return 'Interno';
+  const n = String(nombre || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (/taller/.test(n)) return 'Taller';
+  if (/(planta|pta\.?)\s*(de\s*)?asfalt/.test(n) || /tritura/.test(n)) return 'Pta. Asfalto';
+  if (/predio|cantera|administraci/.test(n)) return 'Interno';
   return 'Obra';
 }
 
@@ -612,7 +614,11 @@ function parsearGSheetTangoMO(file) {
       let clasif;
       if (modo === 'obra' && iClaveFallback >= 0) {
         const colS = iClasif >= 0 ? String(row[iClasif] || '').trim() : '';
-        clasif = /maquinista/i.test(colS) ? 'Maquinista' : clasificarMOPorNombre(clave);
+        // Lo que está imputado a la Planta (asfalto o trituradora) es costo de
+        // Planta aunque sea un maquinista; el resto de los maquinistas sigue
+        // siendo costo del Taller (operan equipos del Taller en las obras).
+        const porNombre = clasificarMOPorNombre(clave);
+        clasif = porNombre === 'Pta. Asfalto' ? porNombre : (/maquinista/i.test(colS) ? 'Maquinista' : porNombre);
       } else {
         clasif = iClasif >= 0 ? String(row[iClasif] || '').trim() || 'Obra' : 'Obra';
       }
