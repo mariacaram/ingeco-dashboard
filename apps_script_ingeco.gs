@@ -3192,10 +3192,20 @@ const RECORDATORIOS_CC          = '';   // ej. 'adriankoss@grupoingeco.com.ar' �
 const RECORDATORIOS_DIAS_VIEJO  = 7;    // días sin cambios para marcar el archivo como desactualizado
 const URL_TABLERO = 'https://ingeco-dashboard.vercel.app';
 
+// email: uno o varios separados por coma. Vacío = no se envía (se registra en el log).
+// frecuencia: 'lunes' (todos los lunes), 'mensual' (primer lunes del mes),
+// 'quincena' (días 3 y 17).
 const RECORDATORIOS = [
-  { nombre: 'Agustín',   email: '', frecuencia: 'lunes',
-    archivos: [{ fileKey: 'agustinObras', titulo: 'Obras a cobrar',
-      que: 'Certificados del mes con su período de realización, y marcar como "Cobrada" lo que ya se cobró.' }] },
+  { nombre: 'Agustín y Sergio', email: 'adegregorio@grupoingeco.com.ar,sergiocangemi@grupoingeco.com.ar', frecuencia: 'lunes',
+    archivos: [
+      { fileKey: 'agustinObras', titulo: 'Obras a cobrar',
+        que: 'Certificados del mes con su período de realización, y marcar como "Cobrada" lo que ya se cobró.' },
+      { fileKey: 'maestroObras', titulo: 'Maestro de obras',
+        que: 'Solo si hay una obra nueva: darla de alta con su nombre, cliente y tipo de contratación antes de cargarla en Obras a cobrar.' },
+    ] },
+  { nombre: 'Agustín', email: 'adegregorio@grupoingeco.com.ar', frecuencia: 'mensual',
+    archivos: [{ fileKey: 'equiposFlota', titulo: 'Tarifas y precios del mes',
+      que: 'Actualizar los precios del mes.' }] },
   { nombre: 'Esteban',   email: '', frecuencia: 'lunes',
     archivos: [{ fileKey: 'estebanSheet', titulo: 'Cobros (planilla por mes)',
       que: 'Cobros de la semana con fecha real de cobro, facturas emitidas y fechas probables de lo pendiente.' }] },
@@ -3205,7 +3215,7 @@ const RECORDATORIOS = [
   { nombre: 'Roberto',   email: '', frecuencia: 'lunes',
     archivos: [{ fileKey: 'remitosAsfalto', titulo: 'Remitos oficiales',
       que: 'Remitos de la semana con OBRA GENERAL, destino, unidad (TON o KG) y fecha del año en curso.' }] },
-  { nombre: 'Nico',      email: '', frecuencia: 'lunes',
+  { nombre: 'Nico',      email: 'nicobdallagata@gmail.com', frecuencia: 'lunes',
     archivos: [
       { fileKey: 'usageEquipos', titulo: 'Partes diarios de equipos', que: 'Horas por equipo y obra de toda la semana.' },
       { fileKey: 'repuestosEquipos', titulo: 'Pedidos y entregas de repuestos', que: 'Entregas de la semana con costo y equipo.' },
@@ -3241,6 +3251,8 @@ function _htmlRecordatorio(p, fechas) {
   }).join('');
   const intro = p.frecuencia === 'quincena'
     ? 'Cerró la quincena: te pedimos cargar la liquidación en la carpeta de TANGO.'
+    : p.frecuencia === 'mensual'
+    ? 'Recordatorio mensual: te pedimos actualizar los precios del mes.'
     : 'Recordatorio semanal: te pedimos dejar al día tu archivo antes del miércoles.';
   return '<div style="font-family:Arial,Helvetica,sans-serif;color:#0f172a;max-width:620px;">' +
     '<p style="font-size:15px;">Hola ' + p.nombre + ',</p>' +
@@ -3266,7 +3278,9 @@ function _enviarRecordatorio(p, fechas) {
   const destino = RECORDATORIOS_MODO_PRUEBA ? RECORDATORIOS_PRUEBA_A : p.email;
   if (!destino) { Logger.log('Recordatorio a ' + p.nombre + ': sin mail cargado, no se envía'); return false; }
   const asunto = (RECORDATORIOS_MODO_PRUEBA ? '[PRUEBA → ' + p.nombre + (p.email ? ' <' + p.email + '>' : ' (sin mail)') + '] ' : '') +
-    (p.frecuencia === 'quincena' ? 'INGECO · Cargar la quincena en TANGO' : 'INGECO · Actualizar ' + p.archivos.map(function(a) { return a.titulo; }).join(' y '));
+    (p.frecuencia === 'quincena' ? 'INGECO · Cargar la quincena en TANGO'
+      : p.frecuencia === 'mensual' ? 'INGECO · Actualizar precios del mes'
+      : 'INGECO · Actualizar ' + p.archivos.map(function(a) { return a.titulo; }).join(' y '));
   const opts = { name: 'INGECO Dashboard', htmlBody: _htmlRecordatorio(p, fechas) };
   if (RECORDATORIOS_CC && !RECORDATORIOS_MODO_PRUEBA) opts.cc = RECORDATORIOS_CC;
   MailApp.sendEmail(destino, asunto, 'Recordatorio de actualización de archivos del Dashboard INGECO.', opts);
@@ -3280,7 +3294,9 @@ function enviarRecordatorios() {
   const diaSemana = parseInt(Utilities.formatDate(new Date(), TZ, 'u'), 10); // 1 = lunes
   const diaMes = parseInt(Utilities.formatDate(new Date(), TZ, 'd'), 10);
   const toca = RECORDATORIOS.filter(function(p) {
-    return (p.frecuencia === 'lunes' && diaSemana === 1) || (p.frecuencia === 'quincena' && (diaMes === 3 || diaMes === 17));
+    return (p.frecuencia === 'lunes' && diaSemana === 1)
+      || (p.frecuencia === 'mensual' && diaSemana === 1 && diaMes <= 7)
+      || (p.frecuencia === 'quincena' && (diaMes === 3 || diaMes === 17));
   });
   if (!toca.length) { Logger.log('Recordatorios: hoy no corresponde enviar'); return; }
   const fechas = leerFechasFuentes();
@@ -3298,5 +3314,5 @@ function crearTriggerRecordatorios() {
     .filter(function(t) { return t.getHandlerFunction() === 'enviarRecordatorios'; })
     .forEach(function(t) { ScriptApp.deleteTrigger(t); });
   ScriptApp.newTrigger('enviarRecordatorios').timeBased().everyDays(1).atHour(8).inTimezone('America/Argentina/Buenos_Aires').create();
-  Logger.log('Trigger de recordatorios creado: todos los días a las 8 (envía lunes y días 3/17)');
+  Logger.log('Trigger de recordatorios creado: todos los días a las 8 (envía lunes, primer lunes del mes y días 3/17)');
 }
