@@ -1860,31 +1860,7 @@ function leerPrecioAsfalto() {
 // ============================================================
 function leerGastosEstructura() {
   try {
-    const ss    = SpreadsheetApp.openById(FILE_IDS.gastosEstructura);
-    const sheet = ss.getSheets()[0];
-    const rows  = sheet.getDataRange().getValues();
-    if (!rows || rows.length < 2) return null;
-
-    // Detectar encabezado (primera fila con "cuenta" y "debe")
-    let hdr = -1;
-    for (let i = 0; i < Math.min(5, rows.length); i++) {
-      const cells = rows[i].map(c => String(c).toLowerCase().trim());
-      if (cells.some(c => c === 'cuenta') && cells.some(c => c === 'debe')) { hdr = i; break; }
-    }
-    if (hdr < 0) hdr = 0;
-
-    const H = rows[hdr].map(c => String(c).toLowerCase().trim());
-    const iCuenta = _findCol(H, ['cuenta']);
-    const iFecha  = _findCol(H, ['fecha']);
-    const iComp   = _findCol(H, ['numero comprobante', 'nro comprobante', 'comprobante']);
-    const iProv   = _findCol(H, ['razón social', 'razon social', 'proveedor']);
-    const iDebe   = _findCol(H, ['debe']);
-    const iHaber  = _findCol(H, ['haber']);
-    if (iCuenta == null || iFecha == null || iDebe == null) {
-      Logger.log('gastosEstructura: faltan columnas clave — cuenta/fecha/debe');
-      return null;
-    }
-
+    const ss = SpreadsheetApp.openById(FILE_IDS.gastosEstructura);
     const _num = function(v) {
       if (typeof v === 'number') return v;
       if (v == null || v === '') return 0;
@@ -1905,6 +1881,33 @@ function leerGastosEstructura() {
 
     // acum[mes][cuentaFull] = { codigo, nombre, full, total, facturas: [...] }
     const acum = {};
+
+    // Una pestaña por mes (Junio, Julio 26, AGOSTO 26…): se leen TODAS las que
+    // tengan encabezado Cuenta/Debe. El mes sale de la Fecha de cada fila, no
+    // del nombre de la pestaña (oct-2026: antes solo se leía la primera).
+    ss.getSheets().forEach(function(sheet) {
+    const rows = sheet.getDataRange().getValues();
+    if (!rows || rows.length < 2) return;
+
+    let hdr = -1;
+    for (let i = 0; i < Math.min(5, rows.length); i++) {
+      const cells = rows[i].map(c => String(c).toLowerCase().trim());
+      if (cells.some(c => c === 'cuenta') && cells.some(c => c === 'debe')) { hdr = i; break; }
+    }
+    if (hdr < 0) { Logger.log('gastosEstructura [' + sheet.getName() + '] sin encabezado Cuenta/Debe, omitida'); return; }
+
+    const H = rows[hdr].map(c => String(c).toLowerCase().trim());
+    const iCuenta = _findCol(H, ['cuenta']);
+    const iFecha  = _findCol(H, ['fecha']);
+    const iComp   = _findCol(H, ['numero comprobante', 'nro comprobante', 'comprobante']);
+    const iProv   = _findCol(H, ['razón social', 'razon social', 'proveedor']);
+    const iDebe   = _findCol(H, ['debe']);
+    const iHaber  = _findCol(H, ['haber']);
+    if (iCuenta == null || iFecha == null || iDebe == null) {
+      Logger.log('gastosEstructura [' + sheet.getName() + ']: faltan columnas clave — cuenta/fecha/debe');
+      return;
+    }
+
     for (let i = hdr + 1; i < rows.length; i++) {
       const row = rows[i];
       const cuentaRaw = String(row[iCuenta] || '').trim();
@@ -1935,6 +1938,7 @@ function leerGastosEstructura() {
         monto:       Math.round(monto),
       });
     }
+    });
 
     // Armar salida por mes: cuentas ordenadas por total desc, con subtotal y total del mes
     const resultado = {};
@@ -3188,44 +3192,63 @@ function leerStockAsfalto(remitosData) {
 
 const RECORDATORIOS_MODO_PRUEBA = true;
 const RECORDATORIOS_PRUEBA_A    = 'mariacaram94@gmail.com';
-const RECORDATORIOS_CC          = '';   // ej. 'adriankoss@grupoingeco.com.ar' — vacío = sin copia
+const RECORDATORIOS_CC          = 'cpngonzalo@gmail.com';   // copia a todos (Gonzalo, coordinador) — vacío = sin copia
 const RECORDATORIOS_DIAS_VIEJO  = 7;    // días sin cambios para marcar el archivo como desactualizado
 const URL_TABLERO = 'https://ingeco-dashboard.vercel.app';
 
 // email: uno o varios separados por coma. Vacío = no se envía (se registra en el log).
 // frecuencia: 'lunes' (todos los lunes), 'mensual' (primer lunes del mes),
 // 'quincena' (días 3 y 17).
+// Por archivo: cols = columnas que lee el tablero (no cambiarles el título);
+// obraCol = columna donde va el nombre de la obra tal cual el Maestro;
+// maestro = pestaña del archivo que trae sola la lista del Maestro de obras.
 const RECORDATORIOS = [
   { nombre: 'Agustín y Sergio', email: 'adegregorio@grupoingeco.com.ar,sergiocangemi@grupoingeco.com.ar', frecuencia: 'lunes',
     archivos: [
       { fileKey: 'agustinObras', titulo: 'Obras a cobrar',
-        que: 'Certificados del mes con su período de realización, y marcar como "Cobrada" lo que ya se cobró.' },
+        que: 'Certificados del mes con su período de realización, y marcar como "Cobrada" lo que ya se cobró.',
+        cols: ['Nombre Obra', 'Estado $', 'Monto Total', 'Anticipo financiero', 'Monto a certificar', 'Código', 'Período de realización'],
+        obraCol: 'Código', maestro: 'Maestro de obras' },
       { fileKey: 'maestroObras', titulo: 'Maestro de obras',
-        que: 'Solo si hay una obra nueva: darla de alta con su nombre, cliente y tipo de contratación antes de cargarla en Obras a cobrar.' },
+        que: 'Solo si hay una obra nueva: agregarla en una fila nueva con su nombre, cliente y tipo de contrato. No cambiar el nombre de una obra que ya existe: las otras planillas copian esta lista.',
+        cols: ['NOMBRE DE OBRA', 'CLIENTE', 'TIPO_CONTRATO', 'ESTADO'] },
     ] },
   { nombre: 'Agustín', email: 'adegregorio@grupoingeco.com.ar', frecuencia: 'mensual',
     archivos: [{ fileKey: 'equiposFlota', titulo: 'Tarifas y precios del mes',
-      que: 'Actualizar los precios del mes.' }] },
-  { nombre: 'Esteban',   email: '', frecuencia: 'lunes',
+      que: 'Actualizar los precios del mes.',
+      cols: ['CÓDIGO', 'PF'] }] },
+  { nombre: 'Esteban',   email: 'esaguir@grupoingeco.com.ar', frecuencia: 'lunes',
     archivos: [{ fileKey: 'estebanSheet', titulo: 'Cobros (planilla por mes)',
-      que: 'Cobros de la semana con fecha real de cobro, facturas emitidas y fechas probables de lo pendiente.' }] },
+      que: 'Cobros de la semana con fecha real de cobro, facturas emitidas y fechas probables de lo pendiente. Cada mes nuevo va en una pestaña con el nombre del mes (ej. "Octubre") y las mismas columnas.',
+      cols: ['OBRA', 'CLIENTE', 'CONCEPTO', 'IMPORTE', 'FECHA PROBABLE', 'FECHA REAL'],
+      obraCol: 'OBRA', maestro: 'Maestro de obras' }] },
   { nombre: 'Guillermo', email: 'compras1@grupoingeco.com.ar', frecuencia: 'lunes',
     archivos: [{ fileKey: 'ocInsumos', titulo: 'Órdenes de compra de insumos',
-      que: 'OC de la semana con la OBRA GENERAL completa (sin "Obra no disponible").' }] },
+      que: 'OC de la semana con la OBRA GENERAL completa (sin "Obra no disponible").',
+      cols: ['N° ORDEN', 'PROVEEDOR', 'FECHA', 'DESCRIPCIÓN', 'MONTO', 'OBRA GENERAL'],
+      obraCol: 'OBRA GENERAL', maestro: 'Maestro de obras' }] },
   { nombre: 'Roberto',   email: 'deposito@grupoingeco.com.ar', frecuencia: 'lunes',
     archivos: [{ fileKey: 'remitosAsfalto', titulo: 'Remitos oficiales',
-      que: 'Remitos de la semana con OBRA GENERAL, destino, unidad (TON o KG) y fecha del año en curso.' }] },
+      que: 'Remitos de la semana con OBRA GENERAL, destino, unidad (TON o KG) y fecha del año en curso.',
+      cols: ['FECHA', 'CANTIDAD 1', 'UNIDAD 1', 'DESCRIPCIÓN 1', 'DESTINO', 'OBRA GENERAL'],
+      obraCol: 'OBRA GENERAL', maestro: 'Maestro de obras' }] },
   { nombre: 'Nico',      email: 'nicobdallagata@gmail.com', frecuencia: 'lunes',
     archivos: [
-      { fileKey: 'usageEquipos', titulo: 'Partes diarios de equipos', que: 'Horas por equipo y obra de toda la semana.' },
-      { fileKey: 'repuestosEquipos', titulo: 'Pedidos y entregas de repuestos', que: 'Entregas de la semana con costo y equipo.' },
+      { fileKey: 'usageEquipos', titulo: 'Partes diarios de equipos', que: 'Horas por equipo y obra de toda la semana.',
+        cols: ['FECHA', 'CÓDIGO', 'TIEMPO TRABAJO (HR)', 'OBRA GENERAL'],
+        obraCol: 'OBRA GENERAL', maestro: 'Maestro de obras' },
+      { fileKey: 'repuestosEquipos', titulo: 'Pedidos y entregas de repuestos', que: 'Entregas de la semana con costo y equipo, en la pestaña REGISTRO ENTREGAS.',
+        cols: ['FECHA', 'CÓDIGO 1', 'COSTO', 'OBRA GENERAL'] },
     ] },
   { nombre: 'Romina',    email: 'contabilidad2@grupoingeco.com.ar', frecuencia: 'lunes',
     archivos: [{ fileKey: 'gastosEstructura', titulo: 'Gastos de estructura (libro mayor)',
-      que: 'Gastos administrativos del mes, cada uno con su cuenta.' }] },
+      que: 'Gastos administrativos del mes, cada uno con su cuenta. Cada mes nuevo va en una pestaña nueva con las mismas columnas.',
+      cols: ['Cuenta', 'Fecha', 'Numero Comprobante', 'Razón social', 'Debe', 'Haber'] }] },
   { nombre: 'Mauro',     email: 'sueldos01@grupoingeco.com.ar', frecuencia: 'quincena',
     archivos: [{ fileKey: 'tangoFolder', carpeta: true, titulo: 'Quincenas TANGO (carpeta)',
-      que: 'La quincena que cerró, con la columna OBRA (R) completa usando los nombres del Maestro de obras. Taller y Planta de Asfalto con su nombre.' }] },
+      que: 'La quincena que cerró, con la columna OBRA (R) completa. Taller y Planta de Asfalto con su nombre.',
+      cols: ['OBRA (columna R)', 'Maquinista (columna S)'],
+      obraCol: 'OBRA (columna R)', maestro: 'Maestro de obra' }] },
 ];
 
 function _urlArchivoRecordatorio(a) {
@@ -3247,7 +3270,10 @@ function _htmlRecordatorio(p, fechas) {
     }
     return '<tr>' +
       '<td style="padding:10px 12px;border-top:1px solid #e2e8f0;vertical-align:top;"><a href="' + _urlArchivoRecordatorio(a) + '" style="color:#1b3a5c;font-weight:700;text-decoration:none;">' + a.titulo + ' ↗</a>' +
-      '<div style="color:#475569;font-size:13px;margin-top:4px;">' + a.que + '</div></td>' +
+      '<div style="color:#475569;font-size:13px;margin-top:4px;">' + a.que + '</div>' +
+      (a.cols && a.cols.length ? '<div style="color:#475569;font-size:12.5px;margin-top:6px;"><b>Columnas que lee el tablero:</b> ' + a.cols.join(' · ') + '</div>' : '') +
+      (a.maestro ? '<div style="color:#475569;font-size:12.5px;margin-top:4px;"><b>Nombre de la obra:</b> en ' + a.obraCol + ', copiado tal cual de la pestaña <b>"' + a.maestro + '"</b> de este mismo archivo (se actualiza sola).</div>' : '') +
+      '</td>' +
       '<td style="padding:10px 12px;border-top:1px solid #e2e8f0;vertical-align:top;white-space:nowrap;font-size:13px;color:' + (viejo ? '#b91c1c;font-weight:700' : '#475569') + ';">' +
         ult + (viejo ? '<br>⚠ desactualizado' : '') + '</td>' +
     '</tr>';
@@ -3259,7 +3285,10 @@ function _htmlRecordatorio(p, fechas) {
     : 'Recordatorio semanal: te pedimos dejar al día tu archivo antes del miércoles.';
   return '<div style="font-family:Arial,Helvetica,sans-serif;color:#0f172a;max-width:620px;">' +
     '<p style="font-size:15px;">Hola ' + p.nombre + ',</p>' +
-    '<p style="font-size:14px;color:#334155;">' + intro + ' Con esa información se arma el Dashboard Ejecutivo que mira el directorio.</p>' +
+    '<p style="font-size:14px;color:#334155;">' + intro + ' Con esa información se arma el Dashboard Ejecutivo.</p>' +
+    '<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 14px;margin:0 0 14px;font-size:14px;color:#7f1d1d;">' +
+      '<b>Importante:</b> no agregues, borres ni muevas columnas, y no les cambies el título. El tablero las busca por su nombre: si cambian, deja de leer el archivo.' +
+    '</div>' +
     '<table style="border-collapse:collapse;width:100%;border:1px solid #e2e8f0;border-radius:8px;">' +
       '<tr style="background:#f8fafc;"><th style="text-align:left;padding:8px 12px;font-size:12px;color:#64748b;">Archivo y qué actualizar</th>' +
       '<th style="text-align:left;padding:8px 12px;font-size:12px;color:#64748b;">Última modificación</th></tr>' +
