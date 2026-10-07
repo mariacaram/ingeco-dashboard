@@ -3271,7 +3271,7 @@ function leerStockAsfalto(remitosData) {
 //   2. Ejecutar crearTriggerRecordatorios() → deja programado el envío diario
 //      a las 8 (la función decide si hoy corresponde mandar y a quién).
 
-const RECORDATORIOS_MODO_PRUEBA = true;
+const RECORDATORIOS_MODO_PRUEBA = false;  // activado el 7-oct-2026 (María)
 const RECORDATORIOS_PRUEBA_A    = 'mariacaram94@gmail.com';
 const RECORDATORIOS_CC          = 'cpngonzalo@gmail.com';   // copia a todos (Gonzalo, coordinador) — vacío = sin copia
 const RECORDATORIOS_DIAS_VIEJO  = 7;    // días sin cambios para marcar el archivo como desactualizado
