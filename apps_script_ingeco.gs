@@ -3365,7 +3365,7 @@ function _htmlRecordatorio(p, fechas) {
     ? 'Cerró la quincena: te pedimos cargar la liquidación en la carpeta de TANGO.'
     : p.frecuencia === 'mensual'
     ? 'Recordatorio mensual: te pedimos actualizar los precios del mes.'
-    : 'Recordatorio semanal: te pedimos dejar al día tu archivo antes del miércoles.';
+    : 'Recordatorio semanal: revisá que tu archivo esté actualizado al día.';
   return '<div style="font-family:Arial,Helvetica,sans-serif;color:#0f172a;max-width:620px;">' +
     '<p style="font-size:15px;">Hola ' + p.nombre + ',</p>' +
     '<p style="font-size:14px;color:#334155;">' + intro + ' Con esa información se arma el Dashboard Ejecutivo.</p>' +
