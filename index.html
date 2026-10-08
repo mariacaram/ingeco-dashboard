@@ -2658,14 +2658,34 @@ function renderCertMensual() {
   }
   if (_certMensualChart) { _certMensualChart.destroy(); _certMensualChart = null; }
   const alpha = i => i === sel ? 1 : 0.55;
+  // Total de cada mes arriba de la barra (el del mes seleccionado, en negrita)
+  const totalesArriba = {
+    id: 'totalesArriba',
+    afterDatasetsDraw(chart) {
+      const { ctx } = chart; ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      const css = getComputedStyle(document.documentElement);
+      datos.forEach((x, i) => {
+        if (!(x.total > 0)) return;
+        let top = null, px = null;
+        chart.data.datasets.forEach((_, di) => { const b = chart.getDatasetMeta(di).data[i]; if (b && b.height > 0 && (top == null || b.y < top)) { top = b.y; px = b.x; } });
+        if (top == null) return;
+        ctx.font = (i === sel ? '700 ' : '500 ') + '11px ' + (css.getPropertyValue('--font-body') || 'sans-serif');
+        ctx.fillStyle = i === sel ? '#166534' : '#475569';
+        ctx.fillText(fmtM(x.total), px, top - 4);
+      });
+      ctx.restore();
+    },
+  };
   _certMensualChart = new Chart(canvas, {
     type: 'bar',
+    plugins: [totalesArriba],
     data: { labels, datasets: [
       { label: 'Obras', data: datos.map(x => x.obras), backgroundColor: datos.map((_, i) => `rgba(22,163,74,${alpha(i)})`), borderRadius: 3 },
       { label: 'Provisiones', data: datos.map(x => x.prov), backgroundColor: datos.map((_, i) => `rgba(37,99,235,${alpha(i)})`), borderRadius: 3 },
     ] },
     options: {
       responsive: true, maintainAspectRatio: false,
+      layout: { padding: { top: 18 } },
       onClick: (ev, els) => { if (els.length) setMes(datos[els[0].index].m); },
       scales: {
         x: { stacked: true, grid: { display: false }, ticks: { font: { size: 11 } } },
