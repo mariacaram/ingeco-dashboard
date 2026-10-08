@@ -611,7 +611,7 @@
   .solo-editor { display: none !important; }
   body.edita-obras .solo-editor { display: initial !important; }
   body.edita-obras button.solo-editor { display: inline-flex !important; }
-  .btn-nueva-obra { display: inline-flex; align-items: center; gap: 4px; background: #fff; color: var(--primary); border: 1.5px solid var(--primary); border-radius: 14px; padding: 3px 10px; font-size: 11px !important; font-weight: 600; line-height: 1.3; white-space: nowrap; cursor: pointer; }
+  .btn-nueva-obra { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; box-sizing: border-box; background: #fff; color: var(--primary); border: 1.5px solid var(--primary); border-radius: 14px; padding: 3px 10px; font-size: 11px !important; font-weight: 600; line-height: 1.3; white-space: normal; text-align: left; cursor: pointer; margin: 2px 6px 2px 0; }
   .btn-nueva-obra:hover { background: var(--primary); color: #fff; }
   .form-obra label { display: block; font-size: 11px; font-weight: 600; color: var(--muted); margin: 10px 0 3px; }
   .form-obra input, .form-obra select { width: 100%; box-sizing: border-box; border: 1.5px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 14px; background: #fff; }
@@ -798,7 +798,7 @@
       <div class="kpi-label">Total Certificado</div>
       <div class="kpi-value nd" id="kpi-generado">Actualizá datos</div>
       <div class="kpi-sub" id="kpi-generado-sub">Certificados por período (A Cobrar + Cobradas)</div>
-      <div class="solo-editor" style="margin-top:6px;"><button class="btn-nueva-obra solo-editor" onclick="event.stopPropagation();abrirFormObra()">＋ Nueva obra o certificado</button></div>
+      <div class="solo-editor" style="margin-top:6px;display:flex;flex-wrap:wrap;"><button class="btn-nueva-obra solo-editor" onclick="event.stopPropagation();abrirFormObra()">＋ Nueva obra</button><button class="btn-nueva-obra solo-editor" onclick="event.stopPropagation();abrirTodosCertificados()">Ver y editar certificados</button></div>
       <div id="kpi-generado-breakdown" style="font-size:10px;color:var(--muted);margin-top:5px;line-height:1.7;display:flex;flex-wrap:wrap;gap:4px 10px;"></div>
       <div class="fuente" id="kpi-generado-fuente"><a href="https://docs.google.com/spreadsheets/d/1YldZRtbLh17Xqczl-omI0zjHcgvrhvp3QOsjWffEm_s/edit" target="_blank" onclick="event.stopPropagation()">Obras a cobrar (Agustín)</a></div>
     </div>
@@ -9797,7 +9797,7 @@ async function guardarFormObra(enc) {
     }
     say('Guardado. Actualizando el tablero…', true);
     await refreshData();
-    closePanel();
+    if (ed || _panelCertOrigen === 'todos') _volverPanelCert(); else closePanel();
   } catch (e) {
     say('No se pudo guardar: ' + e.message, false); btn.disabled = false;
   }
@@ -9806,17 +9806,62 @@ async function cambiarEstadoCert(enc) {
   let it; try { it = JSON.parse(decodeURIComponent(enc)); } catch (e) { return; }
   const nuevo = /cobrad/i.test(it.estado || '') ? 'A Cobrar' : 'Cobrada';
   if (!confirm(`¿Marcar "${it.nombre}" como ${nuevo}?`)) return;
-  try { await _postObras({ op: 'estadoCert', fila: it.fila, certNombreAntes: it.nombre, estado: nuevo }); await refreshData(); openTotalACobrarPanel(); }
+  try { await _postObras({ op: 'estadoCert', fila: it.fila, certNombreAntes: it.nombre, estado: nuevo }); await refreshData(); _volverPanelCert(); }
   catch (e) { alert('No se pudo cambiar el estado: ' + e.message); }
 }
 async function borrarCert(enc) {
   let it; try { it = JSON.parse(decodeURIComponent(enc)); } catch (e) { return; }
   if (!confirm(`¿Borrar la fila "${it.nombre}" (${fmt(it.monto)}) de Obras a cobrar?\nQueda registrado en el historial.`)) return;
-  try { await _postObras({ op: 'borrarCert', fila: it.fila, certNombreAntes: it.nombre }); await refreshData(); openTotalACobrarPanel(); }
+  try { await _postObras({ op: 'borrarCert', fila: it.fila, certNombreAntes: it.nombre }); await refreshData(); _volverPanelCert(); }
   catch (e) { alert('No se pudo borrar: ' + e.message); }
 }
 
+// Panel para editores: TODOS los certificados cargados en Obras a cobrar,
+// agrupados por obra, con sus acciones (estado / editar / borrar).
+let _todosCertFiltro = '';
+let _panelCertOrigen = 'mes'; // desde qué panel se abrió la acción: 'mes' o 'todos'
+function _volverPanelCert() { if (_panelCertOrigen === 'todos') abrirTodosCertificados(); else openTotalACobrarPanel(); }
+function abrirTodosCertificados(filtro) {
+  if (!_editaObras()) return;
+  if (filtro != null) _todosCertFiltro = filtro;
+  const panel = document.getElementById('sidePanel'), overlay = document.getElementById('overlay'), content = document.getElementById('panelContent');
+  const todas = ((GENERADO_POR_OBRA && GENERADO_POR_OBRA.obras) || []).concat((GENERADO_POR_OBRA && GENERADO_POR_OBRA.obrasSinPeriodo) || []);
+  // Una obra puede aparecer en ambas listas: unir items por fila
+  const porObra = {};
+  todas.forEach(o => {
+    const k = o.cod_obra || o.nombre; if (!porObra[k]) porObra[k] = { cod: k, cliente: o.cliente, items: {} };
+    (o.items || []).forEach(it => { if (it.fila) porObra[k].items[it.fila] = it; });
+  });
+  const esCob = e => /cobrad/i.test(e || '');
+  const f = _todosCertFiltro.toLowerCase().trim();
+  const grupos = Object.values(porObra).map(g => ({ ...g, lista: Object.values(g.items).sort((a, b) => a.fila - b.fila) }))
+    .filter(g => g.lista.length && (!f || g.cod.toLowerCase().includes(f) || g.lista.some(i => (i.nombre || '').toLowerCase().includes(f))))
+    .sort((a, b) => a.cod.localeCompare(b.cod, 'es'));
+  const nItems = grupos.reduce((s, g) => s + g.lista.length, 0);
+  const filas = grupos.map(g => `
+    <tr style="border-top:2px solid var(--border);background:#f0fdf4;"><td colspan="3" style="padding:8px 10px;"><strong style="font-size:13px;color:var(--primary);">${_esc(g.cod)}</strong>
+      <span style="font-size:10px;color:var(--muted);margin-left:8px;">${g.lista.length} certificado${g.lista.length !== 1 ? 's' : ''} · a cobrar ${fmt(g.lista.filter(i => !esCob(i.estado)).reduce((s, i) => s + (i.monto || 0), 0))}</span></td></tr>
+    ${g.lista.map(it => `<tr style="border-top:1px solid var(--border);">
+      <td style="padding:5px 10px 5px 18px;font-size:11px;">${_esc(it.nombre)} <span style="font-size:9px;font-weight:700;background:${esCob(it.estado) ? '#dcfce7' : '#fef3c7'};color:${esCob(it.estado) ? '#166534' : '#92400e'};padding:1px 7px;border-radius:8px;white-space:nowrap;display:inline-block;vertical-align:middle;">${esCob(it.estado) ? 'Cobrada' : 'A cobrar'}</span></td>
+      <td style="text-align:right;padding:5px 6px;font-size:11px;white-space:nowrap;color:var(--pos);">${it.monto ? fmt(it.monto) : '—'}</td>
+      <td style="text-align:right;padding:5px 6px;">${_certAcciones(it, g.cod)}</td>
+    </tr>`).join('')}`).join('');
+  content.innerHTML = `
+    <div class="panel-title">Certificados cargados</div>
+    <div class="panel-sub">Obras a cobrar · ${nItems} certificado${nItems !== 1 ? 's' : ''} en ${grupos.length} obra${grupos.length !== 1 ? 's' : ''} · todos los meses</div>
+    <div style="display:flex;gap:8px;margin-top:12px;align-items:center;">
+      <input id="tc-filtro" value="${_esc(_todosCertFiltro)}" placeholder="Filtrar por obra o certificado…" oninput="abrirTodosCertificados(this.value);setTimeout(()=>{const i=document.getElementById('tc-filtro');i.focus();i.setSelectionRange(i.value.length,i.value.length)},0)"
+        style="flex:1;border:1.5px solid var(--border);border-radius:8px;padding:7px 10px;font-size:13px;">
+      <button class="btn-nueva-obra" onclick="abrirFormObra()">＋ Nueva obra</button>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-top:8px;">✓ cambia el estado · ✎ edita nombre, montos, período o estado · 🗑 borra la fila. Todo queda en la pestaña Historial.</div>
+    <table style="width:100%;border-collapse:collapse;margin-top:10px;"><tbody>${filas || '<tr><td style="padding:16px;" class="nd">Sin certificados para ese filtro.</td></tr>'}</tbody></table>`;
+  panel.classList.add('open'); overlay.classList.add('open');
+  _panelCertOrigen = 'todos';
+}
+
 function openTotalACobrarPanel() {
+  _panelCertOrigen = 'mes';
   const panel   = document.getElementById('sidePanel');
   const overlay = document.getElementById('overlay');
   const content = document.getElementById('panelContent');
