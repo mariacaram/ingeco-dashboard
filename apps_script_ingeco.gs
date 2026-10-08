@@ -1592,6 +1592,16 @@ function leerAgustinIntermedio() {
     const out = { aCobrar: {}, aCobrarPorMes: {}, aCobrarSinMes: {}, nombreFernando: {},
                   detalles: {}, detallesPorMes: {}, detallesSinMes: {}, tabSrc: {}, tabsSinPeriodo: [] };
 
+    // Primera pasada: códigos que tienen al menos una fila con certificado o
+    // anticipo. Sirve para reconocer la fila MADRE (solo Monto Total) aunque
+    // Agustín le haya cargado período (oct-2026: SAT Etapa 2 sumaba doble).
+    const codConCert = {};
+    for (let i = hdrIdx + 1; i < rows.length; i++) {
+      const c = String(rows[i][iCod] || '').trim();
+      if (!c) continue;
+      if (parsearMonto(rows[i][iCert]) > 0 || parsearMonto(rows[i][iAnt]) > 0) codConCert[c] = true;
+    }
+
     for (let i = hdrIdx + 1; i < rows.length; i++) {
       const row = rows[i];
       const nombre = String(row[iNom] || '').trim();
@@ -1612,8 +1622,12 @@ function leerAgustinIntermedio() {
       // Período es la fila-resumen del contrato (solo documenta el Monto
       // Total); no suma nunca, diga lo que diga el Estado. Así Agustín puede
       // marcarla "Cobrada" cuando la etapa cerró sin duplicar los montos.
+      // También es madre (aunque tenga período) si solo trae Monto Total y la
+      // misma obra tiene otras filas con certificados o anticipo: el dinero
+      // real está en esas filas.
       const perVacio = row[iPer] == null || String(row[iPer]).trim() === '' || String(row[iPer]).trim() === '-';
-      const esMadre = aCert <= 0 && perVacio;
+      const codRow = String(row[iCod] || '').trim();
+      const esMadre = aCert <= 0 && (perVacio || (anticipo <= 0 && montoTotal > 0 && !!codConCert[codRow]));
       let monto = aCert > 0 ? aCert : 0;
       if (esCobrada && monto <= 0 && !esMadre) monto = anticipo > 0 ? anticipo : (montoTotal > 0 ? montoTotal : 0);
       // Estado normalizado: Cobrada / A Cobrar (cualquier otro texto con saldo
