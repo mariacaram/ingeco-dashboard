@@ -611,7 +611,8 @@
   .solo-editor { display: none !important; }
   body.edita-obras .solo-editor { display: initial !important; }
   body.edita-obras button.solo-editor { display: inline-flex !important; }
-  .btn-nueva-obra { background: var(--accent, #f59e0b); color: #1e293b; border: none; border-radius: 20px; padding: 6px 14px; font-size: 12px; font-weight: 700; cursor: pointer; }
+  .btn-nueva-obra { display: inline-flex; align-items: center; gap: 4px; background: #fff; color: var(--primary); border: 1.5px solid var(--primary); border-radius: 14px; padding: 3px 10px; font-size: 11px !important; font-weight: 600; line-height: 1.3; white-space: nowrap; cursor: pointer; }
+  .btn-nueva-obra:hover { background: var(--primary); color: #fff; }
   .form-obra label { display: block; font-size: 11px; font-weight: 600; color: var(--muted); margin: 10px 0 3px; }
   .form-obra input, .form-obra select { width: 100%; box-sizing: border-box; border: 1.5px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 14px; background: #fff; }
   .form-obra .fila2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -797,7 +798,7 @@
       <div class="kpi-label">Total Certificado</div>
       <div class="kpi-value nd" id="kpi-generado">Actualizá datos</div>
       <div class="kpi-sub" id="kpi-generado-sub">Certificados por período (A Cobrar + Cobradas)</div>
-      <div class="solo-editor" style="margin-top:8px;"><button class="btn-nueva-obra solo-editor" onclick="event.stopPropagation();abrirFormObra()">＋ Nueva obra / certificado</button></div>
+      <div class="solo-editor" style="margin-top:6px;"><button class="btn-nueva-obra solo-editor" onclick="event.stopPropagation();abrirFormObra()">＋ Nueva obra o certificado</button></div>
       <div id="kpi-generado-breakdown" style="font-size:10px;color:var(--muted);margin-top:5px;line-height:1.7;display:flex;flex-wrap:wrap;gap:4px 10px;"></div>
       <div class="fuente" id="kpi-generado-fuente"><a href="https://docs.google.com/spreadsheets/d/1YldZRtbLh17Xqczl-omI0zjHcgvrhvp3QOsjWffEm_s/edit" target="_blank" onclick="event.stopPropagation()">Obras a cobrar (Agustín)</a></div>
     </div>
