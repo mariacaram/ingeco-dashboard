@@ -1901,6 +1901,10 @@ let GENERADO_POR_OBRA = null;
 // Excluye obras con tipo_contrato "Interno" (provisión de asfalto/áridos, cantera,
 // planta, predio, etc.): son transferencias internas, no contratos con clientes,
 // y no deben aparecer en ningún cálculo de "obras" del tablero (KPIs, tablas, paneles).
+// Fila "madre" de Obras a cobrar: solo trae Monto Total (sin certificar ni
+// anticipo). Documenta el contrato, no suma (el backend la deja en $0).
+function _esFilaContrato(it) { return !!it && !(it.monto > 0) && it.montoTotal > 0; }
+
 function _obrasActuales(mes) {
   if (!GENERADO_POR_OBRA) return [];
   const byMonth = GENERADO_POR_OBRA.obrasPorMes && GENERADO_POR_OBRA.obrasPorMes[mes || mesActual];
@@ -9962,7 +9966,7 @@ function abrirTodosCertificados(filtro, mes, estado) {
   const esCob = e => /cobrad/i.test(e || '');
   const f = _todosCertFiltro.toLowerCase().trim();
   const pasaMes = it => !_todosCertMes || (_todosCertMes === 'sin' ? !mesPorFila[it.fila] : mesPorFila[it.fila] === _todosCertMes);
-  const pasaEstado = it => _todosCertEstado === 'todos' || !esCob(it.estado);
+  const pasaEstado = it => _todosCertEstado === 'todos' || !esCob(it.estado) || _esFilaContrato(it);
   const grupos = Object.values(porObra).map(g => ({ ...g, lista: Object.values(g.items).filter(it => pasaMes(it) && pasaEstado(it)).sort((a, b) => a.fila - b.fila) }))
     .filter(g => g.lista.length && (!f || g.cod.toLowerCase().includes(f) || g.lista.some(i => (i.nombre || '').toLowerCase().includes(f))))
     .sort((a, b) => a.cod.localeCompare(b.cod, 'es'));
@@ -9973,9 +9977,11 @@ function abrirTodosCertificados(filtro, mes, estado) {
       <td style="text-align:right;padding:5px 6px;font-size:11px;white-space:nowrap;color:#6d28d9;font-weight:600;">${fmt(saldos[g.cod].saldo)}</td><td></td></tr>` : '';
   const filas = grupos.map(g => `
     <tr style="border-top:2px solid var(--border);background:#f0fdf4;"><td colspan="3" style="padding:8px 10px;"><strong style="font-size:13px;color:var(--primary);">${_esc(g.cod)}</strong>
-      <span style="font-size:10px;color:var(--muted);margin-left:8px;">${g.lista.length} certificado${g.lista.length !== 1 ? 's' : ''} · a cobrar ${fmt(g.lista.filter(i => !esCob(i.estado)).reduce((s, i) => s + (i.monto || 0), 0))}</span></td></tr>
+      <span style="font-size:10px;color:var(--muted);margin-left:8px;">${(n => n + ' certificado' + (n !== 1 ? 's' : ''))(g.lista.filter(i => !_esFilaContrato(i)).length)} · a cobrar ${fmt(g.lista.filter(i => !esCob(i.estado)).reduce((s, i) => s + (i.monto || 0), 0))}</span></td></tr>
     ${g.lista.map(it => `<tr style="border-top:1px solid var(--border);">
-      <td style="padding:5px 10px 5px 18px;font-size:11px;">${_esc(it.nombre)} <span style="font-size:9px;font-weight:700;background:${esCob(it.estado) ? '#dcfce7' : '#fef3c7'};color:${esCob(it.estado) ? '#166534' : '#92400e'};padding:1px 7px;border-radius:8px;white-space:nowrap;display:inline-block;vertical-align:middle;">${esCob(it.estado) ? 'Cobrada' : 'A cobrar'}</span>${mesPorFila[it.fila] ? `<span style="font-size:9px;color:var(--muted);margin-left:6px;white-space:nowrap;">${(MES[mesPorFila[it.fila]] || mesPorFila[it.fila]).replace(' 2026', '')}</span>` : '<span style="font-size:9px;color:#b45309;margin-left:6px;white-space:nowrap;">sin período</span>'}</td>
+      <td style="padding:5px 10px 5px 18px;font-size:11px;">${_esc(it.nombre)} ${_esFilaContrato(it)
+        ? `<span style="font-size:9px;font-weight:700;background:#f1f5f9;color:#64748b;padding:1px 7px;border-radius:8px;white-space:nowrap;display:inline-block;vertical-align:middle;" title="Fila del contrato: solo documenta el Monto Total, no suma">Contrato ${fmt(it.montoTotal)}</span>`
+        : `<span style="font-size:9px;font-weight:700;background:${esCob(it.estado) ? '#dcfce7' : '#fef3c7'};color:${esCob(it.estado) ? '#166534' : '#92400e'};padding:1px 7px;border-radius:8px;white-space:nowrap;display:inline-block;vertical-align:middle;">${esCob(it.estado) ? 'Cobrada' : 'A cobrar'}</span>`}${mesPorFila[it.fila] ? `<span style="font-size:9px;color:var(--muted);margin-left:6px;white-space:nowrap;">${(MES[mesPorFila[it.fila]] || mesPorFila[it.fila]).replace(' 2026', '')}</span>` : '<span style="font-size:9px;color:#b45309;margin-left:6px;white-space:nowrap;">sin período</span>'}</td>
       <td style="text-align:right;padding:5px 6px;font-size:11px;white-space:nowrap;color:var(--pos);">${it.monto ? fmt(it.monto) : '—'}</td>
       <td style="text-align:right;padding:5px 6px;">${_certAcciones(it, g.cod)}</td>
     </tr>`).join('')}${saldoFila(g)}`).join('');
@@ -10022,7 +10028,8 @@ function openTotalACobrarPanel() {
     if (esCobrada(it.estado)) totalCobrada += it.monto; else totalCobrar += it.monto;
   }));
 
-  const badge = est => {
+  const badge = (est, it) => {
+    if (it && _esFilaContrato(it)) return `<span style="font-size:9px;font-weight:700;background:#f1f5f9;color:#64748b;padding:1px 7px;border-radius:8px;white-space:nowrap;margin-left:8px;" title="Fila del contrato: solo documenta el Monto Total, no suma">Contrato ${fmt(it.montoTotal)}</span>`;
     const cob = esCobrada(est);
     return `<span style="font-size:9px;font-weight:700;background:${cob ? '#dcfce7' : '#fef3c7'};color:${cob ? '#166534' : '#92400e'};padding:1px 7px;border-radius:8px;white-space:nowrap;margin-left:8px;">${cob ? 'Cobrada' : 'A cobrar'}</span>`;
   };
@@ -10032,8 +10039,8 @@ function openTotalACobrarPanel() {
     const items = o.items && o.items.length > 0 ? [...o.items].sort((a,b) => b.monto - a.monto) : [];
     const detalles = items.map(it => `
       <tr style="border-top:1px solid var(--border);background:#fafafa;">
-        <td style="padding:4px 10px 4px 24px;font-size:11px;color:var(--text);">${it.nombre}${badge(it.estado)}${_certAcciones(it, o.cod_obra)}</td>
-        <td style="text-align:right;padding:4px 10px;font-size:11px;white-space:nowrap;color:var(--pos);">${fmt(it.monto)}</td>
+        <td style="padding:4px 10px 4px 24px;font-size:11px;color:var(--text);">${it.nombre}${badge(it.estado, it)}${_certAcciones(it, o.cod_obra)}</td>
+        <td style="text-align:right;padding:4px 10px;font-size:11px;white-space:nowrap;color:var(--pos);">${it.monto ? fmt(it.monto) : '—'}</td>
       </tr>`).join('');
     return `<tr style="border-top:2px solid var(--border);background:#f0fdf4;">
       <td style="padding:9px 10px;">
