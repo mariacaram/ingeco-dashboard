@@ -750,7 +750,7 @@
     </div>
     <div class="refresh-area">
       <div style="display:flex;gap:6px;align-items:center;">
-        <button class="btn-refresh solo-editor" id="btn-alta-obra" onclick="abrirFormObra()" title="Dar de alta una obra nueva en el Maestro">＋ Obra</button>
+        <button class="btn-refresh solo-editor" id="btn-alta-obra" onclick="abrirAltaObra()" title="Dar de alta una obra nueva en el Maestro">＋ Obra</button>
         <button class="btn-refresh" id="btn-refresh" onclick="refreshData()">🔄 Actualizar datos</button>
       </div>
       <div class="last-update" id="last-update">Datos locales — sin conexión a Drive</div>
@@ -9739,7 +9739,43 @@ function _obrasDelMaestro() {
   Object.keys(tn).forEach(n => { if (t[n.toLowerCase()] !== 'Interno' && ![...nombres].some(x => x.toLowerCase() === n.toLowerCase())) nombres.add(n); });
   return [...nombres].filter(n => t[n.toLowerCase()] !== 'Interno').sort((a, b) => a.localeCompare(b, 'es'));
 }
-// Abre el formulario. Sin datos = alta; con datos (certificado codificado) = edición.
+// Alta de obra nueva en el Maestro: solo nombre, cliente y tipo de contrato.
+function abrirAltaObra() {
+  if (!_editaObras()) return;
+  const panel = document.getElementById('sidePanel'), overlay = document.getElementById('overlay'), content = document.getElementById('panelContent');
+  content.innerHTML = `
+    <div class="panel-title">Nueva obra</div>
+    <div class="panel-sub">Se agrega al Maestro de obras y queda en el historial</div>
+    <div class="form-obra" style="margin-top:12px;">
+      <label>Nombre de la obra (corto, sin número de expediente)</label><input id="ao-nombre" maxlength="120" placeholder="ej. Avenida Roca - Etapa 2">
+      <div class="fila2">
+        <div><label>Cliente</label><input id="ao-cliente" maxlength="40" placeholder="MUNCMT / VIA / PRI / SAT…"></div>
+        <div><label>Tipo de contrato</label><select id="ao-tipo"><option value="">—</option>${OBRAS_TIPOS.map(t => `<option>${t}</option>`).join('')}</select></div>
+      </div>
+      <div style="font-size:11px;color:#92400e;margin-top:8px;">Una vez dada de alta, el nombre no se cambia: las demás planillas lo copian.</div>
+      <button class="btn-guardar" id="ao-guardar" onclick="guardarAltaObra()">Dar de alta</button>
+      <div class="msg" id="ao-msg"></div>
+    </div>`;
+  panel.classList.add('open'); overlay.classList.add('open');
+  setTimeout(() => { const i = document.getElementById('ao-nombre'); if (i) i.focus(); }, 50);
+}
+async function guardarAltaObra() {
+  const g = id => (document.getElementById(id) || {}).value;
+  const btn = document.getElementById('ao-guardar'), msg = document.getElementById('ao-msg');
+  const say = (t, ok) => { msg.textContent = t; msg.style.color = ok ? '#166534' : '#b91c1c'; };
+  const nombre = (g('ao-nombre') || '').trim();
+  if (nombre.length < 3) { say('Escribí el nombre de la obra.', false); return; }
+  btn.disabled = true; say('Guardando…', true);
+  try {
+    await _postObras({ op: 'altaObra', nombre: nombre, cliente: g('ao-cliente') || '', tipo: g('ao-tipo') || '' });
+    say('Obra dada de alta. Actualizando el tablero…', true);
+    await refreshData();
+    // Dejar listo para cargar el primer certificado de esa obra
+    abrirFormObra(); const sel = document.getElementById('fo-obra'); if (sel && [...sel.options].some(o => o.value === nombre)) sel.value = nombre;
+  } catch (e) { say('No se pudo dar de alta: ' + e.message, false); btn.disabled = false; }
+}
+
+// Formulario de certificado. Sin datos = agregar; con datos (certificado codificado) = edición.
 function abrirFormObra(enc) {
   if (!_editaObras()) return;
   const panel = document.getElementById('sidePanel'), overlay = document.getElementById('overlay'), content = document.getElementById('panelContent');
@@ -9748,24 +9784,13 @@ function abrirFormObra(enc) {
   const hoy = new Date(); const mesDef = hoy.getFullYear() + '-' + String(hoy.getMonth() + 1).padStart(2, '0');
   const opObras = obras.map(n => `<option value="${_esc(n)}" ${ed && ed.cod === n ? 'selected' : ''}>${_esc(n)}</option>`).join('');
   content.innerHTML = `
-    <div class="panel-title">${ed ? 'Editar certificado' : 'Agregar certificado u obra'}</div>
+    <div class="panel-title">${ed ? 'Editar certificado' : 'Agregar certificado'}</div>
     <div class="panel-sub">Se guarda en las planillas de Sergio y Agustín y queda en el historial</div>
     <div class="form-obra" style="margin-top:12px;">
       ${ed ? '' : `
       <label>Obra</label>
-      <select id="fo-obra" onchange="document.getElementById('fo-nueva').style.display = this.value === '__nueva__' ? 'block' : 'none'">
-        <option value="">Elegí una obra existente…</option>${opObras}
-        <option value="__nueva__">＋ Dar de alta una obra nueva</option>
-      </select>
-      <div id="fo-nueva" style="display:none;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:10px 12px;margin-top:8px;">
-        <label>Nombre de la obra nueva (corto, sin número de expediente)</label><input id="fo-nombre" maxlength="120" placeholder="ej. Avenida Roca - Etapa 2">
-        <div class="fila2">
-          <div><label>Cliente</label><input id="fo-cliente" maxlength="40" placeholder="MUNCMT / VIA / PRI / SAT…"></div>
-          <div><label>Tipo de contrato</label><select id="fo-tipo-obra"><option value="">—</option>${OBRAS_TIPOS.map(t => `<option>${t}</option>`).join('')}</select></div>
-        </div>
-        <label>Oficina (opcional)</label><input id="fo-oficina" maxlength="80">
-        <div style="font-size:11px;color:#92400e;margin-top:6px;">Una vez dada de alta, el nombre no se cambia: las demás planillas lo copian.</div>
-      </div>`}
+      <select id="fo-obra"><option value="">Elegí una obra…</option>${opObras}</select>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px;">¿No está en la lista? <a href="#" onclick="event.preventDefault();abrirAltaObra()" style="color:var(--primary);font-weight:600;">Dar de alta una obra nueva</a></div>`}
       ${ed ? `<label>Obra</label><input value="${_esc(ed.cod)}" disabled>` : ''}
       <label>Certificado (nombre en Obras a cobrar)</label>
       <input id="fo-cert" maxlength="200" value="${ed ? _esc(ed.nombre) : ''}" placeholder="ej. Certificado 3 · Etapa 8 - Cert. 2">
@@ -9795,15 +9820,7 @@ async function guardarFormObra(enc) {
   const say = (t, ok) => { msg.textContent = t; msg.style.color = ok ? '#166534' : '#b91c1c'; };
   btn.disabled = true; say('Guardando…', true);
   try {
-    let obra = ed ? ed.cod : g('fo-obra');
-    let tipoObra = '', oficina = '';
-    if (!ed && obra === '__nueva__') {
-      const nombre = (g('fo-nombre') || '').trim();
-      if (nombre.length < 3) throw new Error('Escribí el nombre de la obra nueva.');
-      tipoObra = g('fo-tipo-obra') || ''; oficina = g('fo-oficina') || '';
-      await _postObras({ op: 'altaObra', nombre: nombre, cliente: g('fo-cliente') || '', oficina: oficina, tipo: tipoObra });
-      obra = nombre;
-    }
+    const obra = ed ? ed.cod : g('fo-obra');
     if (!obra) throw new Error('Elegí una obra.');
     const cert = (g('fo-cert') || '').trim();
     const tieneCert = cert || _montoValor(g('fo-monto')) || _montoValor(g('fo-total')) || _montoValor(g('fo-anticipo'));
@@ -9812,7 +9829,7 @@ async function guardarFormObra(enc) {
       const mc = _montoValor(g('fo-monto')), mt = _montoValor(g('fo-total')), an = _montoValor(g('fo-anticipo'));
       if (mc === 'x' || mt === 'x' || an === 'x') throw new Error('Revisá los montos: solo números, con coma para centavos.');
       const body = { obra: obra, certNombre: cert, montoCert: mc, montoTotal: mt, anticipo: an,
-                     periodo: g('fo-periodo') || '', estado: g('fo-estado'), tipo: tipoObra, oficina: oficina };
+                     periodo: g('fo-periodo') || '', estado: g('fo-estado') };
       if (ed) { body.op = 'editarCert'; body.fila = ed.fila; body.certNombreAntes = ed.nombre; }
       else body.op = 'agregarCert';
       await _postObras(body);
@@ -9886,9 +9903,10 @@ function abrirTodosCertificados(filtro, mes) {
         ${MES_ORDER.filter(m => opm[m] && opm[m].length).map(m => `<option value="${m}" ${_todosCertMes === m ? 'selected' : ''}>${MES[m] || m}</option>`).join('')}
         <option value="sin" ${_todosCertMes === 'sin' ? 'selected' : ''}>Sin período</option>
       </select>
-      <button class="btn-nueva-obra" onclick="abrirFormObra()" title="Agregar un certificado a una obra existente, o dar de alta una obra nueva">＋ Agregar</button>
+      <button class="btn-nueva-obra" onclick="abrirFormObra()" title="Agregar un certificado a una obra existente">＋ Certificado</button>
+      <button class="btn-nueva-obra" onclick="abrirAltaObra()" title="Dar de alta una obra nueva en el Maestro">＋ Obra</button>
     </div>
-    <div style="font-size:11px;color:var(--muted);margin-top:8px;">✓ cambia el estado · ✎ edita nombre, montos, período o estado · 🗑 borra la fila · ＋ Agregar carga un certificado o da de alta una obra nueva. Todo queda en la pestaña Historial.</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:8px;">✓ cambia el estado · ✎ edita nombre, montos, período o estado · 🗑 borra la fila. Todo queda en la pestaña Historial.</div>
     <table style="width:100%;border-collapse:collapse;margin-top:10px;"><tbody>${filas || '<tr><td style="padding:16px;" class="nd">Sin certificados para ese filtro.</td></tr>'}</tbody></table>`;
   panel.classList.add('open'); overlay.classList.add('open');
   _panelCertOrigen = 'todos';
