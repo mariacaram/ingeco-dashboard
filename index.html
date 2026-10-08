@@ -1911,19 +1911,21 @@ let GENERADO_POR_OBRA = null;
 // Fila "madre" de Obras a cobrar: solo trae Monto Total (sin certificar ni
 // anticipo). Documenta el contrato, no suma (el backend la deja en $0).
 function _esFilaContrato(it) { return !!it && !(it.monto > 0) && it.montoTotal > 0; }
+// Obra que en ese mes solo tiene filas de contrato (nada certificado): no se muestra.
+function _soloContrato(o) { return !((o.aCobrar ?? o.generado ?? 0) > 0) && (o.items || []).every(_esFilaContrato); }
 
 function _obrasActuales(mes) {
   if (!GENERADO_POR_OBRA) return [];
   const byMonth = GENERADO_POR_OBRA.obrasPorMes && GENERADO_POR_OBRA.obrasPorMes[mes || mesActual];
   // Si hay obrasPorMes, usar solo esas (filtradas por mes). Si no existe (caché viejo), caer a .obras.
   const lista = GENERADO_POR_OBRA.obrasPorMes ? (byMonth || []) : (GENERADO_POR_OBRA.obras || []);
-  return lista.filter(o => !_esTipoInterno(o));
+  return lista.filter(o => !_esTipoInterno(o) && !_soloContrato(o));
 }
 
 // Obras sin "Período de realización" asignado — sección separada en las tablas.
 function _obrasSinPeriodo() {
   if (!GENERADO_POR_OBRA) return [];
-  return (GENERADO_POR_OBRA.obrasSinPeriodo || []).filter(o => !_esTipoInterno(o));
+  return (GENERADO_POR_OBRA.obrasSinPeriodo || []).filter(o => !_esTipoInterno(o) && !_soloContrato(o));
 }
 
 // Alquiler interno de equipos — se carga desde Apps Script
@@ -10036,7 +10038,7 @@ function abrirTodosCertificados(filtro, mes, estado) {
   const pasaMes = it => !_todosCertMes || (_todosCertMes === 'sin' ? !mesPorFila[it.fila] : mesPorFila[it.fila] === _todosCertMes);
   const pasaEstado = it => _todosCertEstado === 'todos' || !esCob(it.estado) || _esFilaContrato(it);
   const grupos = Object.values(porObra).map(g => ({ ...g, lista: Object.values(g.items).filter(it => pasaMes(it) && pasaEstado(it)).sort((a, b) => a.fila - b.fila) }))
-    .filter(g => g.lista.length && (!f || g.cod.toLowerCase().includes(f) || g.lista.some(i => (i.nombre || '').toLowerCase().includes(f))))
+    .filter(g => g.lista.some(i => !_esFilaContrato(i)) && (!f || g.cod.toLowerCase().includes(f) || g.lista.some(i => (i.nombre || '').toLowerCase().includes(f))))
     .sort((a, b) => a.cod.localeCompare(b.cod, 'es'));
   const nItems = grupos.reduce((s, g) => s + g.lista.length, 0);
   const saldos = _saldosContrato();
