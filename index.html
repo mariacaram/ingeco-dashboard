@@ -9704,7 +9704,8 @@ function _clientesMaestro() {
   const fromBack = (GENERADO_POR_OBRA && GENERADO_POR_OBRA.clientes) || [];
   const set = new Set(fromBack);
   ((GENERADO_POR_OBRA && GENERADO_POR_OBRA.obras) || []).concat((GENERADO_POR_OBRA && GENERADO_POR_OBRA.obrasSinPeriodo) || []).forEach(o => { const c = (o.cliente || '').trim(); if (c && c !== '-' && c !== '—') set.add(c); });
-  return [...set].filter(c => !/^obra no cargada$/i.test(c)).sort((a, b) => a.localeCompare(b, 'es'));
+  // Se excluyen etiquetas internas que no son clientes
+  return [...set].filter(c => !/^(obra no cargada|int|fondo de reparo|redeterminaci[oó]n)$/i.test(c)).sort((a, b) => a.localeCompare(b, 'es'));
 }
 // Montos en el formulario: se escriben solo dígitos (y coma para centavos); se
 // muestran con punto de miles. _montoValor devuelve el número limpio para enviar.
