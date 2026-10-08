@@ -1135,6 +1135,7 @@
     <div class="section-title">Seguimiento de cobros por obra</div>
     <div id="seg-cobros-sub" style="font-size:12px;color:var(--muted);margin:-4px 0 14px;"></div>
     <div id="seg-fondos-card"></div>
+    <div id="seg-saldo-card"></div>
     <div id="seg-cobros-list"></div>
   </div>
 </div>
@@ -7489,6 +7490,41 @@ function _seguimientoCobros() {
   return { meses, ult, obras };
 }
 
+// ── Saldo de contrato por obra (María, oct-2026) ──────────────────────
+// Lo que falta certificar de un contrato: Monto Total − (anticipos +
+// certificados), sumando TODAS las filas de la obra, cobradas o no. Se
+// calcula solo, no se escribe en la planilla. Requiere que alguna fila de la
+// obra tenga Monto Total. Como en algunas obras cada certificado trae su
+// propio Monto Total (ej. Ruta 357), el contrato se toma como el MAYOR Monto
+// Total de la obra y solo cuenta si supera lo ya certificado.
+function _saldosContrato() {
+  const out = {};
+  const todas = ((GENERADO_POR_OBRA && GENERADO_POR_OBRA.obras) || []).concat((GENERADO_POR_OBRA && GENERADO_POR_OBRA.obrasSinPeriodo) || []);
+  const porObra = {};
+  todas.forEach(o => {
+    const k = o.cod_obra || o.nombre; if (!k) return;
+    if (!porObra[k]) porObra[k] = { nombre: k, items: {} };
+    (o.items || []).forEach(it => { if (it.fila) porObra[k].items[it.fila] = it; });
+  });
+  Object.values(porObra).forEach(g => {
+    const items = Object.values(g.items);
+    const contrato = Math.max(0, ...items.map(i => i.montoTotal || 0));
+    if (!contrato) return;
+    // Certificado/cobrado: monto a certificar + anticipo de cada fila. El
+    // anticipo es plata ya recibida del contrato, así que descuenta del saldo.
+    // Si en una fila el anticipo y el monto son el mismo número, es el mismo
+    // dinero (Agustín cargó el anticipo como "a certificar"): cuenta una vez.
+    let certificado = 0;
+    items.forEach(i => {
+      const m = i.monto || 0, a = i.anticipo || 0;
+      certificado += (a > 0 && Math.abs(a - m) < 1) ? m : m + a;
+    });
+    const saldo = contrato - certificado;
+    if (saldo > AUDIT_TOLERANCIA) out[g.nombre] = { nombre: g.nombre, contrato, certificado, saldo, nItems: items.length };
+  });
+  return out;
+}
+
 // Pendiente según Julia (certificados con estado "A Cobrar"), agrupado por el
 // nombre canónico del seguimiento. Devuelve también las obras que Julia
 // certificó pero Esteban no tiene en su programación (posible olvido).
@@ -7690,6 +7726,32 @@ function renderSeguimientoCobros() {
   // Solo si el archivo de Julia ya trae estados cargados.
   const jp = _juliaPendPorCanon(obras);
 
+  // Saldo de contrato sin certificar, por obra canónica del seguimiento
+  const saldosC = _saldosContrato();
+  const saldoDe = n => {
+    let tot = 0;
+    Object.keys(saldosC).forEach(k => {
+      const ens = MAPA_OBRAS_AUDIT[k];
+      const canons = (ens && ens.length ? ens.map(_segNorm) : []).concat([_segNorm(k)]);
+      if (canons.includes(n)) tot += saldosC[k].saldo;
+    });
+    return tot;
+  };
+  const cardSaldo = document.getElementById('seg-saldo-card');
+  if (cardSaldo) {
+    const lista = Object.values(saldosC).sort((a, b) => b.saldo - a.saldo);
+    const totS = lista.reduce((s, x) => s + x.saldo, 0);
+    cardSaldo.innerHTML = lista.length ? `
+      <div style="background:#f5f3ff;border:1px solid #c4b5fd;border-left:4px solid #7c3aed;border-radius:10px;padding:13px 16px;margin-bottom:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <span style="font-size:20px;">📄</span>
+        <div>
+          <div style="font-size:13px;font-weight:700;color:#4c1d95;">Cartera pendiente de certificar</div>
+          <div style="font-size:11px;color:#6d28d9;">Monto de contrato que todavía no se certificó, en ${lista.length} obra${lista.length !== 1 ? 's' : ''}: ${lista.slice(0, 4).map(x => x.nombre.replace(/'/g, '')).join(', ')}${lista.length > 4 ? '…' : ''}. Se calcula del Monto Total cargado en Obras a cobrar.</div>
+        </div>
+        <span style="margin-left:auto;font-size:20px;font-weight:800;color:#4c1d95;">${fmt(totS)}</span>
+      </div>` : '';
+  }
+
   // ── Tabla: una fila por obra, una columna por estado (María, sep-2026) ──
   // La columna Nota de crédito solo aparece si hay alguna (si no, es ruido)
   const hayNC = Object.values(obras).some(o => ((o.cats || {}).noCobrados || 0) > 0);
@@ -7723,6 +7785,7 @@ function renderSeguimientoCobros() {
       ${num(c.menosProbable, 'nd', 'Esteban lo registra como de cobro poco probable')}
       ${hayNC ? num(c.noCobrados, 'neg-val', 'Nota de crédito') : ''}
       <td class="num" style="white-space:nowrap;font-weight:700;">${o.pend > 0 ? fmt(o.pend) : '<span class="nd">—</span>'}</td>
+      ${(() => { const sc = saldoDe(n); return `<td class="num" style="white-space:nowrap;" title="Monto Total del contrato menos lo ya certificado (Obras a cobrar)">${sc > 0 ? `<span style="color:#6d28d9;">${fmt(sc)}</span>` : '<span class="nd">—</span>'}</td>`; })()}
       <td class="num" style="white-space:nowrap;"><strong style="color:${pctColor};">${pct}%</strong></td>
       <td style="text-align:center;">${agustin}</td>
     </tr>`;
@@ -7735,6 +7798,7 @@ function renderSeguimientoCobros() {
       <td><strong>${s.nombre}</strong><div style="font-size:10.5px;color:#9a3412;margin-top:2px;">Cargada por Agustín, sin programación de cobro en Esteban</div></td>
       ${'<td class="num"><span class="nd">—</span></td>'.repeat(hayNC ? 5 : 4)}
       <td class="num" style="white-space:nowrap;font-weight:700;color:#ea580c;">${fmt(s.monto)}</td>
+      ${(() => { const sc = saldoDe(_segNorm(s.nombre)); return `<td class="num" style="white-space:nowrap;">${sc > 0 ? `<span style="color:#6d28d9;">${fmt(sc)}</span>` : '<span class="nd">—</span>'}</td>`; })()}
       <td class="num"><span class="nd">—</span></td>
       <td style="text-align:center;"><span style="color:#b45309;font-weight:700;cursor:pointer;" title="Falta en la planilla de Esteban — click para ver la inconsistencia en Auditorías" onclick="event.stopPropagation();irAAuditoriaObra('${(s.nombre || '').replace(/'/g, "\\'")}')">⚠ ver</span></td>
     </tr>`).join('');
@@ -7742,6 +7806,7 @@ function renderSeguimientoCobros() {
   // Totales (obras activas + solo Agustín)
   const tot = { cob: 0, fac: 0, prog: 0, menos: 0, nc: 0, pend: 0 };
   activas.forEach(n => { const o = obras[n], c = o.cats || {}; tot.cob += o.cob; tot.fac += c.facturados || 0; tot.prog += c.sinFecha || 0; tot.menos += c.menosProbable || 0; tot.nc += c.noCobrados || 0; tot.pend += o.pend; });
+  const totSinCert = Object.values(saldosC).reduce((s, x) => s + x.saldo, 0);
   soloJulia.forEach(s => { tot.pend += s.monto; });
   const pctTot = (tot.cob + tot.pend) > 0 ? Math.round(tot.cob / (tot.cob + tot.pend) * 100) : 0;
 
@@ -7753,13 +7818,14 @@ function renderSeguimientoCobros() {
     <th class="num" title="Cobro poco probable según Esteban">Menos probable</th>
     ${hayNC ? '<th class="num" title="Notas de crédito">Nota de crédito</th>' : ''}
     <th class="num" title="Facturado + Programado + Menos probable${hayNC ? ' + N/C' : ''}">Pendiente</th>
+    <th class="num" title="Monto Total del contrato menos lo ya certificado, según Obras a cobrar. No es cobro programado: es obra por certificar.">Sin certificar</th>
     <th class="num" title="Cobrado sobre cobrado + pendiente">% cobrado</th>
     <th style="text-align:center;" title="Cruce contra los certificados del archivo de Agustín">Agustín</th>
   </tr></thead>`;
   const totRow = `<tr style="background:#f8fafc;font-weight:700;border-top:2px solid var(--border);">
     <td style="font-size:12px;">TOTAL</td>
     <td class="num pos-val">${fmt(tot.cob)}</td><td class="num">${fmt(tot.fac)}</td><td class="num">${fmt(tot.prog)}</td><td class="num" style="color:var(--muted);">${fmt(tot.menos)}</td>${hayNC ? `<td class="num">${fmt(tot.nc)}</td>` : ''}
-    <td class="num">${fmt(tot.pend)}</td><td class="num">${pctTot}%</td><td></td>
+    <td class="num">${fmt(tot.pend)}</td><td class="num" style="color:#6d28d9;">${totSinCert > 0 ? fmt(totSinCert) : '—'}</td><td class="num">${pctTot}%</td><td></td>
   </tr>`;
 
   list.innerHTML = `<div class="table-wrap"><table id="tabla-seguimiento-cobros">${thead}<tbody>
@@ -9900,6 +9966,10 @@ function abrirTodosCertificados(filtro, mes, estado) {
     .filter(g => g.lista.length && (!f || g.cod.toLowerCase().includes(f) || g.lista.some(i => (i.nombre || '').toLowerCase().includes(f))))
     .sort((a, b) => a.cod.localeCompare(b.cod, 'es'));
   const nItems = grupos.reduce((s, g) => s + g.lista.length, 0);
+  const saldos = _saldosContrato();
+  const saldoFila = g => saldos[g.cod] ? `<tr style="border-top:1px dashed var(--border);background:#f8fafc;">
+      <td style="padding:5px 10px 5px 18px;font-size:11px;color:var(--muted);">Pendiente de certificar del contrato <span style="font-size:10px;">(${fmt(saldos[g.cod].contrato)} − ${fmt(saldos[g.cod].certificado)})</span></td>
+      <td style="text-align:right;padding:5px 6px;font-size:11px;white-space:nowrap;color:#6d28d9;font-weight:600;">${fmt(saldos[g.cod].saldo)}</td><td></td></tr>` : '';
   const filas = grupos.map(g => `
     <tr style="border-top:2px solid var(--border);background:#f0fdf4;"><td colspan="3" style="padding:8px 10px;"><strong style="font-size:13px;color:var(--primary);">${_esc(g.cod)}</strong>
       <span style="font-size:10px;color:var(--muted);margin-left:8px;">${g.lista.length} certificado${g.lista.length !== 1 ? 's' : ''} · a cobrar ${fmt(g.lista.filter(i => !esCob(i.estado)).reduce((s, i) => s + (i.monto || 0), 0))}</span></td></tr>
@@ -9907,7 +9977,7 @@ function abrirTodosCertificados(filtro, mes, estado) {
       <td style="padding:5px 10px 5px 18px;font-size:11px;">${_esc(it.nombre)} <span style="font-size:9px;font-weight:700;background:${esCob(it.estado) ? '#dcfce7' : '#fef3c7'};color:${esCob(it.estado) ? '#166534' : '#92400e'};padding:1px 7px;border-radius:8px;white-space:nowrap;display:inline-block;vertical-align:middle;">${esCob(it.estado) ? 'Cobrada' : 'A cobrar'}</span>${mesPorFila[it.fila] ? `<span style="font-size:9px;color:var(--muted);margin-left:6px;white-space:nowrap;">${(MES[mesPorFila[it.fila]] || mesPorFila[it.fila]).replace(' 2026', '')}</span>` : '<span style="font-size:9px;color:#b45309;margin-left:6px;white-space:nowrap;">sin período</span>'}</td>
       <td style="text-align:right;padding:5px 6px;font-size:11px;white-space:nowrap;color:var(--pos);">${it.monto ? fmt(it.monto) : '—'}</td>
       <td style="text-align:right;padding:5px 6px;">${_certAcciones(it, g.cod)}</td>
-    </tr>`).join('')}`).join('');
+    </tr>`).join('')}${saldoFila(g)}`).join('');
   content.innerHTML = `
     <div class="panel-title">Certificados cargados</div>
     <div class="panel-sub">Obras a cobrar · ${nItems} certificado${nItems !== 1 ? 's' : ''} ${_todosCertEstado === 'pend' ? 'a cobrar' : ''} en ${grupos.length} obra${grupos.length !== 1 ? 's' : ''} · ${_todosCertMes === 'sin' ? 'sin período' : _todosCertMes ? (MES[_todosCertMes] || _todosCertMes) : 'todos los meses'}</div>
@@ -9926,7 +9996,7 @@ function abrirTodosCertificados(filtro, mes, estado) {
       <button class="btn-nueva-obra" onclick="abrirFormObra()" title="Agregar un certificado a una obra existente">＋ Certificado</button>
       <button class="btn-nueva-obra" onclick="abrirAltaObra()" title="Dar de alta una obra nueva en el Maestro">＋ Obra</button>
     </div>
-    <div style="font-size:11px;color:var(--muted);margin-top:8px;">✎ edita nombre, montos, período o estado (ahí se marca como cobrada) · 🗑 borra la fila. Todo queda en la pestaña Historial.</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:8px;">✎ edita nombre, montos, período o estado (ahí se marca como cobrada) · 🗑 borra la fila. Todo queda en la pestaña Historial.${Object.keys(saldos).length ? ' La fila gris "Pendiente de certificar" se calcula sola: Monto Total del contrato menos lo ya certificado.' : ''}</div>
     <table style="width:100%;border-collapse:collapse;margin-top:10px;"><tbody>${filas || '<tr><td style="padding:16px;" class="nd">Sin certificados para ese filtro.</td></tr>'}</tbody></table>`;
   panel.classList.add('open'); overlay.classList.add('open');
   _panelCertOrigen = 'todos';
