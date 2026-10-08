@@ -85,6 +85,26 @@ function _cacheGet(key) {
 // ============================================================
 // ENDPOINT PRINCIPAL — el dashboard llama a esta URL
 // ============================================================
+// Escrituras con cuerpo JSON (formulario de obras del tablero). Misma clave
+// que doGet; el usuario viene del proxy (sesión verificada en Vercel).
+function doPost(e) {
+  try {
+    let body = {};
+    try { body = JSON.parse((e && e.postData && e.postData.contents) || '{}'); } catch (pe) { body = {}; }
+    if (!_claveValida(body.key)) {
+      return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'No autorizado' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    let r;
+    if (body.action === 'obras') r = operarObras(body);
+    else r = { status: 'error', message: 'Acción no permitida' };
+    return ContentService.createTextOutput(JSON.stringify(r)).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: err.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
 function doGet(e) {
   try {
     // Clave compartida con el proxy de Vercel (variable APPS_SCRIPT_KEY).
@@ -395,6 +415,208 @@ function guardarAjusteTablero(tipo, clave, desde, valor, usuario) {
     lock.releaseLock();
   }
   return { status: 'ok' };
+}
+
+// ============================================================
+// ALTA Y EDICIÓN DE OBRAS DESDE EL TABLERO (oct-2026)
+// Escribe en las mismas planillas que leen Agustín y Sergio, con las mismas
+// columnas, así el sheet y la app son dos caras del mismo dato.
+//   - Maestro de obras: SOLO alta de obras nuevas. Nunca renombra ni borra:
+//     las demás planillas copian esa lista y un cambio de nombre las rompe.
+//   - Obras a cobrar: agregar / editar / borrar filas de certificados y
+//     cambiar Estado $ (A Cobrar ↔ Cobrada).
+//   - Historial: cada operación agrega una fila en la pestaña "Historial"
+//     de Obras a cobrar (quién, cuándo, qué, antes y después).
+// Quién puede operar lo decide el proxy (lista de editores en Vercel); acá
+// solo se registra el mail que llega.
+// ============================================================
+const HISTORIAL_SHEET = 'Historial';
+const OBRAS_TIPOS_CONTRATO = ['Licitación', 'Contratación Directa', 'Reconocimiento de Servicio', 'Provisión', 'UTE', 'Interno'];
+
+function _histAppend(usuario, operacion, obra, detalle, antes, despues) {
+  try {
+    const ss = SpreadsheetApp.openById(FILE_IDS.agustinObras);
+    let sh = ss.getSheetByName(HISTORIAL_SHEET);
+    if (!sh) {
+      sh = ss.insertSheet(HISTORIAL_SHEET);
+      sh.appendRow(['Fecha', 'Usuario', 'Operación', 'Obra', 'Detalle', 'Antes', 'Después']);
+      sh.getRange(1, 1, 1, 7).setFontWeight('bold');
+    }
+    const seg = t => { const x = String(t == null ? '' : t); return /^[=+\-@]/.test(x) ? "'" + x : x; };
+    sh.appendRow([new Date(), seg(usuario), operacion, seg(obra), seg(detalle), seg(antes), seg(despues)]);
+  } catch (e) { Logger.log('historial error: ' + e); }
+}
+
+function _obrasCols(sheet) {
+  const rows = sheet.getDataRange().getValues();
+  let hdrIdx = 0;
+  for (let i = 0; i < Math.min(6, rows.length); i++) {
+    const t = rows[i].map(c => String(c).toLowerCase()).join('|');
+    if (t.includes('monto a certificar') || t.includes('nombre obra')) { hdrIdx = i; break; }
+  }
+  const h = rows[hdrIdx].map(x => String(x).toLowerCase().trim());
+  return {
+    rows: rows, hdrIdx: hdrIdx, n: rows[hdrIdx].length,
+    nom: _findCol(h, ['nombre obra', 'nombre']) ?? 0, est: _findCol(h, ['estado $', 'estado$']) ?? 1,
+    tot: _findCol(h, ['monto total']) ?? 2, ant: _findCol(h, ['anticipo']) ?? 3,
+    cert: _findCol(h, ['monto a certificar', 'certificar']) ?? 4, ofi: _findCol(h, ['oficina']) ?? 5,
+    tipo: _findCol(h, ['tipo de contrato', 'tipo']) ?? 6, estObra: _findCol(h, ['estado obra']) ?? 7,
+    cod: _findCol(h, ['código', 'codigo']) ?? 8, per: _findCol(h, ['período de realización', 'periodo de realizacion', 'período', 'periodo']) ?? 9,
+    fin: _findCol(h, ['fecha de finalizacion', 'finalización', 'finalizacion']) ?? 10,
+  };
+}
+
+// 'YYYY-MM' o 'dd/mm/yyyy' → texto dd/mm/yyyy (día 1) tal como lo carga Agustín
+function _periodoTexto(p) {
+  const s = String(p || '').trim();
+  if (!s) return '';
+  let m = s.match(/^(\d{4})-(\d{2})$/);
+  if (m) return '01/' + m[2] + '/' + m[1];
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) return m[1].padStart(2, '0') + '/' + m[2].padStart(2, '0') + '/' + m[3];
+  return '';
+}
+
+function _numOk(v) { const n = parseFloat(v); return isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : null; }
+
+function operarObras(b) {
+  const op = String(b.op || '');
+  const usuario = String(b.usuario || '').slice(0, 120);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    if (op === 'altaObra') return _opAltaObra(b, usuario);
+    if (op === 'agregarCert') return _opAgregarCert(b, usuario);
+    if (op === 'editarCert') return _opEditarCert(b, usuario);
+    if (op === 'borrarCert') return _opBorrarCert(b, usuario);
+    if (op === 'estadoCert') return _opEstadoCert(b, usuario);
+    return { status: 'error', message: 'Operación desconocida' };
+  } finally { lock.releaseLock(); }
+}
+
+function _opAltaObra(b, usuario) {
+  const nombre = String(b.nombre || '').trim().slice(0, 120);
+  if (nombre.length < 3) return { status: 'error', message: 'El nombre de la obra es obligatorio' };
+  if (/^[=+\-@]/.test(nombre)) return { status: 'error', message: 'Nombre inválido' };
+  const cliente = String(b.cliente || '').trim().slice(0, 40);
+  const oficina = String(b.oficina || '').trim().slice(0, 80);
+  const tipo = String(b.tipo || '').trim();
+  if (tipo && OBRAS_TIPOS_CONTRATO.indexOf(tipo) < 0) return { status: 'error', message: 'Tipo de contrato inválido' };
+  const ss = SpreadsheetApp.openById(FILE_IDS.maestroObras);
+  const sheet = ss.getSheetByName('Maestro de Obras') || ss.getSheets()[0];
+  const rows = sheet.getDataRange().getValues();
+  let hdrIdx = 0;
+  for (let i = 0; i < Math.min(5, rows.length); i++) {
+    const t = rows[i].map(c => String(c).toUpperCase()).join('|');
+    if (t.includes('CODIGO') && t.includes('NOMBRE')) { hdrIdx = i; break; }
+  }
+  const h = rows[hdrIdx].map(x => String(x).toLowerCase().trim());
+  const iNom = _findCol(h, ['nombre de obra', 'nombre']) ?? 1;
+  const norm = t => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim();
+  for (let i = hdrIdx + 1; i < rows.length; i++) {
+    if (norm(rows[i][iNom]) === norm(nombre)) return { status: 'error', message: 'Ya existe una obra con ese nombre: "' + String(rows[i][iNom]).trim() + '"' };
+  }
+  // Columnas del Maestro: CODIGO | NOMBRE DE OBRA | N° DE OBRA | CLIENTE | OFICINA | TIPO_CONTRATO | ESTADO
+  const fila = new Array(rows[hdrIdx].length).fill('');
+  const put = (keys, v, def) => { const i = _findCol(h, keys); fila[i == null ? def : i] = v; };
+  put(['codigo', 'código'], '-', 0); put(['nombre de obra', 'nombre'], nombre, 1); put(['n° de obra', 'n de obra'], '-', 2);
+  put(['cliente'], cliente, 3); put(['oficina'], oficina, 4); put(['tipo_contrato', 'tipo'], tipo, 5); put(['estado'], '', 6);
+  sheet.appendRow(fila);
+  _histAppend(usuario, 'Alta de obra', nombre, 'Maestro de obras', '', [cliente, oficina, tipo].filter(Boolean).join(' · '));
+  return { status: 'ok', nombre: nombre };
+}
+
+function _certDesdeBody(b) {
+  const r = {
+    nombre: String(b.certNombre || '').trim().slice(0, 200),
+    estado: /cobrad/i.test(String(b.estado || '')) ? 'Cobrada' : 'A Cobrar',
+    total: _numOk(b.montoTotal), anticipo: _numOk(b.anticipo), cert: _numOk(b.montoCert),
+    oficina: String(b.oficina || '').trim().slice(0, 80), tipo: String(b.tipo || '').trim(),
+    estObra: String(b.estadoObra || '').trim().slice(0, 40), cod: String(b.obra || '').trim().slice(0, 120),
+    per: _periodoTexto(b.periodo),
+  };
+  if (!r.nombre) return { error: 'Falta el nombre del certificado' };
+  if (/^[=+\-@]/.test(r.nombre) || /^[=+\-@]/.test(r.cod)) return { error: 'Texto inválido' };
+  if (!r.cod) return { error: 'Falta la obra' };
+  if (b.periodo && !r.per) return { error: 'Período inválido' };
+  if ((b.montoTotal !== '' && b.montoTotal != null && r.total == null) || (b.anticipo !== '' && b.anticipo != null && r.anticipo == null) || (b.montoCert !== '' && b.montoCert != null && r.cert == null)) return { error: 'Monto inválido' };
+  if (r.tipo && OBRAS_TIPOS_CONTRATO.indexOf(r.tipo) < 0) return { error: 'Tipo de contrato inválido' };
+  return r;
+}
+
+function _filaCert(c, cols) {
+  const f = new Array(cols.n).fill('');
+  f[cols.nom] = c.nombre; f[cols.est] = c.estado;
+  f[cols.tot] = c.total == null ? '' : c.total; f[cols.ant] = c.anticipo == null ? '' : c.anticipo; f[cols.cert] = c.cert == null ? '' : c.cert;
+  f[cols.ofi] = c.oficina; f[cols.tipo] = c.tipo; f[cols.estObra] = c.estObra; f[cols.cod] = c.cod; f[cols.per] = c.per;
+  return f;
+}
+function _resumenFila(row, cols) {
+  const v = i => (row[i] instanceof Date) ? Utilities.formatDate(row[i], 'America/Argentina/Buenos_Aires', 'dd/MM/yyyy') : String(row[i] == null ? '' : row[i]);
+  return [v(cols.nom), v(cols.est), 'total ' + v(cols.tot), 'anticipo ' + v(cols.ant), 'a certificar ' + v(cols.cert), v(cols.cod), v(cols.per)].join(' | ');
+}
+// Verifica que la fila pedida siga siendo el certificado que el tablero vio
+function _filaCoincide(row, cols, b) {
+  const esperado = String(b.certNombreAntes || b.certNombre || '').trim();
+  return esperado && String(row[cols.nom] || '').trim() === esperado;
+}
+
+function _opAgregarCert(b, usuario) {
+  const c = _certDesdeBody(b); if (c.error) return { status: 'error', message: c.error };
+  const ss = SpreadsheetApp.openById(FILE_IDS.agustinObras); const sheet = ss.getSheets()[0];
+  const cols = _obrasCols(sheet);
+  // Insertar después de la última fila con datos (antes de filas de totales vacías no hay: appendRow)
+  const fila = _filaCert(c, cols);
+  sheet.appendRow(fila);
+  const r = sheet.getLastRow();
+  _histAppend(usuario, 'Nuevo certificado', c.cod, c.nombre, '', _resumenFila(fila, cols));
+  return { status: 'ok', fila: r };
+}
+
+function _opEditarCert(b, usuario) {
+  const c = _certDesdeBody(b); if (c.error) return { status: 'error', message: c.error };
+  const fila = parseInt(b.fila, 10);
+  const ss = SpreadsheetApp.openById(FILE_IDS.agustinObras); const sheet = ss.getSheets()[0];
+  const cols = _obrasCols(sheet);
+  if (!(fila > cols.hdrIdx + 1) || fila > cols.rows.length) return { status: 'error', message: 'Fila inválida' };
+  const row = cols.rows[fila - 1];
+  if (!_filaCoincide(row, cols, b)) return { status: 'error', message: 'La fila cambió en la planilla. Actualizá los datos y volvé a intentar.' };
+  const antes = _resumenFila(row, cols);
+  const nueva = _filaCert(c, cols);
+  // Conservar columnas que el formulario no maneja (ej. fecha de finalización),
+  // y las que vienen vacías en una edición (período, oficina, tipo, estado de obra)
+  for (let i = 0; i < nueva.length; i++) if ([cols.nom, cols.est, cols.tot, cols.ant, cols.cert, cols.ofi, cols.tipo, cols.estObra, cols.cod, cols.per].indexOf(i) < 0) nueva[i] = row[i];
+  [cols.per, cols.ofi, cols.tipo, cols.estObra].forEach(i => { if (nueva[i] === '') nueva[i] = row[i]; });
+  sheet.getRange(fila, 1, 1, nueva.length).setValues([nueva]);
+  _histAppend(usuario, 'Edición de certificado', c.cod, c.nombre, antes, _resumenFila(nueva, cols));
+  return { status: 'ok', fila: fila };
+}
+
+function _opBorrarCert(b, usuario) {
+  const fila = parseInt(b.fila, 10);
+  const ss = SpreadsheetApp.openById(FILE_IDS.agustinObras); const sheet = ss.getSheets()[0];
+  const cols = _obrasCols(sheet);
+  if (!(fila > cols.hdrIdx + 1) || fila > cols.rows.length) return { status: 'error', message: 'Fila inválida' };
+  const row = cols.rows[fila - 1];
+  if (!_filaCoincide(row, cols, b)) return { status: 'error', message: 'La fila cambió en la planilla. Actualizá los datos y volvé a intentar.' };
+  const antes = _resumenFila(row, cols);
+  sheet.deleteRow(fila);
+  _histAppend(usuario, 'Borrado de certificado', String(row[cols.cod] || ''), String(row[cols.nom] || ''), antes, '');
+  return { status: 'ok' };
+}
+
+function _opEstadoCert(b, usuario) {
+  const fila = parseInt(b.fila, 10);
+  const estado = /cobrad/i.test(String(b.estado || '')) ? 'Cobrada' : 'A Cobrar';
+  const ss = SpreadsheetApp.openById(FILE_IDS.agustinObras); const sheet = ss.getSheets()[0];
+  const cols = _obrasCols(sheet);
+  if (!(fila > cols.hdrIdx + 1) || fila > cols.rows.length) return { status: 'error', message: 'Fila inválida' };
+  const row = cols.rows[fila - 1];
+  if (!_filaCoincide(row, cols, b)) return { status: 'error', message: 'La fila cambió en la planilla. Actualizá los datos y volvé a intentar.' };
+  const antes = String(row[cols.est] || '');
+  sheet.getRange(fila, cols.est + 1).setValue(estado);
+  _histAppend(usuario, 'Cambio de estado', String(row[cols.cod] || ''), String(row[cols.nom] || ''), antes, estado);
+  return { status: 'ok', estado: estado };
 }
 
 // ============================================================
@@ -1504,10 +1726,16 @@ function leerGeneradoPorObra() {
     Object.keys(maestro).forEach(function(k) {
       if (maestro[k] && maestro[k].tipo) tipos[k.toLowerCase()] = maestro[k].tipo;
     });
+    // Nombres del Maestro tal cual (con mayúsculas y tildes) para el formulario
+    // de alta de obras del tablero: obra → tipo
+    const tiposNombres = {};
+    Object.keys(maestro).forEach(function(k) {
+      const m = maestro[k]; if (m && m.nombre && m.nombre.toLowerCase() === k) tiposNombres[m.nombre] = m.tipo || '';
+    });
 
     Logger.log('obrasPorMes — meses: ' + Object.keys(obrasPorMes).join(',') +
                ' | sinPeriodo: ' + obrasSinPeriodo.length);
-    return { obras: obras, obrasPorMes: obrasPorMes, obrasSinPeriodo: obrasSinPeriodo, tabsSinPeriodo: tabsSinPeriodo, tipos: tipos };
+    return { obras: obras, obrasPorMes: obrasPorMes, obrasSinPeriodo: obrasSinPeriodo, tabsSinPeriodo: tabsSinPeriodo, tipos: tipos, tiposNombres: tiposNombres };
 
   } catch (err) {
     Logger.log('leerGeneradoPorObra error: ' + err.toString());

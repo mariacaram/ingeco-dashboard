@@ -607,6 +607,21 @@
     .reveal { opacity: 1 !important; transform: none !important; }
   }
 
+  /* Alta/edición de obras: solo editores (lo decide el servidor en /api/auth/me) */
+  .solo-editor { display: none !important; }
+  body.edita-obras .solo-editor { display: initial !important; }
+  body.edita-obras button.solo-editor { display: inline-flex !important; }
+  .btn-nueva-obra { background: var(--accent, #f59e0b); color: #1e293b; border: none; border-radius: 20px; padding: 6px 14px; font-size: 12px; font-weight: 700; cursor: pointer; }
+  .form-obra label { display: block; font-size: 11px; font-weight: 600; color: var(--muted); margin: 10px 0 3px; }
+  .form-obra input, .form-obra select { width: 100%; box-sizing: border-box; border: 1.5px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 14px; background: #fff; }
+  .form-obra .fila2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .form-obra .btn-guardar { margin-top: 16px; width: 100%; background: var(--primary); color: #fff; border: none; border-radius: 10px; padding: 11px; font-size: 14px; font-weight: 700; cursor: pointer; }
+  .form-obra .btn-guardar:disabled { opacity: .6; }
+  .form-obra .msg { margin-top: 10px; font-size: 12.5px; line-height: 1.5; }
+  .cert-acciones { white-space: nowrap; }
+  .cert-acciones button { border: 1px solid var(--border); background: #fff; border-radius: 6px; padding: 2px 7px; font-size: 11px; cursor: pointer; margin-left: 4px; }
+  .cert-acciones button:hover { background: #f1f5f9; }
+
   /* CONTROL DE ACCESO POR ROL — admin no ve sueldos/MO */
   body.role-admin [data-restrict="sueldos"] { display: none !important; }
   /* Oculta la columna "MO (prorrateada)" (4ta) en la tabla de contribución por obra */
@@ -782,6 +797,7 @@
       <div class="kpi-label">Total Certificado</div>
       <div class="kpi-value nd" id="kpi-generado">Actualizá datos</div>
       <div class="kpi-sub" id="kpi-generado-sub">Certificados por período (A Cobrar + Cobradas)</div>
+      <div class="solo-editor" style="margin-top:8px;"><button class="btn-nueva-obra solo-editor" onclick="event.stopPropagation();abrirFormObra()">＋ Nueva obra / certificado</button></div>
       <div id="kpi-generado-breakdown" style="font-size:10px;color:var(--muted);margin-top:5px;line-height:1.7;display:flex;flex-wrap:wrap;gap:4px 10px;"></div>
       <div class="fuente" id="kpi-generado-fuente"><a href="https://docs.google.com/spreadsheets/d/1YldZRtbLh17Xqczl-omI0zjHcgvrhvp3QOsjWffEm_s/edit" target="_blank" onclick="event.stopPropagation()">Obras a cobrar (Agustín)</a></div>
     </div>
@@ -9665,6 +9681,136 @@ function openMargenPanel() {
   overlay.classList.add('open');
 }
 
+// ================================================================
+// ALTA / EDICIÓN DE OBRAS DESDE EL TABLERO (oct-2026)
+// Escribe en el Maestro y en Obras a cobrar vía /api/obras (solo editores).
+// Cada cambio queda en la pestaña "Historial" de Obras a cobrar.
+// ================================================================
+const OBRAS_TIPOS = ['Licitación', 'Contratación Directa', 'Reconocimiento de Servicio', 'Provisión', 'UTE'];
+const _esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+function _editaObras() { return document.body.classList.contains('edita-obras'); }
+function _certAcciones(it, cod) {
+  if (!_editaObras() || !it.fila) return '';
+  const d = encodeURIComponent(JSON.stringify({ fila: it.fila, nombre: it.nombre, cod: cod, estado: it.estado, monto: it.monto, montoTotal: it.montoTotal, anticipo: it.anticipo }));
+  const cob = /cobrad/i.test(it.estado || '');
+  return `<span class="cert-acciones">
+    <button title="${cob ? 'Volver a A cobrar' : 'Marcar como cobrada'}" onclick="event.stopPropagation();cambiarEstadoCert('${d}')">${cob ? '↩ A cobrar' : '✓ Cobrada'}</button>
+    <button title="Editar" onclick="event.stopPropagation();abrirFormObra('${d}')">✎</button>
+    <button title="Borrar" onclick="event.stopPropagation();borrarCert('${d}')">🗑</button></span>`;
+}
+async function _postObras(body) {
+  const r = await fetch('/api/obras', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'ingeco-dashboard' }, body: JSON.stringify(body) });
+  let d = {}; try { d = await r.json(); } catch (e) {}
+  if (!r.ok || d.status !== 'ok') throw new Error(d.message || ('HTTP ' + r.status));
+  return d;
+}
+function _obrasDelMaestro() {
+  const t = (GENERADO_POR_OBRA && GENERADO_POR_OBRA.tipos) || {};
+  const nombres = new Set();
+  ((GENERADO_POR_OBRA && GENERADO_POR_OBRA.obras) || []).concat((GENERADO_POR_OBRA && GENERADO_POR_OBRA.obrasSinPeriodo) || []).forEach(o => { if (o.cod_obra) nombres.add(o.cod_obra); });
+  // Obras del Maestro sin certificados todavía: el backend las manda con su
+  // nombre tal cual en tiposNombres; las áreas internas no son obras.
+  const tn = (GENERADO_POR_OBRA && GENERADO_POR_OBRA.tiposNombres) || {};
+  Object.keys(tn).forEach(n => { if (t[n.toLowerCase()] !== 'Interno' && ![...nombres].some(x => x.toLowerCase() === n.toLowerCase())) nombres.add(n); });
+  return [...nombres].filter(n => t[n.toLowerCase()] !== 'Interno').sort((a, b) => a.localeCompare(b, 'es'));
+}
+// Abre el formulario. Sin datos = alta; con datos (certificado codificado) = edición.
+function abrirFormObra(enc) {
+  if (!_editaObras()) return;
+  const panel = document.getElementById('sidePanel'), overlay = document.getElementById('overlay'), content = document.getElementById('panelContent');
+  let ed = null; try { ed = enc ? JSON.parse(decodeURIComponent(enc)) : null; } catch (e) {}
+  const obras = _obrasDelMaestro();
+  const hoy = new Date(); const mesDef = hoy.getFullYear() + '-' + String(hoy.getMonth() + 1).padStart(2, '0');
+  const opObras = obras.map(n => `<option value="${_esc(n)}" ${ed && ed.cod === n ? 'selected' : ''}>${_esc(n)}</option>`).join('');
+  content.innerHTML = `
+    <div class="panel-title">${ed ? 'Editar certificado' : 'Nueva obra / certificado'}</div>
+    <div class="panel-sub">Se guarda en las planillas de Sergio y Agustín y queda en el historial</div>
+    <div class="form-obra" style="margin-top:12px;">
+      ${ed ? '' : `
+      <label>Obra</label>
+      <select id="fo-obra" onchange="document.getElementById('fo-nueva').style.display = this.value === '__nueva__' ? 'block' : 'none'">
+        <option value="">Elegí una obra existente…</option>${opObras}
+        <option value="__nueva__">＋ Dar de alta una obra nueva</option>
+      </select>
+      <div id="fo-nueva" style="display:none;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:10px 12px;margin-top:8px;">
+        <label>Nombre de la obra nueva (corto, sin número de expediente)</label><input id="fo-nombre" maxlength="120" placeholder="ej. Avenida Roca - Etapa 2">
+        <div class="fila2">
+          <div><label>Cliente</label><input id="fo-cliente" maxlength="40" placeholder="MUNCMT / VIA / PRI / SAT…"></div>
+          <div><label>Tipo de contrato</label><select id="fo-tipo-obra"><option value="">—</option>${OBRAS_TIPOS.map(t => `<option>${t}</option>`).join('')}</select></div>
+        </div>
+        <label>Oficina (opcional)</label><input id="fo-oficina" maxlength="80">
+        <div style="font-size:11px;color:#92400e;margin-top:6px;">Una vez dada de alta, el nombre no se cambia: las demás planillas lo copian.</div>
+      </div>`}
+      ${ed ? `<label>Obra</label><input value="${_esc(ed.cod)}" disabled>` : ''}
+      <label>Certificado (nombre en Obras a cobrar)</label>
+      <input id="fo-cert" maxlength="200" value="${ed ? _esc(ed.nombre) : ''}" placeholder="ej. Certificado 3 · Etapa 8 - Cert. 2">
+      <div class="fila2">
+        <div><label>Monto a certificar ($)</label><input id="fo-monto" type="number" min="0" step="0.01" value="${ed && ed.monto ? ed.monto : ''}"></div>
+        <div><label>Período (mes del trabajo)</label><input id="fo-periodo" type="month" value="${ed ? '' : mesDef}"></div>
+      </div>
+      <div class="fila2">
+        <div><label>Monto total del contrato (opcional)</label><input id="fo-total" type="number" min="0" step="0.01" value="${ed && ed.montoTotal ? ed.montoTotal : ''}"></div>
+        <div><label>Anticipo financiero (opcional)</label><input id="fo-anticipo" type="number" min="0" step="0.01" value="${ed && ed.anticipo ? ed.anticipo : ''}"></div>
+      </div>
+      <label>Estado</label>
+      <select id="fo-estado"><option ${ed && /cobrad/i.test(ed.estado || '') ? '' : 'selected'}>A Cobrar</option><option ${ed && /cobrad/i.test(ed.estado || '') ? 'selected' : ''}>Cobrada</option></select>
+      ${ed ? `<div style="font-size:11px;color:var(--muted);margin-top:6px;">Si dejás el período vacío se conserva el que tiene la fila.</div>` : ''}
+      <button class="btn-guardar" id="fo-guardar" onclick="guardarFormObra(${ed ? `'${enc}'` : 'null'})">${ed ? 'Guardar cambios' : 'Guardar'}</button>
+      <div class="msg" id="fo-msg"></div>
+    </div>`;
+  panel.classList.add('open'); overlay.classList.add('open');
+  if (ed) { // período actual de la fila: no lo tenemos en el item, lo pedimos solo si se cambia
+    document.getElementById('fo-periodo').value = '';
+  }
+}
+async function guardarFormObra(enc) {
+  const g = id => (document.getElementById(id) || {}).value;
+  const btn = document.getElementById('fo-guardar'), msg = document.getElementById('fo-msg');
+  let ed = null; try { ed = enc ? JSON.parse(decodeURIComponent(enc)) : null; } catch (e) {}
+  const say = (t, ok) => { msg.textContent = t; msg.style.color = ok ? '#166534' : '#b91c1c'; };
+  btn.disabled = true; say('Guardando…', true);
+  try {
+    let obra = ed ? ed.cod : g('fo-obra');
+    let tipoObra = '', oficina = '';
+    if (!ed && obra === '__nueva__') {
+      const nombre = (g('fo-nombre') || '').trim();
+      if (nombre.length < 3) throw new Error('Escribí el nombre de la obra nueva.');
+      tipoObra = g('fo-tipo-obra') || ''; oficina = g('fo-oficina') || '';
+      await _postObras({ op: 'altaObra', nombre: nombre, cliente: g('fo-cliente') || '', oficina: oficina, tipo: tipoObra });
+      obra = nombre;
+    }
+    if (!obra) throw new Error('Elegí una obra.');
+    const cert = (g('fo-cert') || '').trim();
+    const tieneCert = cert || g('fo-monto') || g('fo-total') || g('fo-anticipo');
+    if (tieneCert) {
+      if (!cert) throw new Error('Poné un nombre al certificado.');
+      const body = { obra: obra, certNombre: cert, montoCert: g('fo-monto') || '', montoTotal: g('fo-total') || '', anticipo: g('fo-anticipo') || '',
+                     periodo: g('fo-periodo') || '', estado: g('fo-estado'), tipo: tipoObra, oficina: oficina };
+      if (ed) { body.op = 'editarCert'; body.fila = ed.fila; body.certNombreAntes = ed.nombre; }
+      else body.op = 'agregarCert';
+      await _postObras(body);
+    }
+    say('Guardado. Actualizando el tablero…', true);
+    await refreshData();
+    closePanel();
+  } catch (e) {
+    say('No se pudo guardar: ' + e.message, false); btn.disabled = false;
+  }
+}
+async function cambiarEstadoCert(enc) {
+  let it; try { it = JSON.parse(decodeURIComponent(enc)); } catch (e) { return; }
+  const nuevo = /cobrad/i.test(it.estado || '') ? 'A Cobrar' : 'Cobrada';
+  if (!confirm(`¿Marcar "${it.nombre}" como ${nuevo}?`)) return;
+  try { await _postObras({ op: 'estadoCert', fila: it.fila, certNombreAntes: it.nombre, estado: nuevo }); await refreshData(); openTotalACobrarPanel(); }
+  catch (e) { alert('No se pudo cambiar el estado: ' + e.message); }
+}
+async function borrarCert(enc) {
+  let it; try { it = JSON.parse(decodeURIComponent(enc)); } catch (e) { return; }
+  if (!confirm(`¿Borrar la fila "${it.nombre}" (${fmt(it.monto)}) de Obras a cobrar?\nQueda registrado en el historial.`)) return;
+  try { await _postObras({ op: 'borrarCert', fila: it.fila, certNombreAntes: it.nombre }); await refreshData(); openTotalACobrarPanel(); }
+  catch (e) { alert('No se pudo borrar: ' + e.message); }
+}
+
 function openTotalACobrarPanel() {
   const panel   = document.getElementById('sidePanel');
   const overlay = document.getElementById('overlay');
@@ -9693,7 +9839,7 @@ function openTotalACobrarPanel() {
     const items = o.items && o.items.length > 0 ? [...o.items].sort((a,b) => b.monto - a.monto) : [];
     const detalles = items.map(it => `
       <tr style="border-top:1px solid var(--border);background:#fafafa;">
-        <td style="padding:4px 10px 4px 24px;font-size:11px;color:var(--text);">${it.nombre}${badge(it.estado)}</td>
+        <td style="padding:4px 10px 4px 24px;font-size:11px;color:var(--text);">${it.nombre}${badge(it.estado)}${_certAcciones(it, o.cod_obra)}</td>
         <td style="text-align:right;padding:4px 10px;font-size:11px;white-space:nowrap;color:var(--pos);">${fmt(it.monto)}</td>
       </tr>`).join('');
     return `<tr style="border-top:2px solid var(--border);background:#f0fdf4;">
@@ -11440,6 +11586,7 @@ async function cerrarSesion() {
     if (!r.ok) throw new Error('sin sesión');
     const me = await r.json();
     applyRole(me.role, me.email);
+    document.body.classList.toggle('edita-obras', !!me.editaObras);
     document.body.classList.add('authed');
   } catch (e) {
     location.replace('/login.html?next=' + encodeURIComponent(location.pathname + location.search));
