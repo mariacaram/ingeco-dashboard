@@ -2549,7 +2549,8 @@ function renderMargen() {
     }
     // Subtítulo corto: solo obras + provisiones. Las obras sin período no van
     // acá (ya tienen su bloque aparte); queda como tooltip.
-    const descProv = provCert.total > 0 ? ` + ${provCert.items.length} ${provCert.items.length !== 1 ? 'provisiones' : 'provisión'}` : '';
+    const nProv = provCert.items.filter(i => !i.noSuma).length;
+    const descProv = provCert.total > 0 ? ` + ${nProv} ${nProv !== 1 ? 'provisiones' : 'provisión'}` : '';
     if (kpiGenSub) {
       kpiGenSub.textContent = _obrasMes.length + ' obra' + (_obrasMes.length !== 1 ? 's' : '') + descProv;
       kpiGenSub.title = _sinP.length > 0 ? `${_sinP.length} obra${_sinP.length !== 1 ? 's' : ''} sin período de realización cargado — no entran en ningún mes` : '';
@@ -2575,13 +2576,9 @@ function renderMargen() {
       }
       if (provCert.total > 0) {
         const totReal = provCert.items.filter(i => i.esReal).reduce((s, i) => s + i.monto, 0);
-        const totTeo  = provCert.total - totReal;
-        const detLbl = totTeo <= 0 ? 'real'
-          : totReal <= 0 ? 'teórica'
-          : `real ${fmt(totReal)} · teórica ${fmt(totTeo)}`;
         const tipProv = totReal <= 0
           ? 'Certificación teórica (tn × precio de convenio): Esteban todavía no cargó la real'
-          : `Certificación de provisiones: ${detLbl} (real cargada por Esteban; teórica = tn × precio de convenio)`;
+          : 'Certificación real cargada por Esteban (las teóricas del mes no suman)';
         spans.push(`<span style="white-space:nowrap;" title="${tipProv}">Provisiones: <strong>${fmt(provCert.total)}</strong></span>`);
       }
       kpiBreak.innerHTML = spans.join('<span style="color:var(--border);">·</span>');
@@ -3413,7 +3410,11 @@ function _certProvisionesMes(mes) {
     const monto = usaReal ? real.totalFirme : teo;
     if (monto > 0) items.push({ obra: cod, monto: Math.round(monto), esReal: usaReal, mesReal: usaReal ? real.mesSig : null });
   });
-  return { total: items.reduce((s, i) => s + i.monto, 0), items };
+  // Si Esteban ya facturó alguna provisión del mes, lo que él cargó es la
+  // certificación completa: las teóricas restantes se muestran pero no suman.
+  const hayReal = items.some(i => i.esReal);
+  items.forEach(i => { i.noSuma = hayReal && !i.esReal; });
+  return { total: items.filter(i => !i.noSuma).reduce((s, i) => s + i.monto, 0), items };
 }
 
 // Excedente pagado de más el mes anterior: si lo real que cargó Esteban para
@@ -10053,11 +10054,11 @@ function openTotalACobrarPanel() {
   // Provisiones del mes: certificación real (Esteban, mes siguiente) o teórica
   const provCert = mesActual !== 'total' ? _certProvisionesMes(mesActual) : { total: 0, items: [] };
   const provFilas = provCert.items.map(i => `
-    <tr style="border-top:1px solid var(--border);background:#fafafa;">
+    <tr style="border-top:1px solid var(--border);background:#fafafa;${i.noSuma ? 'opacity:.55;' : ''}">
       <td style="padding:6px 10px 6px 24px;font-size:11px;">${i.obra}
-        <span style="font-size:9px;font-weight:700;background:${i.esReal ? '#dcfce7' : '#fef3c7'};color:${i.esReal ? '#166534' : '#92400e'};padding:1px 7px;border-radius:8px;white-space:nowrap;margin-left:8px;">${i.esReal ? 'real — Esteban · ' + (MES[i.mesReal] || i.mesReal) : 'teórica (tn × precio)'}</span>
+        <span style="font-size:9px;font-weight:700;background:${i.esReal ? '#dcfce7' : '#f1f5f9'};color:${i.esReal ? '#166534' : (i.noSuma ? '#64748b' : '#92400e')};${i.esReal || i.noSuma ? '' : 'background:#fef3c7;'}padding:1px 7px;border-radius:8px;white-space:nowrap;margin-left:8px;">${i.esReal ? 'real — Esteban · ' + (MES[i.mesReal] || i.mesReal) : (i.noSuma ? 'teórica — no suma (Esteban ya facturó)' : 'teórica (tn × precio)')}</span>
       </td>
-      <td style="text-align:right;padding:6px 10px;font-size:11px;white-space:nowrap;color:var(--pos);">${fmt(i.monto)}</td>
+      <td style="text-align:right;padding:6px 10px;font-size:11px;white-space:nowrap;color:${i.noSuma ? 'var(--muted)' : 'var(--pos)'};${i.noSuma ? 'text-decoration:line-through;' : ''}">${fmt(i.monto)}</td>
     </tr>`).join('');
   const provSection = provCert.total > 0 ? `
     <tr style="border-top:2px solid var(--border);background:#eff6ff;">
