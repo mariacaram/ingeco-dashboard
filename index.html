@@ -9722,10 +9722,8 @@ function _montoInput(el) {
 function _certAcciones(it, cod) {
   if (!_editaObras() || !it.fila) return '';
   const d = encodeURIComponent(JSON.stringify({ fila: it.fila, nombre: it.nombre, cod: cod, estado: it.estado, monto: it.monto, montoTotal: it.montoTotal, anticipo: it.anticipo }));
-  const cob = /cobrad/i.test(it.estado || '');
   return `<span class="cert-acciones">
-    <button title="${cob ? 'Volver a A cobrar' : 'Marcar como cobrada'}" onclick="event.stopPropagation();cambiarEstadoCert('${d}')">${cob ? '↩ A cobrar' : '✓ Cobrada'}</button>
-    <button title="Editar" onclick="event.stopPropagation();abrirFormObra('${d}')">✎</button>
+    <button title="Editar (nombre, montos, período o estado)" onclick="event.stopPropagation();abrirFormObra('${d}')">✎</button>
     <button title="Borrar" onclick="event.stopPropagation();borrarCert('${d}')">🗑</button></span>`;
 }
 async function _postObras(body, reintento) {
@@ -9874,12 +9872,14 @@ async function borrarCert(enc) {
 // agrupados por obra, con sus acciones (estado / editar / borrar).
 let _todosCertFiltro = '';
 let _todosCertMes = ''; // '' = todos · 'sin' = sin período · 'jul' etc.
+let _todosCertEstado = 'pend'; // 'pend' = solo a cobrar · 'todos' = a cobrar + cobradas
 let _panelCertOrigen = 'mes'; // desde qué panel se abrió la acción: 'mes' o 'todos'
 function _volverPanelCert() { if (_panelCertOrigen === 'todos') abrirTodosCertificados(); else openTotalACobrarPanel(); }
-function abrirTodosCertificados(filtro, mes) {
+function abrirTodosCertificados(filtro, mes, estado) {
   if (!_editaObras()) return;
   if (filtro != null) _todosCertFiltro = filtro;
   if (mes != null) _todosCertMes = mes;
+  if (estado != null) _todosCertEstado = estado;
   // Mes de cada fila (período de realización), según los datos por mes del backend
   const mesPorFila = {};
   const opm = (GENERADO_POR_OBRA && GENERADO_POR_OBRA.obrasPorMes) || {};
@@ -9895,7 +9895,8 @@ function abrirTodosCertificados(filtro, mes) {
   const esCob = e => /cobrad/i.test(e || '');
   const f = _todosCertFiltro.toLowerCase().trim();
   const pasaMes = it => !_todosCertMes || (_todosCertMes === 'sin' ? !mesPorFila[it.fila] : mesPorFila[it.fila] === _todosCertMes);
-  const grupos = Object.values(porObra).map(g => ({ ...g, lista: Object.values(g.items).filter(pasaMes).sort((a, b) => a.fila - b.fila) }))
+  const pasaEstado = it => _todosCertEstado === 'todos' || !esCob(it.estado);
+  const grupos = Object.values(porObra).map(g => ({ ...g, lista: Object.values(g.items).filter(it => pasaMes(it) && pasaEstado(it)).sort((a, b) => a.fila - b.fila) }))
     .filter(g => g.lista.length && (!f || g.cod.toLowerCase().includes(f) || g.lista.some(i => (i.nombre || '').toLowerCase().includes(f))))
     .sort((a, b) => a.cod.localeCompare(b.cod, 'es'));
   const nItems = grupos.reduce((s, g) => s + g.lista.length, 0);
@@ -9909,7 +9910,7 @@ function abrirTodosCertificados(filtro, mes) {
     </tr>`).join('')}`).join('');
   content.innerHTML = `
     <div class="panel-title">Certificados cargados</div>
-    <div class="panel-sub">Obras a cobrar · ${nItems} certificado${nItems !== 1 ? 's' : ''} en ${grupos.length} obra${grupos.length !== 1 ? 's' : ''} · ${_todosCertMes === 'sin' ? 'sin período' : _todosCertMes ? (MES[_todosCertMes] || _todosCertMes) : 'todos los meses'}</div>
+    <div class="panel-sub">Obras a cobrar · ${nItems} certificado${nItems !== 1 ? 's' : ''} ${_todosCertEstado === 'pend' ? 'a cobrar' : ''} en ${grupos.length} obra${grupos.length !== 1 ? 's' : ''} · ${_todosCertMes === 'sin' ? 'sin período' : _todosCertMes ? (MES[_todosCertMes] || _todosCertMes) : 'todos los meses'}</div>
     <div style="display:flex;gap:8px;margin-top:12px;align-items:center;flex-wrap:wrap;">
       <input id="tc-filtro" value="${_esc(_todosCertFiltro)}" placeholder="Filtrar por obra o certificado…" oninput="abrirTodosCertificados(this.value);setTimeout(()=>{const i=document.getElementById('tc-filtro');i.focus();i.setSelectionRange(i.value.length,i.value.length)},0)"
         style="flex:1;min-width:150px;border:1.5px solid var(--border);border-radius:8px;padding:7px 10px;font-size:13px;">
@@ -9918,10 +9919,14 @@ function abrirTodosCertificados(filtro, mes) {
         ${MES_ORDER.filter(m => opm[m] && opm[m].length).map(m => `<option value="${m}" ${_todosCertMes === m ? 'selected' : ''}>${MES[m] || m}</option>`).join('')}
         <option value="sin" ${_todosCertMes === 'sin' ? 'selected' : ''}>Sin período</option>
       </select>
+      <select id="tc-estado" onchange="abrirTodosCertificados(null, null, this.value)" style="border:1.5px solid var(--border);border-radius:8px;padding:7px 8px;font-size:13px;background:#fff;">
+        <option value="pend" ${_todosCertEstado === 'pend' ? 'selected' : ''}>Solo a cobrar</option>
+        <option value="todos" ${_todosCertEstado === 'todos' ? 'selected' : ''}>A cobrar y cobradas</option>
+      </select>
       <button class="btn-nueva-obra" onclick="abrirFormObra()" title="Agregar un certificado a una obra existente">＋ Certificado</button>
       <button class="btn-nueva-obra" onclick="abrirAltaObra()" title="Dar de alta una obra nueva en el Maestro">＋ Obra</button>
     </div>
-    <div style="font-size:11px;color:var(--muted);margin-top:8px;">✓ cambia el estado · ✎ edita nombre, montos, período o estado · 🗑 borra la fila. Todo queda en la pestaña Historial.</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:8px;">✎ edita nombre, montos, período o estado (ahí se marca como cobrada) · 🗑 borra la fila. Todo queda en la pestaña Historial.</div>
     <table style="width:100%;border-collapse:collapse;margin-top:10px;"><tbody>${filas || '<tr><td style="padding:16px;" class="nd">Sin certificados para ese filtro.</td></tr>'}</tbody></table>`;
   panel.classList.add('open'); overlay.classList.add('open');
   _panelCertOrigen = 'todos';
