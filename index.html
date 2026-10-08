@@ -618,6 +618,9 @@
   .form-obra label { display: block; font-size: 11px; font-weight: 600; color: var(--muted); margin: 10px 0 3px; }
   .form-obra input, .form-obra select { width: 100%; box-sizing: border-box; border: 1.5px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 14px; background: #fff; }
   .form-obra .fila2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .form-obra .monto-wrap { position: relative; }
+  .form-obra .monto-wrap::before { content: '$'; position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 14px; pointer-events: none; }
+  .form-obra .monto-wrap input { padding-left: 22px; text-align: right; font-variant-numeric: tabular-nums; }
   .form-obra .btn-guardar { margin-top: 16px; width: 100%; background: var(--primary); color: #fff; border: none; border-radius: 10px; padding: 11px; font-size: 14px; font-weight: 700; cursor: pointer; }
   .form-obra .btn-guardar:disabled { opacity: .6; }
   .form-obra .msg { margin-top: 10px; font-size: 12.5px; line-height: 1.5; }
@@ -9695,6 +9698,18 @@ function openMargenPanel() {
 const OBRAS_TIPOS = ['Licitación', 'Contratación Directa', 'Reconocimiento de Servicio', 'Provisión', 'UTE'];
 const _esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 function _editaObras() { return document.body.classList.contains('edita-obras'); }
+// Montos en el formulario: se escriben solo dígitos (y coma para centavos); se
+// muestran con punto de miles. _montoValor devuelve el número limpio para enviar.
+function _fmtMontoInput(n) { const v = Number(n); if (!isFinite(v)) return ''; return v.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }); }
+function _montoValor(txt) { const t = String(txt || '').replace(/\$/g, '').replace(/\./g, '').replace(/\s/g, '').replace(',', '.').trim(); if (t === '') return ''; const n = parseFloat(t); return isFinite(n) ? String(n) : 'x'; }
+function _montoInput(el) {
+  const raw = el.value.replace(/[^\d,]/g, '');
+  const [ent, dec] = raw.split(',');
+  const entN = ent.replace(/^0+(?=\d)/, '');
+  let out = entN ? Number(entN).toLocaleString('es-AR') : '';
+  if (dec !== undefined) out += ',' + dec.slice(0, 2);
+  el.value = out;
+}
 function _certAcciones(it, cod) {
   if (!_editaObras() || !it.fila) return '';
   const d = encodeURIComponent(JSON.stringify({ fila: it.fila, nombre: it.nombre, cod: cod, estado: it.estado, monto: it.monto, montoTotal: it.montoTotal, anticipo: it.anticipo }));
@@ -9755,12 +9770,12 @@ function abrirFormObra(enc) {
       <label>Certificado (nombre en Obras a cobrar)</label>
       <input id="fo-cert" maxlength="200" value="${ed ? _esc(ed.nombre) : ''}" placeholder="ej. Certificado 3 · Etapa 8 - Cert. 2">
       <div class="fila2">
-        <div><label>Monto a certificar ($)</label><input id="fo-monto" type="number" min="0" step="0.01" value="${ed && ed.monto ? ed.monto : ''}"></div>
+        <div><label>Monto a certificar</label><div class="monto-wrap"><input id="fo-monto" inputmode="numeric" value="${ed && ed.monto ? _fmtMontoInput(ed.monto) : ''}" oninput="_montoInput(this)" placeholder="0"></div></div>
         <div><label>Período (mes del trabajo)</label><input id="fo-periodo" type="month" value="${ed ? '' : mesDef}"></div>
       </div>
       <div class="fila2">
-        <div><label>Monto total del contrato (opcional)</label><input id="fo-total" type="number" min="0" step="0.01" value="${ed && ed.montoTotal ? ed.montoTotal : ''}"></div>
-        <div><label>Anticipo financiero (opcional)</label><input id="fo-anticipo" type="number" min="0" step="0.01" value="${ed && ed.anticipo ? ed.anticipo : ''}"></div>
+        <div><label>Monto total del contrato (opcional)</label><div class="monto-wrap"><input id="fo-total" inputmode="numeric" value="${ed && ed.montoTotal ? _fmtMontoInput(ed.montoTotal) : ''}" oninput="_montoInput(this)" placeholder="0"></div></div>
+        <div><label>Anticipo financiero (opcional)</label><div class="monto-wrap"><input id="fo-anticipo" inputmode="numeric" value="${ed && ed.anticipo ? _fmtMontoInput(ed.anticipo) : ''}" oninput="_montoInput(this)" placeholder="0"></div></div>
       </div>
       <label>Estado</label>
       <select id="fo-estado"><option ${ed && /cobrad/i.test(ed.estado || '') ? '' : 'selected'}>A Cobrar</option><option ${ed && /cobrad/i.test(ed.estado || '') ? 'selected' : ''}>Cobrada</option></select>
@@ -9791,10 +9806,12 @@ async function guardarFormObra(enc) {
     }
     if (!obra) throw new Error('Elegí una obra.');
     const cert = (g('fo-cert') || '').trim();
-    const tieneCert = cert || g('fo-monto') || g('fo-total') || g('fo-anticipo');
+    const tieneCert = cert || _montoValor(g('fo-monto')) || _montoValor(g('fo-total')) || _montoValor(g('fo-anticipo'));
     if (tieneCert) {
       if (!cert) throw new Error('Poné un nombre al certificado.');
-      const body = { obra: obra, certNombre: cert, montoCert: g('fo-monto') || '', montoTotal: g('fo-total') || '', anticipo: g('fo-anticipo') || '',
+      const mc = _montoValor(g('fo-monto')), mt = _montoValor(g('fo-total')), an = _montoValor(g('fo-anticipo'));
+      if (mc === 'x' || mt === 'x' || an === 'x') throw new Error('Revisá los montos: solo números, con coma para centavos.');
+      const body = { obra: obra, certNombre: cert, montoCert: mc, montoTotal: mt, anticipo: an,
                      periodo: g('fo-periodo') || '', estado: g('fo-estado'), tipo: tipoObra, oficina: oficina };
       if (ed) { body.op = 'editarCert'; body.fila = ed.fila; body.certNombreAntes = ed.nombre; }
       else body.op = 'agregarCert';
@@ -9824,11 +9841,17 @@ async function borrarCert(enc) {
 // Panel para editores: TODOS los certificados cargados en Obras a cobrar,
 // agrupados por obra, con sus acciones (estado / editar / borrar).
 let _todosCertFiltro = '';
+let _todosCertMes = ''; // '' = todos · 'sin' = sin período · 'jul' etc.
 let _panelCertOrigen = 'mes'; // desde qué panel se abrió la acción: 'mes' o 'todos'
 function _volverPanelCert() { if (_panelCertOrigen === 'todos') abrirTodosCertificados(); else openTotalACobrarPanel(); }
-function abrirTodosCertificados(filtro) {
+function abrirTodosCertificados(filtro, mes) {
   if (!_editaObras()) return;
   if (filtro != null) _todosCertFiltro = filtro;
+  if (mes != null) _todosCertMes = mes;
+  // Mes de cada fila (período de realización), según los datos por mes del backend
+  const mesPorFila = {};
+  const opm = (GENERADO_POR_OBRA && GENERADO_POR_OBRA.obrasPorMes) || {};
+  MES_ORDER.forEach(m => (opm[m] || []).forEach(o => (o.items || []).forEach(it => { if (it.fila) mesPorFila[it.fila] = m; })));
   const panel = document.getElementById('sidePanel'), overlay = document.getElementById('overlay'), content = document.getElementById('panelContent');
   const todas = ((GENERADO_POR_OBRA && GENERADO_POR_OBRA.obras) || []).concat((GENERADO_POR_OBRA && GENERADO_POR_OBRA.obrasSinPeriodo) || []);
   // Una obra puede aparecer en ambas listas: unir items por fila
@@ -9839,7 +9862,8 @@ function abrirTodosCertificados(filtro) {
   });
   const esCob = e => /cobrad/i.test(e || '');
   const f = _todosCertFiltro.toLowerCase().trim();
-  const grupos = Object.values(porObra).map(g => ({ ...g, lista: Object.values(g.items).sort((a, b) => a.fila - b.fila) }))
+  const pasaMes = it => !_todosCertMes || (_todosCertMes === 'sin' ? !mesPorFila[it.fila] : mesPorFila[it.fila] === _todosCertMes);
+  const grupos = Object.values(porObra).map(g => ({ ...g, lista: Object.values(g.items).filter(pasaMes).sort((a, b) => a.fila - b.fila) }))
     .filter(g => g.lista.length && (!f || g.cod.toLowerCase().includes(f) || g.lista.some(i => (i.nombre || '').toLowerCase().includes(f))))
     .sort((a, b) => a.cod.localeCompare(b.cod, 'es'));
   const nItems = grupos.reduce((s, g) => s + g.lista.length, 0);
@@ -9847,16 +9871,21 @@ function abrirTodosCertificados(filtro) {
     <tr style="border-top:2px solid var(--border);background:#f0fdf4;"><td colspan="3" style="padding:8px 10px;"><strong style="font-size:13px;color:var(--primary);">${_esc(g.cod)}</strong>
       <span style="font-size:10px;color:var(--muted);margin-left:8px;">${g.lista.length} certificado${g.lista.length !== 1 ? 's' : ''} · a cobrar ${fmt(g.lista.filter(i => !esCob(i.estado)).reduce((s, i) => s + (i.monto || 0), 0))}</span></td></tr>
     ${g.lista.map(it => `<tr style="border-top:1px solid var(--border);">
-      <td style="padding:5px 10px 5px 18px;font-size:11px;">${_esc(it.nombre)} <span style="font-size:9px;font-weight:700;background:${esCob(it.estado) ? '#dcfce7' : '#fef3c7'};color:${esCob(it.estado) ? '#166534' : '#92400e'};padding:1px 7px;border-radius:8px;white-space:nowrap;display:inline-block;vertical-align:middle;">${esCob(it.estado) ? 'Cobrada' : 'A cobrar'}</span></td>
+      <td style="padding:5px 10px 5px 18px;font-size:11px;">${_esc(it.nombre)} <span style="font-size:9px;font-weight:700;background:${esCob(it.estado) ? '#dcfce7' : '#fef3c7'};color:${esCob(it.estado) ? '#166534' : '#92400e'};padding:1px 7px;border-radius:8px;white-space:nowrap;display:inline-block;vertical-align:middle;">${esCob(it.estado) ? 'Cobrada' : 'A cobrar'}</span>${mesPorFila[it.fila] ? `<span style="font-size:9px;color:var(--muted);margin-left:6px;white-space:nowrap;">${(MES[mesPorFila[it.fila]] || mesPorFila[it.fila]).replace(' 2026', '')}</span>` : '<span style="font-size:9px;color:#b45309;margin-left:6px;white-space:nowrap;">sin período</span>'}</td>
       <td style="text-align:right;padding:5px 6px;font-size:11px;white-space:nowrap;color:var(--pos);">${it.monto ? fmt(it.monto) : '—'}</td>
       <td style="text-align:right;padding:5px 6px;">${_certAcciones(it, g.cod)}</td>
     </tr>`).join('')}`).join('');
   content.innerHTML = `
     <div class="panel-title">Certificados cargados</div>
-    <div class="panel-sub">Obras a cobrar · ${nItems} certificado${nItems !== 1 ? 's' : ''} en ${grupos.length} obra${grupos.length !== 1 ? 's' : ''} · todos los meses</div>
-    <div style="display:flex;gap:8px;margin-top:12px;align-items:center;">
+    <div class="panel-sub">Obras a cobrar · ${nItems} certificado${nItems !== 1 ? 's' : ''} en ${grupos.length} obra${grupos.length !== 1 ? 's' : ''} · ${_todosCertMes === 'sin' ? 'sin período' : _todosCertMes ? (MES[_todosCertMes] || _todosCertMes) : 'todos los meses'}</div>
+    <div style="display:flex;gap:8px;margin-top:12px;align-items:center;flex-wrap:wrap;">
       <input id="tc-filtro" value="${_esc(_todosCertFiltro)}" placeholder="Filtrar por obra o certificado…" oninput="abrirTodosCertificados(this.value);setTimeout(()=>{const i=document.getElementById('tc-filtro');i.focus();i.setSelectionRange(i.value.length,i.value.length)},0)"
-        style="flex:1;border:1.5px solid var(--border);border-radius:8px;padding:7px 10px;font-size:13px;">
+        style="flex:1;min-width:150px;border:1.5px solid var(--border);border-radius:8px;padding:7px 10px;font-size:13px;">
+      <select id="tc-mes" onchange="abrirTodosCertificados(null, this.value)" style="border:1.5px solid var(--border);border-radius:8px;padding:7px 8px;font-size:13px;background:#fff;">
+        <option value="" ${!_todosCertMes ? 'selected' : ''}>Todos los meses</option>
+        ${MES_ORDER.filter(m => opm[m] && opm[m].length).map(m => `<option value="${m}" ${_todosCertMes === m ? 'selected' : ''}>${MES[m] || m}</option>`).join('')}
+        <option value="sin" ${_todosCertMes === 'sin' ? 'selected' : ''}>Sin período</option>
+      </select>
       <button class="btn-nueva-obra" onclick="abrirFormObra()" title="Agregar un certificado a una obra existente, o dar de alta una obra nueva">＋ Agregar</button>
     </div>
     <div style="font-size:11px;color:var(--muted);margin-top:8px;">✓ cambia el estado · ✎ edita nombre, montos, período o estado · 🗑 borra la fila · ＋ Agregar carga un certificado o da de alta una obra nueva. Todo queda en la pestaña Historial.</div>
