@@ -611,6 +611,8 @@
   .solo-editor { display: none !important; }
   body.edita-obras .solo-editor { display: initial !important; }
   body.edita-obras button.solo-editor { display: inline-flex !important; }
+  #btn-alta-obra { display: none; }
+  body.edita-obras #btn-alta-obra { display: inline-flex !important; }
   .btn-nueva-obra { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; box-sizing: border-box; background: #fff; color: var(--primary); border: 1.5px solid var(--primary); border-radius: 14px; padding: 3px 10px; font-size: 11px !important; font-weight: 600; line-height: 1.3; white-space: normal; text-align: left; cursor: pointer; margin: 2px 6px 2px 0; }
   .btn-nueva-obra:hover { background: var(--primary); color: #fff; }
   .form-obra label { display: block; font-size: 11px; font-weight: 600; color: var(--muted); margin: 10px 0 3px; }
@@ -744,7 +746,10 @@
       <select id="month-select" class="mobile-select" aria-label="Período" onchange="setMes(this.value)"></select>
     </div>
     <div class="refresh-area">
-      <button class="btn-refresh" id="btn-refresh" onclick="refreshData()">🔄 Actualizar datos</button>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <button class="btn-refresh solo-editor" id="btn-alta-obra" onclick="abrirFormObra()" title="Dar de alta una obra nueva en el Maestro">＋ Obra</button>
+        <button class="btn-refresh" id="btn-refresh" onclick="refreshData()">🔄 Actualizar datos</button>
+      </div>
       <div class="last-update" id="last-update">Datos locales — sin conexión a Drive</div>
     </div>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
@@ -798,7 +803,7 @@
       <div class="kpi-label">Total Certificado</div>
       <div class="kpi-value nd" id="kpi-generado">Actualizá datos</div>
       <div class="kpi-sub" id="kpi-generado-sub">Certificados por período (A Cobrar + Cobradas)</div>
-      <div class="solo-editor" style="margin-top:6px;display:flex;flex-wrap:wrap;"><button class="btn-nueva-obra solo-editor" onclick="event.stopPropagation();abrirFormObra()">＋ Nueva obra</button><button class="btn-nueva-obra solo-editor" onclick="event.stopPropagation();abrirTodosCertificados()">Ver y editar certificados</button></div>
+      <div class="solo-editor" style="margin-top:6px;"><button class="btn-nueva-obra solo-editor" onclick="event.stopPropagation();abrirTodosCertificados()" title="Ver, editar y agregar certificados">✎ Certificados</button></div>
       <div id="kpi-generado-breakdown" style="font-size:10px;color:var(--muted);margin-top:5px;line-height:1.7;display:flex;flex-wrap:wrap;gap:4px 10px;"></div>
       <div class="fuente" id="kpi-generado-fuente"><a href="https://docs.google.com/spreadsheets/d/1YldZRtbLh17Xqczl-omI0zjHcgvrhvp3QOsjWffEm_s/edit" target="_blank" onclick="event.stopPropagation()">Obras a cobrar (Agustín)</a></div>
     </div>
@@ -9728,7 +9733,7 @@ function abrirFormObra(enc) {
   const hoy = new Date(); const mesDef = hoy.getFullYear() + '-' + String(hoy.getMonth() + 1).padStart(2, '0');
   const opObras = obras.map(n => `<option value="${_esc(n)}" ${ed && ed.cod === n ? 'selected' : ''}>${_esc(n)}</option>`).join('');
   content.innerHTML = `
-    <div class="panel-title">${ed ? 'Editar certificado' : 'Nueva obra / certificado'}</div>
+    <div class="panel-title">${ed ? 'Editar certificado' : 'Agregar certificado u obra'}</div>
     <div class="panel-sub">Se guarda en las planillas de Sergio y Agustín y queda en el historial</div>
     <div class="form-obra" style="margin-top:12px;">
       ${ed ? '' : `
@@ -9852,9 +9857,9 @@ function abrirTodosCertificados(filtro) {
     <div style="display:flex;gap:8px;margin-top:12px;align-items:center;">
       <input id="tc-filtro" value="${_esc(_todosCertFiltro)}" placeholder="Filtrar por obra o certificado…" oninput="abrirTodosCertificados(this.value);setTimeout(()=>{const i=document.getElementById('tc-filtro');i.focus();i.setSelectionRange(i.value.length,i.value.length)},0)"
         style="flex:1;border:1.5px solid var(--border);border-radius:8px;padding:7px 10px;font-size:13px;">
-      <button class="btn-nueva-obra" onclick="abrirFormObra()">＋ Nueva obra</button>
+      <button class="btn-nueva-obra" onclick="abrirFormObra()" title="Agregar un certificado a una obra existente, o dar de alta una obra nueva">＋ Agregar</button>
     </div>
-    <div style="font-size:11px;color:var(--muted);margin-top:8px;">✓ cambia el estado · ✎ edita nombre, montos, período o estado · 🗑 borra la fila. Todo queda en la pestaña Historial.</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:8px;">✓ cambia el estado · ✎ edita nombre, montos, período o estado · 🗑 borra la fila · ＋ Agregar carga un certificado o da de alta una obra nueva. Todo queda en la pestaña Historial.</div>
     <table style="width:100%;border-collapse:collapse;margin-top:10px;"><tbody>${filas || '<tr><td style="padding:16px;" class="nd">Sin certificados para ese filtro.</td></tr>'}</tbody></table>`;
   panel.classList.add('open'); overlay.classList.add('open');
   _panelCertOrigen = 'todos';
