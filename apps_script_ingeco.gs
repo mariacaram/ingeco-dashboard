@@ -1732,10 +1732,14 @@ function leerGeneradoPorObra() {
     Object.keys(maestro).forEach(function(k) {
       const m = maestro[k]; if (m && m.nombre && m.nombre.toLowerCase() === k) tiposNombres[m.nombre] = m.tipo || '';
     });
+    // Clientes distintos del Maestro (para el desplegable del alta de obras)
+    const clientesSet = {};
+    Object.keys(maestro).forEach(function(k) { const c = (maestro[k] && maestro[k].cliente || '').trim(); if (c && c !== '-') clientesSet[c] = true; });
+    const clientes = Object.keys(clientesSet).sort();
 
     Logger.log('obrasPorMes — meses: ' + Object.keys(obrasPorMes).join(',') +
                ' | sinPeriodo: ' + obrasSinPeriodo.length);
-    return { obras: obras, obrasPorMes: obrasPorMes, obrasSinPeriodo: obrasSinPeriodo, tabsSinPeriodo: tabsSinPeriodo, tipos: tipos, tiposNombres: tiposNombres };
+    return { obras: obras, obrasPorMes: obrasPorMes, obrasSinPeriodo: obrasSinPeriodo, tabsSinPeriodo: tabsSinPeriodo, tipos: tipos, tiposNombres: tiposNombres, clientes: clientes };
 
   } catch (err) {
     Logger.log('leerGeneradoPorObra error: ' + err.toString());

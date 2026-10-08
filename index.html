@@ -9698,6 +9698,14 @@ function openMargenPanel() {
 const OBRAS_TIPOS = ['Licitación', 'Contratación Directa', 'Reconocimiento de Servicio', 'Provisión', 'UTE'];
 const _esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 function _editaObras() { return document.body.classList.contains('edita-obras'); }
+// Clientes ya usados en el Maestro (siglas), para estandarizar el alta de obras.
+// Si el backend todavía no los manda, se deducen de las obras cargadas.
+function _clientesMaestro() {
+  const fromBack = (GENERADO_POR_OBRA && GENERADO_POR_OBRA.clientes) || [];
+  const set = new Set(fromBack);
+  ((GENERADO_POR_OBRA && GENERADO_POR_OBRA.obras) || []).concat((GENERADO_POR_OBRA && GENERADO_POR_OBRA.obrasSinPeriodo) || []).forEach(o => { const c = (o.cliente || '').trim(); if (c && c !== '-' && c !== '—') set.add(c); });
+  return [...set].filter(c => !/^obra no cargada$/i.test(c)).sort((a, b) => a.localeCompare(b, 'es'));
+}
 // Montos en el formulario: se escriben solo dígitos (y coma para centavos); se
 // muestran con punto de miles. _montoValor devuelve el número limpio para enviar.
 function _fmtMontoInput(n) { const v = Number(n); if (!isFinite(v)) return ''; return v.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }); }
@@ -9749,7 +9757,12 @@ function abrirAltaObra() {
     <div class="form-obra" style="margin-top:12px;">
       <label>Nombre de la obra (corto, sin número de expediente)</label><input id="ao-nombre" maxlength="120" placeholder="ej. Avenida Roca - Etapa 2">
       <div class="fila2">
-        <div><label>Cliente</label><input id="ao-cliente" maxlength="40" placeholder="MUNCMT / VIA / PRI / SAT…"></div>
+        <div><label>Cliente</label>
+          <select id="ao-cliente-sel" onchange="document.getElementById('ao-cliente-otro').style.display = this.value === '__otro__' ? 'block' : 'none'; if (this.value === '__otro__') document.getElementById('ao-cliente').focus();">
+            <option value="">—</option>${_clientesMaestro().map(c => `<option value="${_esc(c)}">${_esc(c)}</option>`).join('')}<option value="__otro__">Otro…</option>
+          </select>
+          <div id="ao-cliente-otro" style="display:none;"><input id="ao-cliente" maxlength="40" placeholder="Sigla nueva, ej. MUNYB" style="margin-top:6px;"></div>
+        </div>
         <div><label>Tipo de contrato</label><select id="ao-tipo"><option value="">—</option>${OBRAS_TIPOS.map(t => `<option>${t}</option>`).join('')}</select></div>
       </div>
       <div style="font-size:11px;color:#92400e;margin-top:8px;">Una vez dada de alta, el nombre no se cambia: las demás planillas lo copian.</div>
@@ -9767,7 +9780,8 @@ async function guardarAltaObra() {
   if (nombre.length < 3) { say('Escribí el nombre de la obra.', false); return; }
   btn.disabled = true; say('Guardando…', true);
   try {
-    await _postObras({ op: 'altaObra', nombre: nombre, cliente: g('ao-cliente') || '', tipo: g('ao-tipo') || '' });
+    const cliente = g('ao-cliente-sel') === '__otro__' ? (g('ao-cliente') || '').trim().toUpperCase() : (g('ao-cliente-sel') || '');
+    await _postObras({ op: 'altaObra', nombre: nombre, cliente: cliente, tipo: g('ao-tipo') || '' });
     say('Obra dada de alta. Actualizando el tablero…', true);
     await refreshData();
     // Dejar listo para cargar el primer certificado de esa obra
