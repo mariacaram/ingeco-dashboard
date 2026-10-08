@@ -9698,9 +9698,13 @@ function _certAcciones(it, cod) {
     <button title="Editar" onclick="event.stopPropagation();abrirFormObra('${d}')">✎</button>
     <button title="Borrar" onclick="event.stopPropagation();borrarCert('${d}')">🗑</button></span>`;
 }
-async function _postObras(body) {
+async function _postObras(body, reintento) {
   const r = await fetch('/api/obras', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'ingeco-dashboard' }, body: JSON.stringify(body) });
   let d = {}; try { d = await r.json(); } catch (e) {}
+  // Apps Script a veces responde una página HTML en vez de JSON (redirect de
+  // Google): el proxy lo reporta como 502. Para operaciones que no duplican
+  // filas (estado / edición / borrado) se reintenta una vez.
+  if (r.status === 502 && !reintento && body.op !== 'agregarCert' && body.op !== 'altaObra') return _postObras(body, true);
   if (!r.ok || d.status !== 'ok') throw new Error(d.message || ('HTTP ' + r.status));
   return d;
 }
