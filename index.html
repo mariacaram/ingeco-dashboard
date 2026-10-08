@@ -849,6 +849,13 @@
     </div>
   </div>
 
+  <div class="section" id="cert-mensual-section" style="display:none;">
+    <div class="section-title">Certificación mensual · todos los meses
+      <span id="cert-mensual-var" style="font-size:12px;font-weight:600;margin-left:8px;"></span></div>
+    <div style="position:relative;height:230px;"><canvas id="cert-mensual-chart"></canvas></div>
+    <div style="font-size:11px;color:var(--muted);margin-top:6px;">Total Certificado de cada mes (obras con período + provisiones, real de Esteban si ya la cargó). Click en una barra para ver ese mes.</div>
+  </div>
+
   <div class="section">
     <div class="section-title">
       Contribución marginal por obra · <span id="mes-label-resumen-obra"></span>
@@ -2615,6 +2622,67 @@ function renderMargen() {
   }
 
   renderResumenObra();
+  renderCertMensual();
+}
+
+// Gráfico de barras: Total Certificado de cada mes (misma cuenta que la
+// tarjeta: obras con período del mes + provisiones del mes).
+let _certMensualChart = null;
+function renderCertMensual() {
+  const section = document.getElementById('cert-mensual-section');
+  const canvas  = document.getElementById('cert-mensual-chart');
+  const varEl   = document.getElementById('cert-mensual-var');
+  if (!section || !canvas || typeof Chart === 'undefined') return;
+  if (!GENERADO_POR_OBRA) { section.style.display = 'none'; return; }
+  const serie = MES_ORDER.map(m => {
+    const obras = _obrasActuales(m).reduce((s, o) => s + (o.aCobrar ?? o.generado ?? 0), 0);
+    const prov  = _certProvisionesMes(m).total;
+    return { m, obras, prov, total: obras + prov };
+  });
+  let last = -1; serie.forEach((x, i) => { if (x.total > 0) last = i; });
+  if (last < 0) { section.style.display = 'none'; return; }
+  const datos = serie.slice(0, last + 1);
+  section.style.display = '';
+  const labels = datos.map(x => (MES[x.m] || x.m).replace(' 2026', ''));
+  const sel = datos.findIndex(x => x.m === mesActual);
+  // Variación del mes seleccionado contra el anterior con dato
+  if (varEl) {
+    let prev = -1; for (let i = sel - 1; i >= 0; i--) if (datos[i].total > 0) { prev = i; break; }
+    if (sel >= 0 && prev >= 0 && datos[sel].total > 0) {
+      const d = datos[sel].total / datos[prev].total - 1;
+      varEl.style.color = d >= 0 ? 'var(--pos)' : 'var(--neg)';
+      varEl.textContent = `${labels[sel]}: ${d >= 0 ? '▲' : '▼'} ${Math.abs(d * 100).toFixed(0)}% vs ${labels[prev]}`;
+    } else varEl.textContent = '';
+  }
+  if (_certMensualChart) { _certMensualChart.destroy(); _certMensualChart = null; }
+  const alpha = i => i === sel ? 1 : 0.55;
+  _certMensualChart = new Chart(canvas, {
+    type: 'bar',
+    data: { labels, datasets: [
+      { label: 'Obras', data: datos.map(x => x.obras), backgroundColor: datos.map((_, i) => `rgba(22,163,74,${alpha(i)})`), borderRadius: 3 },
+      { label: 'Provisiones', data: datos.map(x => x.prov), backgroundColor: datos.map((_, i) => `rgba(37,99,235,${alpha(i)})`), borderRadius: 3 },
+    ] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      onClick: (ev, els) => { if (els.length) setMes(datos[els[0].index].m); },
+      scales: {
+        x: { stacked: true, grid: { display: false }, ticks: { font: { size: 11 } } },
+        y: { stacked: true, beginAtZero: true, ticks: { font: { size: 10 }, callback: v => fmtM(v) }, grid: { color: '#f1f5f9' } },
+      },
+      plugins: {
+        legend: { position: 'top', align: 'end', labels: { boxWidth: 10, font: { size: 10 } } },
+        tooltip: { callbacks: {
+          label: c => ` ${c.dataset.label}: ${fmt(c.raw)}`,
+          footer: items => {
+            const i = items[0].dataIndex, t = datos[i].total;
+            let prev = -1; for (let k = i - 1; k >= 0; k--) if (datos[k].total > 0) { prev = k; break; }
+            const v = prev >= 0 && t > 0 ? ` · ${t >= datos[prev].total ? '▲' : '▼'} ${Math.abs((t / datos[prev].total - 1) * 100).toFixed(0)}% vs ${labels[prev]}` : '';
+            return `Total: ${fmt(t)}${v}`;
+          },
+        } },
+      },
+    },
+  });
 }
 
 // Copia el estado de las tarjetas KPI de "Contribución marginal por obra"
